@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-<style>
+    <style>
         ::-webkit-scrollbar { display: none; }   
         body { -webkit-tap-highlight-color: transparent; background-color: #f8f8f8; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; }
         :root { --sexify: #ff2442; }
@@ -16,27 +16,30 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
-        /* 1. 瀑布流容器保持 2 欄 */
-        .masonry-grid { column-count: 2; column-gap: 8px; padding: 8px; }
-        
-        /* 2. 卡片本體：加入按壓微縮放特效 */
+        /* 1. 改為 3 欄，實現小而美的瀑布流 */
+        .masonry-grid { 
+            column-count: 3; 
+            column-gap: 6px; 
+            padding: 6px; 
+        }
+
+        /* 2. 微調卡片圓角與邊距 */
         .masonry-item { 
             break-inside: avoid; 
-            margin-bottom: 8px; 
+            margin-bottom: 6px; 
             background: white; 
-            border-radius: 12px; 
+            border-radius: 8px; 
             overflow: hidden; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             transition: transform 0.1s ease;
         }
         .masonry-item:active { transform: scale(0.97); }
 
-        /* 3. 關鍵修改：移除 max-height，讓高度隨圖片比例自然伸展 */
+        /* 3. 圖片高度自適應 (小紅書長方形感) */
         .masonry-item img { 
             width: 100%; 
-            height: auto; /* 自動適應長方形比例 */
+            height: auto; 
             display: block; 
-            object-fit: cover;
         }
 
         .nav-active { color: #000 !important; font-weight: 900 !important; transform: scale(1.05); transition: all 0.2s; }
@@ -58,9 +61,9 @@
         <header class="sticky top-0 bg-white/90 backdrop-blur-xl border-b z-40 px-5 h-14 flex justify-between items-center">
             <i class="fa-solid fa-bars text-lg text-gray-400"></i>
             <div class="flex space-x-6">
-                <button class="text-gray-400 text-sm font-bold">關注</button>
-                <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
-                <button class="text-gray-400 text-sm font-bold">附近</button>
+                <button class="text-gray-400 text-xs font-bold">關注</button>
+                <button class="text-black text-sm font-black border-b-2 border-sexify pb-0.5">發現</button>
+                <button class="text-gray-400 text-xs font-bold">附近</button>
             </div>
             <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
         </header>
@@ -71,13 +74,13 @@
                     <div id="card-xaiver" class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
                         <div class="relative">
                             <img src="https://picsum.photos/400/600?random=11">
-                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center"><i class="fa-solid fa-lock text-white/80 text-2xl"></i></div>
+                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center"><i class="fa-solid fa-lock text-white/60 text-lg"></i></div>
                         </div>
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold mb-2">深夜驚喜！🍆</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full"><span>Xaiver</span></div>
-                                <div class="flex items-center gap-0.5 p-1" onclick="event.stopPropagation(); toggleLike(this)">
+                        <div class="p-2">
+                            <h4 class="text-[10px] font-bold mb-1 leading-tight line-clamp-2 text-gray-800">深夜驚喜！🍆</h4>
+                            <div class="flex justify-between items-center text-[8px] text-gray-400 scale-[0.9] origin-left">
+                                <div class="flex items-center gap-1"><img src="https://i.pravatar.cc/100?u=a1" class="w-3 h-3 rounded-full"><span>Xaiver</span></div>
+                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)">
                                     <i class="fa-regular fa-heart"></i><span class="like-count">5</span>
                                 </div>
                             </div>
@@ -85,16 +88,18 @@
                     </div>
                     <div id="card-mina" class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
                         <img src="https://picsum.photos/400/400?random=12">
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold mb-2">衣服都被雨水打濕了🌧️</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full"><span>Mina_米娜</span></div>
-                                <div class="flex items-center gap-0.5 p-1" onclick="event.stopPropagation(); toggleLike(this)">
+                        <div class="p-2">
+                            <h4 class="text-[10px] font-bold mb-1 leading-tight line-clamp-2 text-gray-800">衣服都被雨水打濕了🌧️</h4>
+                            <div class="flex justify-between items-center text-[8px] text-gray-400 scale-[0.9] origin-left">
+                                <div class="flex items-center gap-1"><img src="https://i.pravatar.cc/100?u=a2" class="w-3 h-3 rounded-full"><span>Mina_米娜</span></div>
+                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)">
                                     <i class="fa-regular fa-heart"></i><span class="like-count">892</span>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <div class="masonry-item"><img src="https://picsum.photos/400/700?random=13"><div class="p-2"><h4 class="text-[10px] font-bold text-gray-800">性感寫真系列</h4></div></div>
+                    <div class="masonry-item"><img src="https://picsum.photos/400/500?random=14"><div class="p-2"><h4 class="text-[10px] font-bold text-gray-800">今日穿搭...</h4></div></div>
                 </div>
             </section>
             
@@ -189,13 +194,9 @@
     </div>
 
     <script>
+        // ... (腳本內容與之前相同)
         const postComments = { 'card-xaiver': [], 'card-mina': [] };
-
-        function verifyAge() {
-            document.getElementById('age-gate').classList.add('opacity-0');
-            setTimeout(() => { document.getElementById('age-gate').style.display = 'none'; document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none'); }, 500);
-        }
-
+        function verifyAge() { document.getElementById('age-gate').classList.add('opacity-0'); setTimeout(() => { document.getElementById('age-gate').style.display = 'none'; document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none'); }, 500); }
         function switchTab(tabId, btn) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
@@ -204,11 +205,8 @@
             if(tabId === 'shop-tab') renderShop();
             if(tabId === 'profile-tab') renderProfile();
         }
-
-        // 上傳功能修正
         function openUpload() { document.getElementById('upload-tab').classList.remove('hidden'); }
         function closeUpload() { document.getElementById('upload-tab').classList.add('hidden'); }
-
         function renderShop() {
             const products = [
                 { name: "1對1 私密聊", price: 49, oldPrice: 99, img: "https://picsum.photos/300/300?random=21" },
@@ -228,18 +226,13 @@
                 </div>
             `).join('');
         }
-
         function renderProfile() {
             const grid = document.getElementById('user-gallery');
             if(grid.innerHTML !== "") return;
             let items = "";
-            for(let i=1; i<=15; i++) {
-                items += `<div class="aspect-square bg-gray-100 overflow-hidden"><img src="https://picsum.photos/200/200?random=${i+50}" class="w-full h-full object-cover active:opacity-70"></div>`;
-            }
+            for(let i=1; i<=15; i++) { items += `<div class="aspect-square bg-gray-100 overflow-hidden"><img src="https://picsum.photos/200/200?random=${i+50}" class="w-full h-full object-cover active:opacity-70"></div>`; }
             grid.innerHTML = items;
         }
-
-        // 詳情頁核心邏輯
         function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
             const detail = document.getElementById('post-detail');
             document.getElementById('detail-image').src = imgSrc;
@@ -248,59 +241,30 @@
             document.getElementById('detail-title').innerText = title;
             detail.dataset.sourceId = cardId;
             detail.querySelector('.like-count').innerText = likeCount;
-
             detail.classList.remove('hidden');
             setTimeout(() => detail.classList.remove('translate-y-full'), 10);
             document.body.style.overflow = 'hidden';
         }
-
-        function closeDetail() { 
-            document.getElementById('post-detail').classList.add('translate-y-full'); 
-            document.body.style.overflow = '';
-            setTimeout(() => document.getElementById('post-detail').classList.add('hidden'), 300); 
-        }
-
-        function openComments() { 
-            document.getElementById('comment-sheet').classList.remove('hidden'); 
-            setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
-        }
-
-        function closeComments() { 
-            document.getElementById('comment-panel').classList.add('translate-y-full'); 
-            setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
-        }
-
+        function closeDetail() { document.getElementById('post-detail').classList.add('translate-y-full'); document.body.style.overflow = ''; setTimeout(() => document.getElementById('post-detail').classList.add('hidden'), 300); }
+        function openComments() { document.getElementById('comment-sheet').classList.remove('hidden'); setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); }
+        function closeComments() { document.getElementById('comment-panel').classList.add('translate-y-full'); setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); }
         function toggleLike(el) {
             const heart = el.querySelector('i');
             const countSpan = el.querySelector('.like-count');
             let count = parseInt(countSpan.innerText);
-            if (heart.classList.contains('fa-regular')) {
-                heart.className = 'fa-solid fa-heart text-sexify';
-                count++;
-            } else {
-                heart.className = 'fa-regular fa-heart';
-                count--;
-            }
+            if (heart.classList.contains('fa-regular')) { heart.className = 'fa-solid fa-heart text-sexify'; count++; }
+            else { heart.className = 'fa-regular fa-heart'; count--; }
             countSpan.innerText = count;
         }
-
         function handleFileSelect(i) {
             const file = i.files[0];
             if (file) {
                 const r = new FileReader();
-                r.onload = (e) => {
-                    document.getElementById('upload-prompt').classList.add('hidden');
-                    document.getElementById('preview-container').classList.remove('hidden');
-                    document.getElementById('file-preview').src = e.target.result;
-                };
+                r.onload = (e) => { document.getElementById('upload-prompt').classList.add('hidden'); document.getElementById('preview-container').classList.remove('hidden'); document.getElementById('file-preview').src = e.target.result; };
                 r.readAsDataURL(file);
             }
         }
-        function resetUpload() { 
-            document.getElementById('file-input').value = ""; 
-            document.getElementById('preview-container').classList.add('hidden'); 
-            document.getElementById('upload-prompt').classList.remove('hidden'); 
-        }
+        function resetUpload() { document.getElementById('file-input').value = ""; document.getElementById('preview-container').classList.add('hidden'); document.getElementById('upload-prompt').classList.remove('hidden'); }
         function startUpload() { alert("🚀 發佈成功！"); closeUpload(); resetUpload(); }
     </script>
 </body>
