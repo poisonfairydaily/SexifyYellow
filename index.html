@@ -232,125 +232,141 @@
         </div>
     </div>
 
-    <script>
-        // 1. 年齡驗證
-        function verifyAge() {
-            document.getElementById('age-gate').classList.add('opacity-0');
-            setTimeout(() => {
-                document.getElementById('age-gate').style.display = 'none';
-                document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
-            }, 500);
+<script>
+    // 1. 年齡驗證
+    function verifyAge() {
+        document.getElementById('age-gate').classList.add('opacity-0');
+        setTimeout(() => {
+            document.getElementById('age-gate').style.display = 'none';
+            document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
+        }, 500);
+    }
+
+    // 2. 切換 Tab
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(b => {
+            b.classList.remove('nav-active');
+            b.classList.add('text-gray-400');
+        });
+        if(btn && btn.classList.contains('nav-btn')) {
+            btn.classList.add('nav-active');
+            btn.classList.remove('text-gray-400');
         }
+        if(tabId === 'shop-tab') renderShop();
+        window.scrollTo(0, 0);
+    }
 
-        // 2. 切換 Tab
-        function switchTab(tabId, btn) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            document.querySelectorAll('.nav-btn').forEach(b => {
-                b.classList.remove('nav-active');
-                b.classList.add('text-gray-400');
-            });
-            if(btn && btn.classList.contains('nav-btn')) {
-                btn.classList.add('nav-active');
-                btn.classList.remove('text-gray-400');
-            }
-            if(tabId === 'shop-tab') renderShop();
-            window.scrollTo(0, 0);
-        }
-
-        // 3. 詳情頁控制
-// 修改後：增加一個 likeCount 參數
-function openDetail(imgSrc, username, avatar, title, likeCount) {
-    const detail = document.getElementById('post-detail');
-    document.getElementById('detail-image').src = imgSrc;
-    document.getElementById('detail-avatar').src = avatar;
-    document.getElementById('detail-username').innerText = username;
-    document.getElementById('detail-title').innerText = title;
-    
-    // 關鍵這行：把詳情頁底部的數字換成傳進來的那個數字
-    detail.querySelector('.like-count').innerText = likeCount;
-
-    detail.classList.remove('hidden');
-    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-}
+    // 3. 詳情頁控制 (已整合為單一函數)
+    function openDetail(imgSrc, username, avatar, title, likeCount) {
+        const detail = document.getElementById('post-detail');
         
-        // 4. 點讚功能 (修復數字不跳動)
-        function toggleLike(element) {
-            if (event) event.stopPropagation();
-            const heartIcon = element.querySelector('i');
-            const countSpan = element.querySelector('.like-count');
-            if (!countSpan) return;
+        // 填入動態資料
+        document.getElementById('detail-image').src = imgSrc;
+        document.getElementById('detail-avatar').src = avatar;
+        document.getElementById('detail-username').innerText = username;
+        document.getElementById('detail-title').innerText = title;
+        
+        // 確保找到詳情頁內的 like-count 並更新
+        const detailLikeCount = detail.querySelector('.like-count');
+        if(detailLikeCount) detailLikeCount.innerText = likeCount;
 
-            let countText = countSpan.innerText.trim();
-            let isK = countText.includes('k');
-            let count = parseFloat(countText.replace('k', ''));
-            if (isK) count = count * 1000;
+        // 顯示邏輯
+        detail.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // 鎖定背景滾動
+        
+        setTimeout(() => {
+            detail.classList.remove('translate-y-full');
+        }, 10);
+    }
 
-            if (!heartIcon.classList.contains('fa-solid')) {
-                heartIcon.classList.replace('fa-regular', 'fa-solid');
-                heartIcon.classList.add('text-sexify', 'heart-pop');
-                count++;
-            } else {
-                heartIcon.classList.replace('fa-solid', 'fa-regular');
-                heartIcon.classList.remove('text-sexify', 'heart-pop');
-                count--;
-            }
+    function closeDetail() {
+        const detail = document.getElementById('post-detail');
+        detail.classList.add('translate-y-full'); // 觸發下滑動畫
+        
+        setTimeout(() => {
+            detail.classList.add('hidden');
+            document.body.style.overflow = 'auto'; // 恢復背景滾動
+        }, 300); // 等待動畫結束
+    }
 
-            countSpan.innerText = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
+    // 4. 點讚功能
+    function toggleLike(element) {
+        if (event) event.stopPropagation();
+        const heartIcon = element.querySelector('i');
+        const countSpan = element.querySelector('.like-count');
+        if (!countSpan) return;
+
+        let countText = countSpan.innerText.trim();
+        let isK = countText.includes('k');
+        let count = parseFloat(countText.replace('k', ''));
+        if (isK) count = count * 1000;
+
+        if (!heartIcon.classList.contains('fa-solid')) {
+            heartIcon.classList.replace('fa-regular', 'fa-solid');
+            heartIcon.classList.add('text-sexify', 'heart-pop');
+            count++;
+        } else {
+            heartIcon.classList.replace('fa-solid', 'fa-regular');
+            heartIcon.classList.remove('text-sexify', 'heart-pop');
+            count--;
         }
 
-        // 5. 關注切換
-        function toggleFollow(btnId) {
-            const btn = document.getElementById(btnId);
-            const isFollowing = btn.getAttribute('data-following') === 'true';
-            if (!isFollowing) {
-                btn.innerText = "已關注";
-                btn.setAttribute('data-following', 'true');
-                btn.className = (btnId === 'follow-btn-detail') ? "bg-gray-100 text-gray-400 px-4 py-1.5 rounded-full text-xs font-bold" : "text-black text-sm font-bold";
-            } else {
-                btn.innerText = "關注";
-                btn.setAttribute('data-following', 'false');
-                btn.className = (btnId === 'follow-btn-detail') ? "bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold" : "text-gray-400 text-sm font-bold";
-            }
-        }
+        countSpan.innerText = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
+    }
 
-        // 6. 商店與上傳
-        function renderShop() {
-            const products = [
-                { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
-                { name: "專屬語音包", price: 19.9, old: 35.0, img: "https://picsum.photos/300/300?random=22" }
-            ];
-            document.getElementById('shop-grid').innerHTML = products.map(p => `
-                <div class="bg-white rounded-2xl overflow-hidden shadow-sm">
-                    <img src="${p.img}" class="w-full aspect-square object-cover">
-                    <div class="p-3">
-                        <h4 class="text-[11px] font-bold truncate">${p.name}</h4>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="text-sexify font-black text-xs">$${p.price}</span>
-                            <span class="text-[9px] text-gray-300 line-through">$${p.old}</span>
-                        </div>
+    // 5. 關注與商店/上傳 (其餘功能保持不變)
+    function toggleFollow(btnId) {
+        const btn = document.getElementById(btnId);
+        const isFollowing = btn.getAttribute('data-following') === 'true';
+        if (!isFollowing) {
+            btn.innerText = "已關注";
+            btn.setAttribute('data-following', 'true');
+            btn.className = (btnId === 'follow-btn-detail') ? "bg-gray-100 text-gray-400 px-4 py-1.5 rounded-full text-xs font-bold" : "text-black text-sm font-bold";
+        } else {
+            btn.innerText = "關注";
+            btn.setAttribute('data-following', 'false');
+            btn.className = (btnId === 'follow-btn-detail') ? "bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold" : "text-gray-400 text-sm font-bold";
+        }
+    }
+
+    function renderShop() {
+        const products = [
+            { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
+            { name: "專屬語音包", price: 19.9, old: 35.0, img: "https://picsum.photos/300/300?random=22" }
+        ];
+        document.getElementById('shop-grid').innerHTML = products.map(p => `
+            <div class="bg-white rounded-2xl overflow-hidden shadow-sm">
+                <img src="${p.img}" class="w-full aspect-square object-cover">
+                <div class="p-3">
+                    <h4 class="text-[11px] font-bold truncate">${p.name}</h4>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-sexify font-black text-xs">$${p.price}</span>
+                        <span class="text-[9px] text-gray-300 line-through">$${p.old}</span>
                     </div>
                 </div>
-            `).join('');
-        }
+            </div>
+        `).join('');
+    }
 
-        function handleFileSelect(input) {
-            const file = input.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.getElementById('upload-prompt').classList.add('hidden');
-                document.getElementById('preview-container').classList.remove('hidden');
-                document.getElementById('file-preview').src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-        function resetUpload() {
-            document.getElementById('file-input').value = "";
-            document.getElementById('preview-container').classList.add('hidden');
-            document.getElementById('upload-prompt').classList.remove('hidden');
-        }
-        function startUpload() { alert("🚀 發佈成功！"); resetUpload(); switchTab('home-tab'); }
-    </script>
+    function handleFileSelect(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('upload-prompt').classList.add('hidden');
+            document.getElementById('preview-container').classList.remove('hidden');
+            document.getElementById('file-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    function resetUpload() {
+        document.getElementById('file-input').value = "";
+        document.getElementById('preview-container').classList.add('hidden');
+        document.getElementById('upload-prompt').classList.remove('hidden');
+    }
+    function startUpload() { alert("🚀 發佈成功！"); resetUpload(); switchTab('home-tab'); }
+</script>
 </body>
 </html>
