@@ -67,6 +67,8 @@
 
         <main class="pb-24">
             <section id="home-tab" class="tab-content active">
+                <div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/600?random=1', '小愛 Alice', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！這次的主題大家還喜歡嗎？🍑')">
+    </div>
                 <div class="masonry-grid" id="main-feed">
                     <div class="masonry-item">
                         <div class="relative">
@@ -308,8 +310,73 @@
     </div>
 </footer>
     </div>
+<div id="post-detail" class="fixed inset-0 z-[1000] bg-white translate-y-full transition-transform duration-300 ease-out overflow-y-auto hidden">
+    <div class="sticky top-0 bg-white/80 backdrop-blur-md flex items-center justify-between px-4 h-14 z-10">
+        <button onclick="closeDetail()" class="w-8 h-8 flex items-center justify-center text-2xl">✕</button>
+        <div class="flex items-center gap-2">
+            <img id="detail-avatar" src="" class="w-8 h-8 rounded-full">
+            <span id="detail-username" class="text-sm font-bold">Username</span>
+        </div>
+        <button class="bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold">關注</button>
+    </div>
 
+    <div class="pb-24">
+        <img id="detail-image" src="" class="w-full object-contain bg-gray-100">
+        <div class="p-5">
+            <h2 id="detail-title" class="text-xl font-black mb-3 text-gray-900 leading-tight">標題加載中...</h2>
+            <p id="detail-desc" class="text-sm text-gray-600 leading-relaxed mb-6">
+                這裡是詳細的內容描述，展現小紅書那種溫暖又質感的排版風格。✨
+            </p>
+            <div class="text-[10px] text-gray-400 mb-6">發佈於 2026-03-25 16:50</div>
+            
+            <div class="border-t pt-5">
+                <p class="text-xs font-bold text-gray-800 mb-4">共 12 條評論</p>
+                <div class="flex gap-3 mb-4">
+                    <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0"></div>
+                    <div>
+                        <p class="text-[11px] font-bold text-gray-500">路人甲</p>
+                        <p class="text-[11px] text-gray-800">這套穿搭太好看了吧！求連結 😍</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 inset-x-0 bg-white border-t h-16 flex items-center px-4 gap-4">
+        <div class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-gray-400 text-xs">說點什麼...</div>
+        <div class="flex gap-4 text-gray-600">
+            <div class="flex flex-col items-center"><span class="text-lg">❤️</span><span class="text-[9px]">1.2k</span></div>
+            <div class="flex flex-col items-center"><span class="text-lg">⭐</span><span class="text-[9px]">856</span></div>
+            <div class="flex flex-col items-center"><span class="text-lg">💬</span><span class="text-[9px]">12</span></div>
+        </div>
+    </div>
+</div>
     <script>
+        // 打開詳情頁
+function openDetail(imgSrc, username, avatar, title) {
+    const detail = document.getElementById('post-detail');
+    
+    // 填入資料
+    document.getElementById('detail-image').src = imgSrc;
+    document.getElementById('detail-avatar').src = avatar;
+    document.getElementById('detail-username').innerText = username;
+    document.getElementById('detail-title').innerText = title;
+
+    // 顯示並動畫彈出
+    detail.classList.remove('hidden');
+    setTimeout(() => {
+        detail.classList.remove('translate-y-full');
+    }, 10);
+}
+
+// 關閉詳情頁
+function closeDetail() {
+    const detail = document.getElementById('post-detail');
+    detail.classList.add('translate-y-full');
+    setTimeout(() => {
+        detail.classList.add('hidden');
+    }, 300);
+}
         // 初始化商店內容
         const products = [
             { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
