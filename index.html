@@ -128,7 +128,42 @@
                 <div class="grid grid-cols-2 gap-3" id="shop-grid">
                     </div>
             </section>
+<section id="upload-tab" class="tab-content bg-white min-h-screen">
+    <div class="p-6">
+        <h2 class="text-xl font-black mb-6">發佈新動態</h2>
+        
+        <div id="drop-area" 
+             onclick="document.getElementById('file-input').click()"
+             class="aspect-square border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center bg-gray-50 active:bg-gray-100 transition">
+            <i class="fa-solid fa-camera text-4xl text-gray-300 mb-4"></i>
+            <p class="text-sm text-gray-400 font-bold">點擊上傳照片或影片</p>
+            <span class="text-[10px] text-gray-300 mt-2">支援 JPG, PNG, MP4</span>
+            <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
+        </div>
 
+        <div id="preview-container" class="hidden mt-4 relative rounded-3xl overflow-hidden aspect-square shadow-inner bg-black">
+            <img id="file-preview" class="w-full h-full object-contain">
+            <video id="video-preview" class="hidden w-full h-full object-contain" controls></video>
+            <button onclick="resetUpload()" class="absolute top-4 right-4 bg-black/50 text-white w-8 h-8 rounded-full">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="mt-8 space-y-4">
+            <input type="text" placeholder="填寫標題..." class="w-full border-b py-3 outline-none font-bold text-sm focus:border-sexify transition">
+            <textarea placeholder="說說你的心情或這張照片的故事..." class="w-full h-24 outline-none text-sm resize-none"></textarea>
+            
+            <div class="flex items-center justify-between border-y py-4 text-sm">
+                <span class="text-gray-500"><i class="fa-solid fa-tag mr-2"></i>標籤</span>
+                <span class="text-gray-300">#新增標籤 ></span>
+            </div>
+
+            <button onclick="startUpload()" class="w-full bg-sexify text-white py-4 rounded-full font-bold shadow-xl mt-4 active:scale-95 transition">
+                發佈動態
+            </button>
+        </div>
+    </div>
+</section>
             <section id="profile-tab" class="tab-content">
                 <div class="bg-white px-6 pt-12 pb-6 border-b rounded-b-[2.5rem] shadow-sm">
                     <div class="flex items-center gap-5 mb-6">
@@ -225,6 +260,55 @@
                 document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
             }, 500);
         }
+        let selectedFile = null;
+
+function handleFileSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    selectedFile = file;
+    const reader = new FileReader();
+    const isVideo = file.type.startsWith('video/');
+    
+    reader.onload = (e) => {
+        const previewImg = document.getElementById('file-preview');
+        const previewVid = document.getElementById('video-preview');
+        const container = document.getElementById('preview-container');
+        const dropArea = document.getElementById('drop-area');
+
+        dropArea.classList.add('hidden');
+        container.classList.remove('hidden');
+
+        if (isVideo) {
+            previewImg.classList.add('hidden');
+            previewVid.classList.remove('hidden');
+            previewVid.src = e.target.result;
+        } else {
+            previewVid.classList.add('hidden');
+            previewImg.classList.remove('hidden');
+            previewImg.src = e.target.result;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function resetUpload() {
+    selectedFile = null;
+    document.getElementById('file-input').value = "";
+    document.getElementById('drop-area').classList.remove('hidden');
+    document.getElementById('preview-container').classList.add('hidden');
+    document.getElementById('video-preview').src = "";
+}
+
+// 模擬發佈成功
+async function startUpload() {
+    if (!selectedFile) return alert("請先選取內容！");
+    
+    // 這裡可以串接你的 Firebase 程式碼
+    alert("✨ 內容已準備好發佈至 Sexify！");
+    resetUpload();
+    switchTab('home-tab'); // 發佈完跳回首頁
+}
     </script>
 </body>
 </html>
