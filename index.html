@@ -301,33 +301,43 @@
         }
 
         // 5. 點讚功能邏輯
-        function toggleLike(element) {
-            const heartIcon = element.querySelector('i');
-            const countSpan = element.querySelector('.like-count');
-            
-            let countText = countSpan.innerText;
-            let count = parseFloat(countText.replace('k', ''));
-            let isK = countText.includes('k');
-            if (isK) count = count * 1000;
+function toggleLike(element) {
+    // 防止觸發外層的點擊事件（很重要！）
+    if (event) event.stopPropagation();
 
-            const isLiked = heartIcon.classList.contains('fa-solid');
+    const heartIcon = element.querySelector('i');
+    const countSpan = element.querySelector('.like-count');
+    
+    if (!countSpan) return; // 如果找不到數字標籤就停止
 
-            if (!isLiked) {
-                heartIcon.classList.replace('fa-regular', 'fa-solid');
-                heartIcon.classList.add('text-sexify');
-                count++;
-            } else {
-                heartIcon.classList.replace('fa-solid', 'fa-regular');
-                heartIcon.classList.remove('text-sexify');
-                count--;
-            }
+    let countText = countSpan.innerText.trim();
+    let isK = countText.includes('k');
+    let count = parseFloat(countText.replace('k', ''));
+    
+    if (isK) count = count * 1000;
 
-            if (count >= 1000) {
-                countSpan.innerText = (count / 1000).toFixed(1) + 'k';
-            } else {
-                countSpan.innerText = Math.floor(count);
-            }
-        }
+    // 判斷目前是空心還是實心
+    const isLiked = heartIcon.classList.contains('fa-solid');
+
+    if (!isLiked) {
+        // 變紅、變實心
+        heartIcon.classList.remove('fa-regular');
+        heartIcon.classList.add('fa-solid', 'text-sexify');
+        count++;
+    } else {
+        // 變灰、變空心
+        heartIcon.classList.remove('fa-solid', 'text-sexify');
+        heartIcon.classList.add('fa-regular');
+        count--;
+    }
+
+    // 格式化回傳顯示
+    if (count >= 1000) {
+        countSpan.innerText = (count / 1000).toFixed(1) + 'k';
+    } else {
+        countSpan.innerText = Math.max(0, Math.floor(count));
+    }
+}
 
         // 6. 關注功能
         function toggleFollow(btnId) {
