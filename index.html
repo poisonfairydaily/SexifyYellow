@@ -36,7 +36,7 @@
         }
         .masonry-item img {
             width: 100%;
-            max-height: 300px; /* 限制首頁圖片不過長 */
+            max-height: 300px;
             object-fit: cover;
             display: block;
         }
@@ -48,18 +48,23 @@
         }
         .nav-active { color: #000 !important; font-weight: 900 !important; transform: scale(1.05); transition: all 0.2s; }
         
-        /* 點讚動畫 */
+        /* 動畫 */
         .heart-pop { animation: heartPop 0.3s ease-out; }
         @keyframes heartPop {
             0% { transform: scale(1); }
             50% { transform: scale(1.4); }
             100% { transform: scale(1); }
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
 <body class="text-gray-900">
 
-    <div id="age-gate" class="fixed inset-0 z-[1001] bg-black flex items-center justify-center transition-opacity duration-500">
+    <div id="age-gate" class="fixed inset-0 z-[2000] bg-black flex items-center justify-center transition-opacity duration-500">
         <div class="bg-white p-10 rounded-[2.5rem] w-11/12 max-w-sm text-center shadow-2xl">
             <h2 class="text-4xl font-black text-sexify mb-3 tracking-tighter">SEXIFY</h2>
             <p class="text-gray-400 text-sm mb-8 leading-relaxed">此空間包含成人內容<br>進入即代表您已滿 18 歲</p>
@@ -80,53 +85,53 @@
         </header>
 
         <main class="pb-24">
-    <section id="home-tab" class="tab-content active">
-        <div class="masonry-grid" id="main-feed">
-            
-            <div id="card-xaiver" class="masonry-item cursor-pointer" 
-                 onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
-                <div class="relative">
-                    <img src="https://picsum.photos/400/600?random=11">
-                    <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
-                        <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
-                    </div>
-                </div>
-                <div class="p-2.5">
-                    <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！🍆</h4>
-                    <div class="flex justify-between items-center text-[10px] text-gray-500">
-                        <div class="flex items-center gap-1.5">
-                            <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
-                            <span>Xaiver</span>
+            <section id="home-tab" class="tab-content active">
+                <div class="masonry-grid" id="main-feed">
+                    
+                    <div id="card-xaiver" class="masonry-item cursor-pointer" 
+                         onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
+                        <div class="relative">
+                            <img src="https://picsum.photos/400/600?random=11">
+                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+                                <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
-                            <i class="fa-regular fa-heart"></i>
-                            <span class="like-count">5</span>
+                        <div class="p-2.5">
+                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！🍆</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5">
+                                    <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
+                                    <span>Xaiver</span>
+                                </div>
+                                <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
+                                    <i class="fa-regular fa-heart"></i>
+                                    <span class="like-count">5</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div id="card-mina" class="masonry-item cursor-pointer" 
-                 onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
-                <img src="https://picsum.photos/400/400?random=12">
-                <div class="p-2.5">
-                    <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">衣服都被雨水打濕了🌧️</h4>
-                    <div class="flex justify-between items-center text-[10px] text-gray-500">
-                        <div class="flex items-center gap-1.5">
-                            <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
-                            <span>Mina_米娜</span>
-                        </div>
-                        <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
-                            <i class="fa-regular fa-heart"></i>
-                            <span class="like-count">892</span>
+                    <div id="card-mina" class="masonry-item cursor-pointer" 
+                         onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
+                        <img src="https://picsum.photos/400/400?random=12">
+                        <div class="p-2.5">
+                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">衣服都被雨水打濕了🌧️</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5">
+                                    <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
+                                    <span>Mina_米娜</span>
+                                </div>
+                                <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
+                                    <i class="fa-regular fa-heart"></i>
+                                    <span class="like-count">892</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-        </div>
-    </section>
-</main>
+                </div>
+            </section>
+
             <section id="shop-tab" class="tab-content p-4">
                 <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm">
                     <h2 class="text-xl font-black mb-1">Sexify Store</h2>
@@ -145,7 +150,6 @@
                     <div id="drop-area" onclick="document.getElementById('file-input').click()" class="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
                         <div id="preview-container" class="absolute inset-0 hidden bg-black">
                             <img id="file-preview" class="w-full h-full object-contain">
-                            <video id="video-preview" class="hidden w-full h-full object-contain" controls></video>
                             <button onclick="event.stopPropagation(); resetUpload()" class="absolute top-3 right-3 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center">✕</button>
                         </div>
                         <div id="upload-prompt" class="text-center">
@@ -153,30 +157,11 @@
                         </div>
                         <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
                     </div>
-                    <div class="mt-6 space-y-4">
-                        <input type="text" placeholder="填寫標題內容..." class="w-full text-base font-black outline-none border-b pb-3">
-                        <textarea placeholder="分享你的故事吧..." class="w-full h-32 text-sm outline-none resize-none"></textarea>
-                    </div>
-                </div>
-            </section>
-
-            <section id="profile-tab" class="tab-content bg-[#f9f9f9] min-h-screen">
-                <div class="bg-white px-6 pt-12 pb-6 rounded-b-[2.5rem] shadow-sm relative">
-                    <div class="flex items-center gap-5 mb-6">
-                        <div class="w-20 h-20 rounded-full p-1 border-2 border-sexify">
-                            <img src="https://i.pravatar.cc/200?u=sexify_user" class="w-full h-full rounded-full object-cover">
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-black">Creator_Master</h3>
-                            <p class="text-[10px] text-gray-400">Sexify ID: 888 999 666</p>
-                        </div>
-                    </div>
-                    <button class="w-full bg-gray-100 py-2.5 rounded-full text-xs font-black">編輯資料</button>
                 </div>
             </section>
         </main>
 
-        <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2 shadow-2xl">
+        <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2">
             <div class="flex flex-1 justify-around">
                 <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
                     <i class="fa-solid fa-house text-lg"></i>
@@ -189,10 +174,7 @@
             </div>
             <div class="w-16 flex justify-center">
                 <button onclick="switchTab('upload-tab', this)" class="w-12 h-8 border-[1.5px] border-black rounded-lg relative">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="w-4 h-[2px] bg-black"></div>
-                        <div class="w-[2px] h-4 bg-black absolute"></div>
-                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center font-bold text-xl">+</div>
                 </button>
             </div>
             <div class="flex flex-1 justify-around">
@@ -232,243 +214,197 @@
                     <i class="fa-regular fa-heart text-xl"></i>
                     <span class="text-[10px] font-bold like-count">5</span>
                 </div>
-                <div class="flex flex-col items-center gap-0.5"><i class="fa-regular fa-message text-xl"></i><span class="text-[10px] font-bold">128</span></div>
-                <div class="flex flex-col items-center gap-0.5" onclick="alert('連結已複製！')"><i class="fa-solid fa-share-nodes text-xl"></i><span class="text-[10px] font-bold">分享</span></div>
+                <div class="flex flex-col items-center gap-0.5 cursor-pointer" onclick="openComments()">
+                    <i class="fa-regular fa-message text-xl"></i>
+                    <span class="text-[10px] font-bold">128</span>
+                </div>
+                <div class="flex flex-col items-center gap-0.5" onclick="alert('連結已複製！')">
+                    <i class="fa-solid fa-share-nodes text-xl"></i>
+                    <span class="text-[10px] font-bold">分享</span>
+                </div>
             </div>
         </div>
     </div>
 
-<script>
-    // 1. 年齡驗證
-    function verifyAge() {
-        document.getElementById('age-gate').classList.add('opacity-0');
-        setTimeout(() => {
-            document.getElementById('age-gate').style.display = 'none';
-            document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
-        }, 500);
-    }
-
-    // 2. 切換 Tab
-    function switchTab(tabId, btn) {
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        document.querySelectorAll('.nav-btn').forEach(b => {
-            b.classList.remove('nav-active');
-            b.classList.add('text-gray-400');
-        });
-        if(btn && btn.classList.contains('nav-btn')) {
-            btn.classList.add('nav-active');
-            btn.classList.remove('text-gray-400');
-        }
-        if(tabId === 'shop-tab') renderShop();
-        window.scrollTo(0, 0);
-    }
-
-    // 3. 詳情頁控制 (已整合為單一函數)
-    function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
-    const detail = document.getElementById('post-detail');
-    
-    // 填入資料
-    document.getElementById('detail-image').src = imgSrc;
-    document.getElementById('detail-avatar').src = avatar;
-    document.getElementById('detail-username').innerText = username;
-    document.getElementById('detail-title').innerText = title;
-    
-    // 儲存來源卡片 ID，讓點讚可以同步
-    detail.dataset.sourceId = cardId;
-    
-    // 同步點讚數字
-    const detailLikeCount = detail.querySelector('.like-count');
-    if(detailLikeCount) detailLikeCount.innerText = likeCount;
-
-    // 檢查首頁卡片目前是否已點讚，若是，詳情頁也要變紅
-    const sourceCard = document.getElementById(cardId);
-    const detailHeart = detail.querySelector('.fa-heart');
-    if(sourceCard && sourceCard.querySelector('.fa-solid')) {
-        detailHeart.classList.replace('fa-regular', 'fa-solid');
-        detailHeart.classList.add('text-sexify');
-    } else {
-        detailHeart.classList.replace('fa-solid', 'fa-regular');
-        detailHeart.classList.remove('text-sexify');
-    }
-
-    // 顯示詳情頁
-    detail.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-}
-    function closeDetail() {
-        const detail = document.getElementById('post-detail');
-        detail.classList.add('translate-y-full'); // 觸發下滑動畫
-        
-        setTimeout(() => {
-            detail.classList.add('hidden');
-            document.body.style.overflow = 'auto'; // 恢復背景滾動
-        }, 300); // 等待動畫結束
-    }
-
-    // 4. 點讚功能
-    function toggleLike(element) {
-    if (event) event.stopPropagation();
-    const heartIcon = element.querySelector('i');
-    const countSpan = element.querySelector('.like-count');
-    if (!countSpan) return;
-
-    // --- 原有的加減邏輯 ---
-    let countText = countSpan.innerText.trim();
-    let isK = countText.includes('k');
-    let count = parseFloat(countText.replace('k', ''));
-    if (isK) count = count * 1000;
-
-    const isAdding = !heartIcon.classList.contains('fa-solid');
-    if (isAdding) {
-        heartIcon.classList.replace('fa-regular', 'fa-solid');
-        heartIcon.classList.add('text-sexify', 'heart-pop');
-        count++;
-    } else {
-        heartIcon.classList.replace('fa-solid', 'fa-regular');
-        heartIcon.classList.remove('text-sexify', 'heart-pop');
-        count--;
-    }
-    const finalDisplay = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
-    countSpan.innerText = finalDisplay;
-    // ----------------------
-
-    // --- 新增：同步邏輯 ---
-    const detailPage = document.getElementById('post-detail');
-    // 如果現在點的是詳情頁裡的愛心
-    if (element.closest('#post-detail')) {
-        const sourceId = detailPage.dataset.sourceId;
-        if (sourceId) {
-            const sourceCard = document.getElementById(sourceId);
-            if (sourceCard) {
-                const sourceHeart = sourceCard.querySelector('i');
-                const sourceCount = sourceCard.querySelector('.like-count');
-                
-                // 同步狀態與數字到首頁卡片
-                sourceCount.innerText = finalDisplay;
-                if (isAdding) {
-                    sourceHeart.classList.replace('fa-regular', 'fa-solid');
-                    sourceHeart.classList.add('text-sexify');
-                } else {
-                    sourceHeart.classList.replace('fa-solid', 'fa-regular');
-                    sourceHeart.classList.remove('text-sexify');
-                }
-            }
-        }
-    }
-}
-    // 5. 關注與商店/上傳 (其餘功能保持不變)
-    function toggleFollow(btnId) {
-        const btn = document.getElementById(btnId);
-        const isFollowing = btn.getAttribute('data-following') === 'true';
-        if (!isFollowing) {
-            btn.innerText = "已關注";
-            btn.setAttribute('data-following', 'true');
-            btn.className = (btnId === 'follow-btn-detail') ? "bg-gray-100 text-gray-400 px-4 py-1.5 rounded-full text-xs font-bold" : "text-black text-sm font-bold";
-        } else {
-            btn.innerText = "關注";
-            btn.setAttribute('data-following', 'false');
-            btn.className = (btnId === 'follow-btn-detail') ? "bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold" : "text-gray-400 text-sm font-bold";
-        }
-    }
-
-    function renderShop() {
-        const products = [
-            { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
-            { name: "專屬語音包", price: 19.9, old: 35.0, img: "https://picsum.photos/300/300?random=22" }
-        ];
-        document.getElementById('shop-grid').innerHTML = products.map(p => `
-            <div class="bg-white rounded-2xl overflow-hidden shadow-sm">
-                <img src="${p.img}" class="w-full aspect-square object-cover">
-                <div class="p-3">
-                    <h4 class="text-[11px] font-bold truncate">${p.name}</h4>
-                    <div class="flex items-center gap-2 mt-1">
-                        <span class="text-sexify font-black text-xs">$${p.price}</span>
-                        <span class="text-[9px] text-gray-300 line-through">$${p.old}</span>
+    <div id="comment-sheet" class="fixed inset-0 z-[1100] hidden">
+        <div class="absolute inset-0 bg-black/40" onclick="closeComments()"></div>
+        <div id="comment-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] h-[75vh] translate-y-full transition-transform duration-300 flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-[2rem]">
+                <span class="font-black text-sm">評論 128</span>
+                <button onclick="closeComments()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-6" id="comment-list">
+                <div class="flex gap-3">
+                    <img src="https://i.pravatar.cc/100?u=user1" class="w-8 h-8 rounded-full">
+                    <div class="flex-1">
+                        <p class="text-[11px] font-bold text-gray-400">帥氣小哥哥</p>
+                        <p class="text-sm mt-1">這張照片拍得太好看了吧！🔥</p>
+                        <p class="text-[10px] text-gray-300 mt-2">3小時前 · 回覆</p>
                     </div>
                 </div>
             </div>
-        `).join('');
-    }
-
-    function handleFileSelect(input) {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            document.getElementById('upload-prompt').classList.add('hidden');
-            document.getElementById('preview-container').classList.remove('hidden');
-            document.getElementById('file-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
-    function resetUpload() {
-        document.getElementById('file-input').value = "";
-        document.getElementById('preview-container').classList.add('hidden');
-        document.getElementById('upload-prompt').classList.remove('hidden');
-    }
-    function startUpload() { alert("🚀 發佈成功！"); resetUpload(); switchTab('home-tab'); }
-    // 開啟留言區
-function openComments() {
-    const sheet = document.getElementById('comment-sheet');
-    const panel = document.getElementById('comment-panel');
-    sheet.classList.remove('hidden');
-    setTimeout(() => {
-        panel.classList.remove('translate-y-full');
-    }, 10);
-}
-
-// 關閉留言區
-function closeComments() {
-    const panel = document.getElementById('comment-panel');
-    const sheet = document.getElementById('comment-sheet');
-    panel.classList.add('translate-y-full');
-    setTimeout(() => {
-        sheet.classList.add('hidden');
-    }, 300);
-}
-
-// 修改原有的詳情頁底部 HTML，讓訊息圖示可以點擊
-// 請在你的 HTML 詳情頁底部找到這個 div 並修改：
-/*
-<div class="flex flex-col items-center gap-0.5 cursor-pointer" onclick="openComments()">
-    <i class="fa-regular fa-message text-xl"></i>
-    <span class="text-[10px] font-bold">128</span>
-</div>
-*/
-</script>
-    
-    <div id="comment-sheet" class="fixed inset-0 z-[1100] hidden">
-    <div class="absolute inset-0 bg-black/40" onclick="closeComments()"></div>
-    <div id="comment-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] h-[70vh] translate-y-full transition-transform duration-300 flex flex-col">
-        <div class="p-4 border-b flex justify-between items-center">
-            <span class="font-black text-sm">128 條評論</span>
-            <button onclick="closeComments()" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-4 space-y-4" id="comment-list">
-            <div class="flex gap-3">
-                <img src="https://i.pravatar.cc/100?u=user1" class="w-8 h-8 rounded-full">
-                <div class="flex-1">
-                    <p class="text-[11px] font-bold text-gray-500">帥氣小哥哥</p>
-                    <p class="text-xs mt-1">這張照片拍得太好看了吧！🔥</p>
-                    <p class="text-[10px] text-gray-300 mt-2">3小時前 · 回覆</p>
-                </div>
+            <div class="p-4 border-t pb-10 flex items-center gap-3 bg-white">
+                <input type="text" id="comment-input" placeholder="說點好聽的..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none">
+                <button onclick="sendComment()" class="text-sexify font-bold text-sm">發送</button>
             </div>
-            <div class="flex gap-3">
-                <img src="https://i.pravatar.cc/100?u=user2" class="w-8 h-8 rounded-full">
-                <div class="flex-1">
-                    <p class="text-[11px] font-bold text-gray-500">匿名用戶</p>
-                    <p class="text-xs mt-1">跪求攝影器材清單 📸</p>
-                    <p class="text-[10px] text-gray-300 mt-2">5小時前 · 回覆</p>
-                </div>
-            </div>
-        </div>
-        <div class="p-4 border-t pb-8 flex items-center gap-3">
-            <input type="text" placeholder="說點好聽的..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-xs outline-none">
-            <button class="text-sexify font-bold text-xs">發送</button>
         </div>
     </div>
-</div>
+
+    <script>
+        // 1. 年齡驗證
+        function verifyAge() {
+            document.getElementById('age-gate').classList.add('opacity-0');
+            setTimeout(() => {
+                document.getElementById('age-gate').style.display = 'none';
+                document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
+            }, 500);
+        }
+
+        // 2. 切換 Tab
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('nav-active');
+                b.classList.add('text-gray-400');
+            });
+            if(btn && btn.classList.contains('nav-btn')) {
+                btn.classList.add('nav-active');
+                btn.classList.remove('text-gray-400');
+            }
+            if(tabId === 'shop-tab') renderShop();
+            window.scrollTo(0, 0);
+        }
+
+        // 3. 詳情頁控制
+        function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
+            const detail = document.getElementById('post-detail');
+            document.getElementById('detail-image').src = imgSrc;
+            document.getElementById('detail-avatar').src = avatar;
+            document.getElementById('detail-username').innerText = username;
+            document.getElementById('detail-title').innerText = title;
+            detail.dataset.sourceId = cardId; // 紀錄來源卡片
+            
+            const detailLikeCount = detail.querySelector('.like-count');
+            if(detailLikeCount) detailLikeCount.innerText = likeCount;
+
+            // 同步愛心顏色
+            const sourceCard = document.getElementById(cardId);
+            const detailHeart = detail.querySelector('.fa-heart');
+            if(sourceCard && sourceCard.querySelector('.fa-solid')) {
+                detailHeart.classList.replace('fa-regular', 'fa-solid');
+                detailHeart.classList.add('text-sexify');
+            } else {
+                detailHeart.classList.replace('fa-solid', 'fa-regular');
+                detailHeart.classList.remove('text-sexify');
+            }
+
+            detail.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            setTimeout(() => detail.classList.remove('translate-y-full'), 10);
+        }
+
+        function closeDetail() {
+            const detail = document.getElementById('post-detail');
+            detail.classList.add('translate-y-full');
+            setTimeout(() => {
+                detail.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            }, 300);
+        }
+
+        // 4. 點讚同步功能
+        function toggleLike(element) {
+            if (event) event.stopPropagation();
+            const heartIcon = element.querySelector('i');
+            const countSpan = element.querySelector('.like-count');
+            
+            let countText = countSpan.innerText.trim();
+            let count = parseFloat(countText.replace('k', ''));
+            if (countText.includes('k')) count *= 1000;
+
+            const isAdding = !heartIcon.classList.contains('fa-solid');
+            if (isAdding) {
+                heartIcon.classList.replace('fa-regular', 'fa-solid');
+                heartIcon.classList.add('text-sexify', 'heart-pop');
+                count++;
+            } else {
+                heartIcon.classList.replace('fa-solid', 'fa-regular');
+                heartIcon.classList.remove('text-sexify', 'heart-pop');
+                count--;
+            }
+            const finalDisplay = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
+            countSpan.innerText = finalDisplay;
+
+            // 如果在詳情頁點擊，同步回首頁卡片
+            const detailPage = document.getElementById('post-detail');
+            if (element.closest('#post-detail')) {
+                const sourceId = detailPage.dataset.sourceId;
+                const sourceCard = document.getElementById(sourceId);
+                if (sourceCard) {
+                    sourceCard.querySelector('.like-count').innerText = finalDisplay;
+                    const sHeart = sourceCard.querySelector('i');
+                    if (isAdding) { sHeart.classList.replace('fa-regular', 'fa-solid'); sHeart.classList.add('text-sexify'); }
+                    else { sHeart.classList.replace('fa-solid', 'fa-regular'); sHeart.classList.remove('text-sexify'); }
+                }
+            }
+        }
+
+        // 5. 留言板功能
+        function openComments() {
+            const sheet = document.getElementById('comment-sheet');
+            sheet.classList.remove('hidden');
+            setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10);
+        }
+        function closeComments() {
+            document.getElementById('comment-panel').classList.add('translate-y-full');
+            setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300);
+        }
+        function sendComment() {
+            const input = document.getElementById('comment-input');
+            if (!input.value.trim()) return;
+            const list = document.getElementById('comment-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-3 animate-fade-in';
+            div.innerHTML = `<img src="https://i.pravatar.cc/100?u=me" class="w-8 h-8 rounded-full">
+                <div class="flex-1"><p class="text-[11px] font-bold text-gray-400">我</p>
+                <p class="text-sm mt-1">${input.value}</p><p class="text-[10px] text-gray-300 mt-2">剛剛 · 回覆</p></div>`;
+            list.prepend(div);
+            input.value = '';
+        }
+
+        // 其餘功能保持
+        function toggleFollow(id) {
+            const b = document.getElementById(id);
+            const isF = b.innerText === "關注";
+            b.innerText = isF ? "已關注" : "關注";
+            b.style.color = isF ? "#999" : "";
+        }
+        function renderShop() {
+            const p = [{ name: "1對1 私密聊天", price: 49.0, img: "https://picsum.photos/300/300?random=21" }];
+            document.getElementById('shop-grid').innerHTML = p.map(i => `<div class="bg-white rounded-2xl overflow-hidden p-3">
+                <img src="${i.img}" class="rounded-xl mb-2">
+                <h4 class="text-xs font-bold">${i.name}</h4>
+                <p class="text-sexify font-black mt-1">$${i.price}</p></div>`).join('');
+        }
+        function handleFileSelect(i) {
+            const file = i.files[0];
+            if (file) {
+                const r = new FileReader();
+                r.onload = (e) => {
+                    document.getElementById('upload-prompt').classList.add('hidden');
+                    document.getElementById('preview-container').classList.remove('hidden');
+                    document.getElementById('file-preview').src = e.target.result;
+                };
+                r.readAsDataURL(file);
+            }
+        }
+        function resetUpload() {
+            document.getElementById('file-input').value = "";
+            document.getElementById('preview-container').classList.add('hidden');
+            document.getElementById('upload-prompt').classList.remove('hidden');
+        }
+        function startUpload() { alert("🚀 發佈成功！"); resetUpload(); switchTab('home-tab'); }
+    </script>
 </body>
 </html>
