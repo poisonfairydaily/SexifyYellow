@@ -80,47 +80,53 @@
         </header>
 
         <main class="pb-24">
-            <section id="home-tab" class="tab-content active">
-                <div class="masonry-grid" id="main-feed">
-<div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5')">                        <div class="relative">
-                            <img src="https://picsum.photos/400/600?random=11">
-                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
-                                <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
-                            </div>
-                        </div>
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！🍆</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5">
-                                    <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
-                                    <span>Xaiver</span>
-                                </div>
-                                <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
-                                    <i class="fa-regular fa-heart"></i>
-                                    <span class="like-count">5</span>
-                                </div>
-                            </div>
-                        </div>
+    <section id="home-tab" class="tab-content active">
+        <div class="masonry-grid" id="main-feed">
+            
+            <div id="card-xaiver" class="masonry-item cursor-pointer" 
+                 onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
+                <div class="relative">
+                    <img src="https://picsum.photos/400/600?random=11">
+                    <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+                        <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
                     </div>
-
-<div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892')">                        <img src="https://picsum.photos/400/400?random=12">
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">衣服都被雨水打濕了🌧️</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5">
-                                    <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
-                                    <span>Mina_米娜</span>
-                                </div>
-                                <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
-                                    <i class="fa-regular fa-heart"></i>
-                                    <span class="like-count">892</span>
-                                </div>
-                            </div>
+                </div>
+                <div class="p-2.5">
+                    <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！🍆</h4>
+                    <div class="flex justify-between items-center text-[10px] text-gray-500">
+                        <div class="flex items-center gap-1.5">
+                            <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
+                            <span>Xaiver</span>
+                        </div>
+                        <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
+                            <i class="fa-regular fa-heart"></i>
+                            <span class="like-count">5</span>
                         </div>
                     </div>
                 </div>
-            </section>
+            </div>
 
+            <div id="card-mina" class="masonry-item cursor-pointer" 
+                 onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
+                <img src="https://picsum.photos/400/400?random=12">
+                <div class="p-2.5">
+                    <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">衣服都被雨水打濕了🌧️</h4>
+                    <div class="flex justify-between items-center text-[10px] text-gray-500">
+                        <div class="flex items-center gap-1.5">
+                            <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
+                            <span>Mina_米娜</span>
+                        </div>
+                        <div class="flex items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
+                            <i class="fa-regular fa-heart"></i>
+                            <span class="like-count">892</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</main>
             <section id="shop-tab" class="tab-content p-4">
                 <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm">
                     <h2 class="text-xl font-black mb-1">Sexify Store</h2>
@@ -259,28 +265,28 @@
     }
 
     // 3. 詳情頁控制 (已整合為單一函數)
-    function openDetail(imgSrc, username, avatar, title, likeCount) {
-        const detail = document.getElementById('post-detail');
-        
-        // 填入動態資料
-        document.getElementById('detail-image').src = imgSrc;
-        document.getElementById('detail-avatar').src = avatar;
-        document.getElementById('detail-username').innerText = username;
-        document.getElementById('detail-title').innerText = title;
-        
-        // 確保找到詳情頁內的 like-count 並更新
-        const detailLikeCount = detail.querySelector('.like-count');
-        if(detailLikeCount) detailLikeCount.innerText = likeCount;
+    function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
+    const detail = document.getElementById('post-detail');
+    
+    // 1. 填入資料
+    document.getElementById('detail-image').src = imgSrc;
+    document.getElementById('detail-avatar').src = avatar;
+    document.getElementById('detail-username').innerText = username;
+    document.getElementById('detail-title').innerText = title;
+    
+    // 2. 紀錄來源卡片的 ID (新增這行)
+    detail.dataset.sourceId = cardId;
 
-        // 顯示邏輯
-        detail.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // 鎖定背景滾動
-        
-        setTimeout(() => {
-            detail.classList.remove('translate-y-full');
-        }, 10);
-    }
+    // 3. 更新詳情頁數字
+    const detailLikeCount = detail.querySelector('.like-count');
+    if(detailLikeCount) detailLikeCount.innerText = likeCount;
 
+    // 4. 顯示
+    detail.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
+}
+    
     function closeDetail() {
         const detail = document.getElementById('post-detail');
         detail.classList.add('translate-y-full'); // 觸發下滑動畫
@@ -293,29 +299,55 @@
 
     // 4. 點讚功能
     function toggleLike(element) {
-        if (event) event.stopPropagation();
-        const heartIcon = element.querySelector('i');
-        const countSpan = element.querySelector('.like-count');
-        if (!countSpan) return;
+    if (event) event.stopPropagation();
+    const heartIcon = element.querySelector('i');
+    const countSpan = element.querySelector('.like-count');
+    if (!countSpan) return;
 
-        let countText = countSpan.innerText.trim();
-        let isK = countText.includes('k');
-        let count = parseFloat(countText.replace('k', ''));
-        if (isK) count = count * 1000;
+    // --- 原有的加減邏輯 ---
+    let countText = countSpan.innerText.trim();
+    let isK = countText.includes('k');
+    let count = parseFloat(countText.replace('k', ''));
+    if (isK) count = count * 1000;
 
-        if (!heartIcon.classList.contains('fa-solid')) {
-            heartIcon.classList.replace('fa-regular', 'fa-solid');
-            heartIcon.classList.add('text-sexify', 'heart-pop');
-            count++;
-        } else {
-            heartIcon.classList.replace('fa-solid', 'fa-regular');
-            heartIcon.classList.remove('text-sexify', 'heart-pop');
-            count--;
-        }
-
-        countSpan.innerText = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
+    const isAdding = !heartIcon.classList.contains('fa-solid');
+    if (isAdding) {
+        heartIcon.classList.replace('fa-regular', 'fa-solid');
+        heartIcon.classList.add('text-sexify', 'heart-pop');
+        count++;
+    } else {
+        heartIcon.classList.replace('fa-solid', 'fa-regular');
+        heartIcon.classList.remove('text-sexify', 'heart-pop');
+        count--;
     }
+    const finalDisplay = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : Math.floor(count);
+    countSpan.innerText = finalDisplay;
+    // ----------------------
 
+    // --- 新增：同步邏輯 ---
+    const detailPage = document.getElementById('post-detail');
+    // 如果現在點的是詳情頁裡的愛心
+    if (element.closest('#post-detail')) {
+        const sourceId = detailPage.dataset.sourceId;
+        if (sourceId) {
+            const sourceCard = document.getElementById(sourceId);
+            if (sourceCard) {
+                const sourceHeart = sourceCard.querySelector('i');
+                const sourceCount = sourceCard.querySelector('.like-count');
+                
+                // 同步狀態與數字到首頁卡片
+                sourceCount.innerText = finalDisplay;
+                if (isAdding) {
+                    sourceHeart.classList.replace('fa-regular', 'fa-solid');
+                    sourceHeart.classList.add('text-sexify');
+                } else {
+                    sourceHeart.classList.replace('fa-solid', 'fa-regular');
+                    sourceHeart.classList.remove('text-sexify');
+                }
+            }
+        }
+    }
+}
     // 5. 關注與商店/上傳 (其餘功能保持不變)
     function toggleFollow(btnId) {
         const btn = document.getElementById(btnId);
