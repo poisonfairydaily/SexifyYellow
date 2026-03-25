@@ -197,27 +197,36 @@
             </section>
         </main>
 
-        <footer class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t h-16 flex justify-around items-center z-50 px-2">
-            <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active text-gray-300 flex flex-col items-center">
-                <i class="fa-solid fa-house text-lg"></i>
-                <span class="text-[9px] mt-0.5 font-bold">首頁</span>
-            </button>
-            <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-300 flex flex-col items-center">
-                <i class="fa-solid fa-bag-shopping text-lg"></i>
-                <span class="text-[9px] mt-0.5 font-bold">商店</span>
-            </button>
-            <button onclick="switchTab('upload-tab', this)" class="w-12 h-9 bg-sexify text-white rounded-lg flex items-center justify-center shadow-lg active:scale-90 transition">
-                <i class="fa-solid fa-plus text-lg"></i>
-            </button>
-            <button class="nav-btn text-gray-300 flex flex-col items-center">
-                <i class="fa-solid fa-comment-dots text-lg"></i>
-                <span class="text-[9px] mt-0.5 font-bold">消息</span>
-            </button>
-            <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-300 flex flex-col items-center">
-                <i class="fa-solid fa-user text-lg"></i>
-                <span class="text-[9px] mt-0.5 font-bold">我</span>
-            </button>
-        </footer>
+       <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t h-20 flex justify-around items-center z-[60] px-2 pb-safe">
+    
+    <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active text-gray-400 flex flex-col items-center flex-1">
+        <i class="fa-solid fa-house text-xl"></i>
+        <span class="text-[10px] mt-1 font-bold">首頁</span>
+    </button>
+
+    <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1">
+        <i class="fa-solid fa-bag-shopping text-xl"></i>
+        <span class="text-[10px] mt-1 font-bold">商店</span>
+    </button>
+
+    <div class="flex-1 flex justify-center items-center">
+        <button onclick="switchTab('upload-tab', this)" 
+                class="w-14 h-10 bg-sexify text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all duration-200"
+                style="background-color: #ff2442 !important;">
+            <i class="fa-solid fa-plus text-2xl"></i>
+        </button>
+    </div>
+
+    <button class="nav-btn text-gray-400 flex flex-col items-center flex-1">
+        <i class="fa-solid fa-comment-dots text-xl"></i>
+        <span class="text-[10px] mt-1 font-bold">消息</span>
+    </button>
+
+    <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1">
+        <i class="fa-solid fa-user text-xl"></i>
+        <span class="text-[10px] mt-1 font-bold">我</span>
+    </button>
+</footer>
     </div>
 
     <script>
