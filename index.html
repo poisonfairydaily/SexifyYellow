@@ -197,34 +197,35 @@
             </section>
         </main>
 
-<footer class="fixed bottom-0 left-0 right-0 bg-white border-t z-[100] h-16 flex items-center shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
+<footer class="fixed bottom-0 left-0 right-0 bg-white border-t flex items-center shadow-lg h-16 z-[999]">
     
-    <div class="flex flex-1 justify-around items-center">
-        <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
-            <i class="fa-solid fa-house text-lg text-gray-800"></i>
-            <span class="text-[9px] mt-0.5 font-bold text-gray-800">首頁</span>
+    <div class="flex flex-1 justify-around">
+        <button onclick="switchTab('home-tab', this)" class="flex flex-col items-center">
+            <span class="text-[20px]">🏠</span>
+            <span class="text-[9px] font-bold text-gray-800">首頁</span>
         </button>
-        <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-bag-shopping text-lg"></i>
-            <span class="text-[9px] mt-0.5 font-bold">商店</span>
+        <button onclick="switchTab('shop-tab', this)" class="flex flex-col items-center text-gray-400">
+            <span class="text-[20px]">🛍️</span>
+            <span class="text-[9px] font-bold">商店</span>
         </button>
     </div>
 
-    <div class="flex justify-center items-center w-20">
+    <div class="w-20 flex justify-center">
         <button onclick="switchTab('upload-tab', this)" 
-                class="w-12 h-8 bg-white border-2 border-gray-900 rounded-lg flex items-center justify-center active:scale-90 transition-transform">
-            <i class="fa-solid fa-plus text-black text-xl font-black"></i>
+                class="w-12 h-9 bg-white border-2 border-black rounded-lg flex items-center justify-center active:scale-90 transition-all relative">
+            <div class="absolute w-5 h-0.5 bg-black"></div>
+            <div class="absolute h-5 w-0.5 bg-black"></div>
         </button>
     </div>
 
-    <div class="flex flex-1 justify-around items-center">
+    <div class="flex flex-1 justify-around">
         <button class="flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-comment-dots text-lg"></i>
-            <span class="text-[9px] mt-0.5 font-bold">消息</span>
+            <span class="text-[20px]">💬</span>
+            <span class="text-[9px] font-bold">消息</span>
         </button>
-        <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-user text-lg"></i>
-            <span class="text-[9px] mt-0.5 font-bold">我</span>
+        <button onclick="switchTab('profile-tab', this)" class="flex flex-col items-center text-gray-400">
+            <span class="text-[20px]">👤</span>
+            <span class="text-[9px] font-bold">我</span>
         </button>
     </div>
 </footer>
