@@ -251,7 +251,8 @@
 </div>
     </div>
 
-    <script>
+<script>
+        // 1. 切換分頁邏輯
         function switchTab(tabId, btn) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
@@ -270,6 +271,7 @@
             window.scrollTo(0, 0);
         }
 
+        // 2. 開啟詳情頁
         function openDetail(imgSrc, username, avatar, title) {
             const detail = document.getElementById('post-detail');
             document.getElementById('detail-image').src = imgSrc;
@@ -280,12 +282,82 @@
             setTimeout(() => detail.classList.remove('translate-y-full'), 10);
         }
 
+        // 3. 關閉詳情頁
         function closeDetail() {
             const detail = document.getElementById('post-detail');
             detail.classList.add('translate-y-full');
             setTimeout(() => detail.classList.add('hidden'), 300);
         }
 
+        // 4. 年齡驗證（進入入口）
+        function verifyAge() {
+            const gate = document.getElementById('age-gate');
+            const app = document.getElementById('app-content');
+            gate.classList.add('opacity-0');
+            setTimeout(() => {
+                gate.style.display = 'none';
+                app.classList.remove('blur-2xl', 'pointer-events-none');
+            }, 500);
+        }
+
+        // 5. 點讚功能邏輯
+        function toggleLike(element) {
+            const heartIcon = element.querySelector('i');
+            const countSpan = element.querySelector('.like-count');
+            
+            let countText = countSpan.innerText;
+            let count = parseFloat(countText.replace('k', ''));
+            let isK = countText.includes('k');
+            if (isK) count = count * 1000;
+
+            const isLiked = heartIcon.classList.contains('fa-solid');
+
+            if (!isLiked) {
+                heartIcon.classList.replace('fa-regular', 'fa-solid');
+                heartIcon.classList.add('text-sexify');
+                count++;
+            } else {
+                heartIcon.classList.replace('fa-solid', 'fa-regular');
+                heartIcon.classList.remove('text-sexify');
+                count--;
+            }
+
+            if (count >= 1000) {
+                countSpan.innerText = (count / 1000).toFixed(1) + 'k';
+            } else {
+                countSpan.innerText = Math.floor(count);
+            }
+        }
+
+        // 6. 關注功能
+        function toggleFollow(btnId) {
+            const btn = document.getElementById(btnId);
+            const isFollowing = btn.getAttribute('data-following') === 'true';
+
+            if (!isFollowing) {
+                btn.innerText = "已關注";
+                btn.setAttribute('data-following', 'true');
+                if (btnId === 'follow-btn-detail') {
+                    btn.classList.remove('bg-sexify', 'text-white');
+                    btn.classList.add('bg-white', 'text-gray-400', 'border', 'border-gray-200');
+                } else {
+                    btn.classList.remove('text-gray-400');
+                    btn.classList.add('text-black');
+                }
+            } else {
+                btn.innerText = "關注";
+                btn.setAttribute('data-following', 'false');
+                if (btnId === 'follow-btn-detail') {
+                    btn.classList.remove('bg-white', 'text-gray-400', 'border', 'border-gray-200');
+                    btn.classList.add('bg-sexify', 'text-white');
+                } else {
+                    btn.classList.remove('text-black');
+                    btn.classList.add('text-gray-400');
+                }
+            }
+        }
+
+        // 7. 商店渲染
         function renderShop() {
             const products = [
                 { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
@@ -305,14 +377,7 @@
             `).join('');
         }
 
-        function verifyAge() {
-            document.getElementById('age-gate').classList.add('opacity-0');
-            setTimeout(() => {
-                document.getElementById('age-gate').style.display = 'none';
-                document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
-            }, 500);
-        }
-
+        // 8. 上傳相關邏輯
         function handleFileSelect(input) {
             const file = input.files[0];
             if (!file) return;
@@ -344,70 +409,6 @@
             alert("🚀 動態發佈成功！");
             resetUpload();
             switchTab('home-tab');
-        }
-function toggleFollow(btnId) {
-    const btn = document.getElementById(btnId);
-    // 檢查目前是否為關注狀態
-    const isFollowing = btn.getAttribute('data-following') === 'true';
-
-    if (!isFollowing) {
-        // --- 變更為「已關注」 ---
-        btn.innerText = "已關注";
-        btn.setAttribute('data-following', 'true');
-        
-        if (btnId === 'follow-btn-detail') {
-            // 詳情頁按鈕：變灰框白底
-            btn.classList.remove('bg-sexify', 'text-white');
-            btn.classList.add('bg-white', 'text-gray-400', 'border', 'border-gray-200');
-        } else {
-            // Header 按鈕：變黑色加粗
-            btn.classList.remove('text-gray-400');
-            btn.classList.add('text-black');
-        }
-    } else {
-        // --- 恢復為「關注」 ---
-        btn.innerText = "關注";
-        btn.setAttribute('data-following', 'false');
-        
-        if (btnId === 'follow-btn-detail') {
-            // 詳情頁按鈕：變回紅色
-            btn.classList.remove('bg-white', 'text-gray-400', 'border', 'border-gray-200');
-            btn.classList.add('bg-sexify', 'text-white');
-        } else {
-            // Header 按鈕：變回灰色
-            btn.classList.remove('text-black');
-            btn.classList.add('text-gray-400');
-        }
-    }
-}
- <script>
-        // 把剛才那段程式碼貼在這裡面
-        function toggleLike(element) {
-            const heartIcon = element.querySelector('i');
-            const countSpan = element.querySelector('.like-count');
-            
-            let countText = countSpan.innerText;
-            let count = parseFloat(countText.replace('k', ''));
-            let isK = countText.includes('k');
-            if (isK) count = count * 1000;
-
-            const isLiked = heartIcon.classList.contains('fa-solid');
-
-            if (!isLiked) {
-                heartIcon.classList.replace('fa-regular', 'fa-solid');
-                heartIcon.classList.add('text-sexify');
-                count++;
-            } else {
-                heartIcon.classList.replace('fa-solid', 'fa-regular');
-                heartIcon.classList.remove('text-sexify');
-                count--;
-            }
-
-            if (count >= 1000) {
-                countSpan.innerText = (count / 1000).toFixed(1) + 'k';
-            } else {
-                countSpan.innerText = Math.floor(count);
-            }
         }
     </script>
 </body>
