@@ -313,6 +313,35 @@
             resetUpload();
             switchTab('home-tab');
         }
+        function toggleFollow(btnId) {
+    const btn = document.getElementById(btnId);
+    const isFollowing = btn.getAttribute('data-following') === 'true';
+
+    if (!isFollowing) {
+        // 變更為「已關注」狀態
+        btn.innerText = "已關注";
+        btn.classList.remove('bg-sexify', 'text-white');
+        btn.classList.add('bg-white', 'text-gray-400', 'border', 'border-gray-200');
+        btn.setAttribute('data-following', 'true');
+        
+        // 如果是 Header 的按鈕，我們讓它變黑一點表示選中
+        if (btnId === 'follow-btn-header') {
+            btn.classList.add('text-black');
+            btn.classList.remove('text-gray-400');
+        }
+    } else {
+        // 恢復為「未關注」狀態
+        btn.innerText = "關注";
+        btn.classList.remove('bg-white', 'text-gray-400', 'border', 'border-gray-200', 'text-black');
+        
+        if (btnId === 'follow-btn-detail') {
+            btn.classList.add('bg-sexify', 'text-white');
+        } else {
+            btn.classList.add('text-gray-400');
+        }
+        btn.setAttribute('data-following', 'false');
+    }
+}
     </script>
 </body>
 </html>
