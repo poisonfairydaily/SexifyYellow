@@ -317,33 +317,39 @@
             resetUpload();
             switchTab('home-tab');
         }
-        function toggleFollow(btnId) {
+function toggleFollow(btnId) {
     const btn = document.getElementById(btnId);
+    // 檢查目前是否為關注狀態
     const isFollowing = btn.getAttribute('data-following') === 'true';
 
     if (!isFollowing) {
-        // 變更為「已關注」狀態
+        // --- 變更為「已關注」 ---
         btn.innerText = "已關注";
-        btn.classList.remove('bg-sexify', 'text-white');
-        btn.classList.add('text-gray-400');
         btn.setAttribute('data-following', 'true');
         
-        // 如果是 Header 的按鈕，我們讓它變黑一點表示選中
-        if (btnId === 'follow-btn-header') {
-            btn.classList.add('text-black');
+        if (btnId === 'follow-btn-detail') {
+            // 詳情頁按鈕：變灰框白底
+            btn.classList.remove('bg-sexify', 'text-white');
+            btn.classList.add('bg-white', 'text-gray-400', 'border', 'border-gray-200');
+        } else {
+            // Header 按鈕：變黑色加粗
             btn.classList.remove('text-gray-400');
+            btn.classList.add('text-black');
         }
     } else {
-        // 恢復為「未關注」狀態
+        // --- 恢復為「關注」 ---
         btn.innerText = "關注";
-        btn.classList.remove('bg-white', 'text-gray-400', 'border', 'border-gray-200', 'text-black');
+        btn.setAttribute('data-following', 'false');
         
         if (btnId === 'follow-btn-detail') {
+            // 詳情頁按鈕：變回紅色
+            btn.classList.remove('bg-white', 'text-gray-400', 'border', 'border-gray-200');
             btn.classList.add('bg-sexify', 'text-white');
         } else {
+            // Header 按鈕：變回灰色
+            btn.classList.remove('text-black');
             btn.classList.add('text-gray-400');
         }
-        btn.setAttribute('data-following', 'false');
     }
 }
     </script>
