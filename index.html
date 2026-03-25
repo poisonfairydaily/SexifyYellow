@@ -83,7 +83,25 @@
                 </div>
                 <div class="grid grid-cols-3 gap-2.5" id="shop-grid"></div>
             </section>
-
+            <section id="upload-tab" class="tab-content bg-white min-h-screen">
+                <div class="flex items-center justify-between px-4 py-4 border-b">
+                    <button onclick="switchTab('home-tab')" class="text-gray-400 text-sm">取消</button>
+                    <h2 class="text-base font-black">發佈動態</h2>
+                    <button onclick="startUpload()" class="text-sexify font-black text-sm">發佈</button>
+                </div>
+                <div class="p-5">
+                    <div id="drop-area" onclick="document.getElementById('file-input').click()" class="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
+                        <div id="preview-container" class="absolute inset-0 hidden bg-black">
+                            <img id="file-preview" class="w-full h-full object-contain">
+                            <button onclick="event.stopPropagation(); resetUpload()" class="absolute top-3 right-3 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center">✕</button>
+                        </div>
+                        <div id="upload-prompt" class="text-center">
+                            <p class="text-xs text-gray-400 font-bold">選取照片或影片</p>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
+                    </div>
+                </div>
+            </section>
             <section id="profile-tab" class="tab-content">
                 <div class="bg-white p-8 pt-12 text-center border-b">
                     <div class="relative w-24 h-24 mx-auto mb-4">
@@ -259,7 +277,24 @@
             loadComments(sid);
             input.value = '';
         }
-
+        function handleFileSelect(i) {
+            const file = i.files[0];
+            if (file) {
+                const r = new FileReader();
+                r.onload = (e) => {
+                    document.getElementById('upload-prompt').classList.add('hidden');
+                    document.getElementById('preview-container').classList.remove('hidden');
+                    document.getElementById('file-preview').src = e.target.result;
+                };
+                r.readAsDataURL(file);
+            }
+        }
+        function resetUpload() {
+            document.getElementById('file-input').value = "";
+            document.getElementById('preview-container').classList.add('hidden');
+            document.getElementById('upload-prompt').classList.remove('hidden');
+        }
+        function startUpload() { alert("🚀 發佈成功！"); resetUpload(); switchTab('home-tab'); }
     </script>
 </body>
 </html>
