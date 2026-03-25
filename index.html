@@ -201,19 +201,24 @@ function renderShop() {
             grid.innerHTML = items;
         }
 
-        function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
-            const detail = document.getElementById('post-detail');
-            document.getElementById('detail-image').src = imgSrc;
-            document.getElementById('detail-avatar').src = avatar;
-            document.getElementById('detail-username').innerText = username;
-            document.getElementById('detail-title').innerText = title;
-            detail.dataset.sourceId = cardId;
-            detail.querySelector('.like-count').innerText = likeCount;
-            loadComments(cardId);
-            detail.classList.remove('hidden');
-            setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-        }
+function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
+    const detail = document.getElementById('post-detail');
+    // ... 前面的填值代碼 ...
 
+    // 關鍵：同步愛心圖案狀態
+    const sourceCard = document.getElementById(cardId);
+    const detailHeart = detail.querySelector('.fa-heart');
+    const isLiked = sourceCard.querySelector('i').classList.contains('fa-solid');
+
+    if (isLiked) {
+        detailHeart.classList.replace('fa-regular', 'fa-solid');
+        detailHeart.classList.add('text-sexify');
+    } else {
+        detailHeart.classList.replace('fa-solid', 'fa-regular');
+        detailHeart.classList.remove('text-sexify');
+    }
+    // ... 後面的顯示代碼 ...
+}
         function loadComments(id) {
             const list = document.getElementById('comment-list');
             const cms = postComments[id] || [];
