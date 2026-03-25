@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sexify App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/dist/css/all.min.css">
+    <style>
+        /* 隱藏捲動條但保留功能 */
+        ::-webkit-scrollbar { display: none; }
+        body { 
+            -webkit-tap-highlight-color: transparent; /* 移除手機點擊陰影 */
+            user-select: none; /* 防止文字被選取（保護內容） */
+        }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="bg-white text-gray-900 overflow-x-hidden">
+
+    <div id="age-gate" class="fixed inset-0 z-[100] flex items-center justify-center bg-black">
+        <div class="bg-white p-8 rounded-3xl max-w-sm w-11/12 text-center shadow-2xl">
+            <h2 class="text-2xl font-black mb-6">🔞 內容確認</h2>
+            <button onclick="verifyAge()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl mb-4 shadow-lg">進入專屬空間</button>
+            <button onclick="window.location.href='https://google.com'" class="text-gray-400 text-sm">我未滿 18 歲</button>
+        </div>
+    </div>
+
+    <div id="app-content" class="filter blur-2xl transition-all duration-500">
+        
+        <header class="sticky top-0 bg-white/80 backdrop-blur-md border-b z-40 px-5 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-black tracking-tighter text-blue-600">Sexify</h1>
+            <i class="fa-regular fa-paper-plane text-xl text-gray-700"></i>
+        </header>
+
+        <main class="pb-32">
+            <div class="flex space-x-4 overflow-x-auto p-4 no-scrollbar">
+                <div class="flex-shrink-0 w-16 h-16 rounded-full ring-2 ring-pink-500 p-0.5"><div class="w-full h-full bg-gray-200 rounded-full"></div></div>
+                <div class="flex-shrink-0 w-16 h-16 rounded-full ring-2 ring-blue-500 p-0.5"><div class="w-full h-full bg-gray-200 rounded-full"></div></div>
+                <div class="flex-shrink-0 w-16 h-16 rounded-full ring-2 ring-pink-500 p-0.5"><div class="w-full h-full bg-gray-200 rounded-full"></div></div>
+                <div class="flex-shrink-0 w-16 h-16 rounded-full ring-2 ring-gray-300 p-0.5"><div class="w-full h-full bg-gray-200 rounded-full"></div></div>
+            </div>
+
+            <div class="space-y-1">
+                <div class="p-4 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 bg-gray-300 rounded-full"></div>
+                        <span class="font-bold text-sm">Premium_Creator_01</span>
+                    </div>
+                    <i class="fa-solid fa-ellipsis"></i>
+                </div>
+                <div class="relative aspect-square bg-gray-100 group">
+                    <img id="post-img" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop" class="w-full h-full object-cover blur-3xl">
+                    <div id="post-lock" class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white">
+                        <button onclick="showPay()" class="bg-white text-black px-6 py-2 rounded-full font-bold text-sm shadow-xl active:scale-95 transition">解鎖此貼文 $4.99</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t safe-area-bottom z-50">
+            <div class="flex justify-around items-center h-16">
+                <button class="text-blue-600"><i class="fa-solid fa-house text-xl"></i></button>
+                <button class="text-gray-400"><i class="fa-solid fa-magnifying-glass text-xl"></i></button>
+                <button class="text-gray-400"><i class="fa-solid fa-square-plus text-2xl"></i></button>
+                <button class="text-gray-400"><i class="fa-solid fa-heart text-xl"></i></button>
+                <button class="text-gray-400"><i class="fa-solid fa-user text-xl"></i></button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function verifyAge() {
+            document.getElementById('age-gate').style.display = 'none';
+            document.getElementById('app-content').classList.remove('blur-2xl');
+        }
+
+        function showPay() {
+            // 模擬解鎖效果
+            if(confirm("確認支付 $4.99 觀看內容？")) {
+                document.getElementById('post-img').classList.remove('blur-3xl');
+                document.getElementById('post-lock').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
