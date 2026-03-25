@@ -129,38 +129,55 @@
                     </div>
             </section>
 <section id="upload-tab" class="tab-content bg-white min-h-screen">
-    <div class="p-6">
-        <h2 class="text-xl font-black mb-6">發佈新動態</h2>
-        
+    <div class="flex items-center justify-between px-4 py-4 border-b">
+        <button onclick="switchTab('home-tab')" class="text-gray-400 text-sm">取消</button>
+        <h2 class="text-base font-black">發佈動態</h2>
+        <button onclick="startUpload()" class="text-sexify font-black text-sm">發佈</button>
+    </div>
+
+    <div class="p-5">
         <div id="drop-area" 
              onclick="document.getElementById('file-input').click()"
-             class="aspect-square border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center bg-gray-50 active:bg-gray-100 transition">
-            <i class="fa-solid fa-camera text-4xl text-gray-300 mb-4"></i>
-            <p class="text-sm text-gray-400 font-bold">點擊上傳照片或影片</p>
-            <span class="text-[10px] text-gray-300 mt-2">支援 JPG, PNG, MP4</span>
+             class="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center bg-gray-50 active:bg-gray-100 transition-all overflow-hidden relative">
+            
+            <div id="preview-container" class="absolute inset-0 hidden bg-black">
+                <img id="file-preview" class="w-full h-full object-contain">
+                <video id="video-preview" class="hidden w-full h-full object-contain" controls></video>
+                <button onclick="event.stopPropagation(); resetUpload()" class="absolute top-3 right-3 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md">
+                    <span class="text-xs">✕</span>
+                </button>
+            </div>
+
+            <div id="upload-prompt" class="text-center">
+                <div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
+                    <div class="w-5 h-0.5 bg-gray-300 relative">
+                        <div class="absolute w-0.5 h-5 bg-gray-300 -top-2 left-2"></div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 font-bold">選取照片或影片</p>
+            </div>
+            
             <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
         </div>
 
-        <div id="preview-container" class="hidden mt-4 relative rounded-3xl overflow-hidden aspect-square shadow-inner bg-black">
-            <img id="file-preview" class="w-full h-full object-contain">
-            <video id="video-preview" class="hidden w-full h-full object-contain" controls></video>
-            <button onclick="resetUpload()" class="absolute top-4 right-4 bg-black/50 text-white w-8 h-8 rounded-full">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
+        <div class="mt-6 space-y-4">
+            <input type="text" placeholder="填寫標題內容..." class="w-full text-base font-black outline-none border-b border-gray-50 pb-3 placeholder:text-gray-300">
+            <textarea placeholder="添加正文，分享你的故事吧..." class="w-full h-32 text-sm outline-none resize-none placeholder:text-gray-300 leading-relaxed"></textarea>
         </div>
 
-        <div class="mt-8 space-y-4">
-            <input type="text" placeholder="填寫標題..." class="w-full border-b py-3 outline-none font-bold text-sm focus:border-sexify transition">
-            <textarea placeholder="說說你的心情或這張照片的故事..." class="w-full h-24 outline-none text-sm resize-none"></textarea>
-            
-            <div class="flex items-center justify-between border-y py-4 text-sm">
-                <span class="text-gray-500"><i class="fa-solid fa-tag mr-2"></i>標籤</span>
-                <span class="text-gray-300">#新增標籤 ></span>
+        <div class="mt-4 border-t border-gray-50">
+            <div class="flex items-center justify-between py-4 border-b border-gray-50">
+                <div class="flex items-center gap-2 text-gray-700">
+                    <span class="text-sm">📍 添加地點</span>
+                </div>
+                <span class="text-gray-300 text-xs">></span>
             </div>
-
-            <button onclick="startUpload()" class="w-full bg-sexify text-white py-4 rounded-full font-bold shadow-xl mt-4 active:scale-95 transition">
-                發佈動態
-            </button>
+            <div class="flex items-center justify-between py-4 border-b border-gray-50">
+                <div class="flex items-center gap-2 text-gray-700">
+                    <span class="text-sm">🏷️ 標記標籤</span>
+                </div>
+                <span class="text-gray-300 text-xs">#熱門話題 ></span>
+            </div>
         </div>
     </div>
 </section>
