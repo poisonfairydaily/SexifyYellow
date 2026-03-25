@@ -69,42 +69,48 @@
     <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
 </header>
         <main class="pb-24">
-            <section id="home-tab" class="tab-content active">
-                <div class="masonry-grid" id="main-feed">
-                    <div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/600?random=1', '小愛 Alice', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！這次的主題大家還喜歡嗎？🍑')">
-                        <div class="relative">
-                            <img src="https://picsum.photos/400/600?random=11" class="w-full object-cover">
-                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
-                                <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
-                            </div>
-                        </div>
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！這次的主題大家還喜歡嗎？🍑</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5">
-                                    <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
-                                    <span>小愛 Alice</span>
-                                </div>
-                                <div class="flex items-center gap-0.5"><i class="fa-regular fa-heart"></i> 5.2k</div>
-                            </div>
-                        </div>
+         <section id="home-tab" class="tab-content active">
+    <div class="masonry-grid" id="main-feed">
+        <div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/600?random=1', '小愛 Alice', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！這次的主題大家還喜歡嗎？🍑')">
+            <div class="relative">
+                <img src="https://picsum.photos/400/600?random=11" class="w-full object-cover">
+                <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+                    <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
+                </div>
+            </div>
+            <div class="p-2.5">
+                <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！這次的主題大家還喜歡嗎？🍑</h4>
+                <div class="flex justify-between items-center text-[10px] text-gray-500">
+                    <div class="flex items-center gap-1.5">
+                        <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
+                        <span>小愛 Alice</span>
                     </div>
-
-                    <div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '今日份的 OOTD，下雨天也要美美的 🌧️')">
-                        <img src="https://picsum.photos/400/400?random=12" class="w-full object-cover">
-                        <div class="p-2.5">
-                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">今日份的 OOTD，下雨天也要美美的 🌧️</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5">
-                                    <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
-                                    <span>Mina_米娜</span>
-                                </div>
-                                <div class="flex items-center gap-0.5"><i class="fa-regular fa-heart"></i> 892</div>
-                            </div>
-                        </div>
+                    <div class="flex items-center gap-0.5 cursor-pointer active:scale-125 transition-transform" onclick="event.stopPropagation(); toggleLike(this)">
+                        <i class="fa-regular fa-heart"></i>
+                        <span class="like-count">5.2k</span>
                     </div>
                 </div>
-            </section>
+            </div>
+        </div>
+
+        <div class="masonry-item cursor-pointer" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '今日份的 OOTD，下雨天也要美美的 🌧️')">
+            <img src="https://picsum.photos/400/400?random=12" class="w-full object-cover">
+            <div class="p-2.5">
+                <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">今日份的 OOTD，下雨天也要美美的 🌧️</h4>
+                <div class="flex justify-between items-center text-[10px] text-gray-500">
+                    <div class="flex items-center gap-1.5">
+                        <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
+                        <span>Mina_米娜</span>
+                    </div>
+                    <div class="flex items-center gap-0.5 cursor-pointer active:scale-125 transition-transform" onclick="event.stopPropagation(); toggleLike(this)">
+                        <i class="fa-regular fa-heart"></i>
+                        <span class="like-count">892</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
             <section id="shop-tab" class="tab-content p-4">
                 <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm">
@@ -212,6 +218,7 @@
         class="bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95">
     關注
 </button>
+            
         </div>
         <div class="pb-24">
             <img id="detail-image" src="" class="w-full object-contain bg-black max-h-[70vh]">
@@ -221,6 +228,27 @@
                 <div class="text-[10px] text-gray-400 border-t pt-4">發佈於 2026-03-25</div>
             </div>
         </div>
+        <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center justify-between px-4 h-16 z-50">
+    <div class="flex-1 bg-gray-100 rounded-full px-4 py-2 flex items-center mr-4">
+        <i class="fa-regular fa-comment text-gray-400 mr-2"></i>
+        <span class="text-gray-400 text-xs">說點什麼...</span>
+    </div>
+    
+    <div class="flex items-center space-x-5 text-gray-800">
+        <div class="flex flex-col items-center gap-0.5 cursor-pointer" onclick="toggleLike(this)">
+            <i class="fa-regular fa-heart text-xl"></i>
+            <span class="text-[10px] font-bold like-count">5.2k</span>
+        </div>
+        <div class="flex flex-col items-center gap-0.5">
+            <i class="fa-regular fa-message text-xl"></i>
+            <span class="text-[10px] font-bold">128</span>
+        </div>
+        <div class="flex flex-col items-center gap-0.5" onclick="alert('連結已複製到剪貼簿！')">
+            <i class="fa-solid fa-share-nodes text-xl"></i>
+            <span class="text-[10px] font-bold">分享</span>
+        </div>
+    </div>
+</div>
     </div>
 
     <script>
@@ -353,5 +381,36 @@ function toggleFollow(btnId) {
     }
 }
     </script>
+    function toggleLike(element) {
+    const heartIcon = element.querySelector('i');
+    const countSpan = element.querySelector('.like-count');
+    
+    // 解析數字，處理 5.2k 這種格式
+    let countText = countSpan.innerText;
+    let count = parseFloat(countText.replace('k', ''));
+    let isK = countText.includes('k');
+    if (isK) count = count * 1000;
+
+    const isLiked = heartIcon.classList.contains('fa-solid');
+
+    if (!isLiked) {
+        // 點讚狀態
+        heartIcon.classList.replace('fa-regular', 'fa-solid');
+        heartIcon.classList.add('text-sexify');
+        count++;
+    } else {
+        // 取消點讚
+        heartIcon.classList.replace('fa-solid', 'fa-regular');
+        heartIcon.classList.remove('text-sexify');
+        count--;
+    }
+
+    // 格式化回文字顯示
+    if (count >= 1000) {
+        countSpan.innerText = (count / 1000).toFixed(1) + 'k';
+    } else {
+        countSpan.innerText = Math.floor(count);
+    }
+}
 </body>
 </html>
