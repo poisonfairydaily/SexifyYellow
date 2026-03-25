@@ -83,25 +83,6 @@
                 </div>
                 <div class="grid grid-cols-3 gap-2.5" id="shop-grid"></div>
             </section>
-            <section id="upload-tab" class="tab-content bg-white min-h-screen">
-                <div class="flex items-center justify-between px-4 py-4 border-b">
-                    <button onclick="switchTab('home-tab')" class="text-gray-400 text-sm">取消</button>
-                    <h2 class="text-base font-black">發佈動態</h2>
-                    <button onclick="startUpload()" class="text-sexify font-black text-sm">發佈</button>
-                </div>
-                <div class="p-5">
-                    <div id="drop-area" onclick="document.getElementById('file-input').click()" class="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
-                        <div id="preview-container" class="absolute inset-0 hidden bg-black">
-                            <img id="file-preview" class="w-full h-full object-contain">
-                            <button onclick="event.stopPropagation(); resetUpload()" class="absolute top-3 right-3 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center">✕</button>
-                        </div>
-                        <div id="upload-prompt" class="text-center">
-                            <p class="text-xs text-gray-400 font-bold">選取照片或影片</p>
-                        </div>
-                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
-                    </div>
-                </div>
-            </section>
             <section id="profile-tab" class="tab-content">
                 <div class="bg-white p-8 pt-12 text-center border-b">
                     <div class="relative w-24 h-24 mx-auto mb-4">
@@ -132,6 +113,27 @@
         </footer>
     </div>
 
+            <section id="upload-tab" class="tab-content bg-white min-h-screen">
+                <div class="flex items-center justify-between px-4 py-4 border-b">
+                    <button onclick="switchTab('home-tab')" class="text-gray-400 text-sm">取消</button>
+                    <h2 class="text-base font-black">發佈動態</h2>
+                    <button onclick="startUpload()" class="text-sexify font-black text-sm">發佈</button>
+                </div>
+                <div class="p-5">
+                    <div id="drop-area" onclick="document.getElementById('file-input').click()" class="aspect-[3/4] border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
+                        <div id="preview-container" class="absolute inset-0 hidden bg-black">
+                            <img id="file-preview" class="w-full h-full object-contain">
+                            <button onclick="event.stopPropagation(); resetUpload()" class="absolute top-3 right-3 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center">✕</button>
+                        </div>
+                        <div id="upload-prompt" class="text-center">
+                            <p class="text-xs text-gray-400 font-bold">選取照片或影片</p>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*" onchange="handleFileSelect(this)">
+                    </div>
+                </div>
+            </section>
+        </main>
+    
     <div id="post-detail" class="fixed inset-0 z-[1000] bg-white translate-y-full transition-transform duration-300 ease-out overflow-y-auto hidden">
         <div class="sticky top-0 bg-white/80 backdrop-blur-md flex items-center justify-between px-4 h-14 z-10 border-b">
             <button onclick="closeDetail()" class="text-2xl px-2 font-light">✕</button>
