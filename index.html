@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <style>
+<style>
         ::-webkit-scrollbar { display: none; }   
         body { -webkit-tap-highlight-color: transparent; background-color: #f8f8f8; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; }
         :root { --sexify: #ff2442; }
@@ -15,9 +15,30 @@
         .bg-sexify { background-color: var(--sexify); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        
+        /* 1. 瀑布流容器保持 2 欄 */
         .masonry-grid { column-count: 2; column-gap: 8px; padding: 8px; }
-        .masonry-item { break-inside: avoid; margin-bottom: 8px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .masonry-item img { width: 100%; max-height: 300px; object-fit: cover; display: block; }
+        
+        /* 2. 卡片本體：加入按壓微縮放特效 */
+        .masonry-item { 
+            break-inside: avoid; 
+            margin-bottom: 8px; 
+            background: white; 
+            border-radius: 12px; 
+            overflow: hidden; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease;
+        }
+        .masonry-item:active { transform: scale(0.97); }
+
+        /* 3. 關鍵修改：移除 max-height，讓高度隨圖片比例自然伸展 */
+        .masonry-item img { 
+            width: 100%; 
+            height: auto; /* 自動適應長方形比例 */
+            display: block; 
+            object-fit: cover;
+        }
+
         .nav-active { color: #000 !important; font-weight: 900 !important; transform: scale(1.05); transition: all 0.2s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
