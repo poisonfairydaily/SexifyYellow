@@ -380,37 +380,35 @@ function toggleFollow(btnId) {
         }
     }
 }
+ <script>
+        // 把剛才那段程式碼貼在這裡面
+        function toggleLike(element) {
+            const heartIcon = element.querySelector('i');
+            const countSpan = element.querySelector('.like-count');
+            
+            let countText = countSpan.innerText;
+            let count = parseFloat(countText.replace('k', ''));
+            let isK = countText.includes('k');
+            if (isK) count = count * 1000;
+
+            const isLiked = heartIcon.classList.contains('fa-solid');
+
+            if (!isLiked) {
+                heartIcon.classList.replace('fa-regular', 'fa-solid');
+                heartIcon.classList.add('text-sexify');
+                count++;
+            } else {
+                heartIcon.classList.replace('fa-solid', 'fa-regular');
+                heartIcon.classList.remove('text-sexify');
+                count--;
+            }
+
+            if (count >= 1000) {
+                countSpan.innerText = (count / 1000).toFixed(1) + 'k';
+            } else {
+                countSpan.innerText = Math.floor(count);
+            }
+        }
     </script>
-    function toggleLike(element) {
-    const heartIcon = element.querySelector('i');
-    const countSpan = element.querySelector('.like-count');
-    
-    // 解析數字，處理 5.2k 這種格式
-    let countText = countSpan.innerText;
-    let count = parseFloat(countText.replace('k', ''));
-    let isK = countText.includes('k');
-    if (isK) count = count * 1000;
-
-    const isLiked = heartIcon.classList.contains('fa-solid');
-
-    if (!isLiked) {
-        // 點讚狀態
-        heartIcon.classList.replace('fa-regular', 'fa-solid');
-        heartIcon.classList.add('text-sexify');
-        count++;
-    } else {
-        // 取消點讚
-        heartIcon.classList.replace('fa-solid', 'fa-regular');
-        heartIcon.classList.remove('text-sexify');
-        count--;
-    }
-
-    // 格式化回文字顯示
-    if (count >= 1000) {
-        countSpan.innerText = (count / 1000).toFixed(1) + 'k';
-    } else {
-        countSpan.innerText = Math.floor(count);
-    }
-}
 </body>
 </html>
