@@ -173,22 +173,23 @@
             if(tabId === 'profile-tab') renderProfile();
         }
 
-        function renderShop() {
-            const products = [
-                { name: "1對1 私密聊天", price: 49.0, img: "https://picsum.photos/300/300?random=21" },
-                { name: "專屬寫真集 (數位版)", price: 99.0, img: "https://picsum.photos/300/300?random=22" },
-                { name: "VIP 專屬頻道 1個月", price: 199.0, img: "https://picsum.photos/300/300?random=23" },
-                { name: "親筆簽名限量拍立得", price: 299.0, img: "https://picsum.photos/300/300?random=24" }
-            ];
-            document.getElementById('shop-grid').innerHTML = products.map(p => `
-                <div class="bg-white rounded-2xl p-3 shadow-sm">
-                    <img src="${p.img}" class="rounded-xl mb-2 aspect-square object-cover">
-                    <h4 class="text-xs font-bold truncate">${p.name}</h4>
-                    <p class="text-sexify font-black mt-1">$${p.price.toFixed(1)}</p>
-                </div>
-            `).join('');
-        }
-
+      function renderShop() {
+    const products = [
+        { name: "1對1 私密聊天", price: 49.0, img: "https://picsum.photos/300/300?random=21" },
+        { name: "專屬寫真集 (數位版)", price: 99.0, img: "https://picsum.photos/300/300?random=22" },
+        { name: "VIP 專屬頻道 1個月", price: 199.0, img: "https://picsum.photos/300/300?random=23" },
+        { name: "親筆簽名限量拍立得", price: 299.0, img: "https://picsum.photos/300/300?random=24" }
+    ];
+    document.getElementById('shop-grid').innerHTML = products.map(p => `
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col">
+            <img src="${p.img}" class="w-full h-full object-cover">
+            <div class="p-3">
+                <h4 class="text-xs font-bold truncate">${p.name}</h4>
+                <p class="text-sexify font-black mt-1">$${p.price.toFixed(1)}</p>
+            </div>
+        </div>
+    `).join('');
+}
         function renderProfile() {
             const grid = document.getElementById('user-gallery');
             let items = "";
