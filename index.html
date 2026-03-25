@@ -181,37 +181,91 @@
         </div>
     </div>
 </section>
-            <section id="profile-tab" class="tab-content">
-                <div class="bg-white px-6 pt-12 pb-6 border-b rounded-b-[2.5rem] shadow-sm">
-                    <div class="flex items-center gap-5 mb-6">
-                        <div class="w-20 h-20 bg-gray-100 rounded-full p-1 ring-2 ring-gray-50">
-                            <img src="https://i.pravatar.cc/200?u=master" class="w-full h-full rounded-full object-cover">
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-black">Creator_Master</h3>
-                            <p class="text-[10px] text-gray-400 mt-1">Sexify ID: 888999</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-8 mb-6">
-                        <div class="text-center"><p class="font-black">128</p><p class="text-[10px] text-gray-400">關注</p></div>
-                        <div class="text-center"><p class="font-black">5.2k</p><p class="text-[10px] text-gray-400">粉絲</p></div>
-                        <div class="text-center"><p class="font-black">1.5w</p><p class="text-[10px] text-gray-400">獲讚與收藏</p></div>
-                    </div>
-                    <button class="w-full bg-gray-100 py-2.5 rounded-full text-xs font-bold active:scale-95 transition">編輯資料</button>
+           <section id="profile-tab" class="tab-content bg-[#f9f9f9] min-h-screen">
+    
+    <div class="bg-white px-6 pt-12 pb-6 rounded-b-[2.5rem] shadow-sm relative overflow-hidden">
+        <div class="absolute -top-10 -right-10 w-40 h-40 bg-rose-50 rounded-full opacity-50"></div>
+        
+        <div class="relative z-10">
+            <div class="flex items-center gap-5 mb-6">
+                <div class="w-20 h-20 rounded-full p-1 border-2 border-sexify shadow-md bg-white">
+                    <img src="https://i.pravatar.cc/200?u=sexify_user" class="w-full h-full rounded-full object-cover">
                 </div>
-                
-                <div class="p-4">
-                    <div class="bg-black rounded-[2rem] p-6 text-white relative overflow-hidden">
-                        <div class="relative z-10">
-                            <p class="text-[10px] opacity-50 font-bold tracking-widest uppercase">預估本月收益</p>
-                            <div class="flex items-baseline gap-2 mt-2">
-                                <span class="text-3xl font-black text-sexify">$4,250</span>
-                                <span class="text-sm opacity-30 line-through font-bold">$1,800</span> </div>
-                        </div>
-                        <i class="fa-solid fa-chart-line absolute -right-4 -bottom-4 text-white/5 text-8xl"></i>
+                <div>
+                    <h3 class="text-xl font-black text-gray-900">Creator_Master</h3>
+                    <p class="text-[10px] text-gray-400 mt-1 tracking-wider">Sexify ID: 888 999 666</p>
+                    <div class="flex gap-2 mt-2">
+                        <span class="px-2 py-0.5 bg-gray-100 text-[9px] rounded-full text-gray-500">台北市</span>
+                        <span class="px-2 py-0.5 bg-gray-100 text-[9px] rounded-full text-gray-500">雙子座</span>
                     </div>
                 </div>
-            </section>
+            </div>
+
+            <p class="text-xs text-gray-600 leading-relaxed mb-6 px-1">
+                ✨ 這裡是我的私密創作空間<br>
+                分享生活與不為人知的一面。點擊關注不迷路 🍑
+            </p>
+
+            <div class="flex gap-8 mb-6 border-t border-gray-50 pt-6">
+                <div class="text-center flex-1">
+                    <p class="font-black text-lg">128</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">關注</p>
+                </div>
+                <div class="text-center flex-1 border-x border-gray-50">
+                    <p class="font-black text-lg">5.2k</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">粉絲</p>
+                </div>
+                <div class="text-center flex-1">
+                    <p class="font-black text-lg">1.5w</p>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase">獲讚與收藏</p>
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button class="flex-1 bg-gray-100 py-2.5 rounded-full text-xs font-black active:scale-95 transition">編輯資料</button>
+                <button class="w-12 bg-gray-100 rounded-full flex items-center justify-center active:scale-95 transition">
+                    <div class="w-1 h-1 bg-gray-400 rounded-full mx-0.5"></div>
+                    <div class="w-1 h-1 bg-gray-400 rounded-full mx-0.5"></div>
+                    <div class="w-1 h-1 bg-gray-400 rounded-full mx-0.5"></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-4 mt-2">
+        <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-[2rem] p-6 text-white relative shadow-xl overflow-hidden">
+            <div class="relative z-10">
+                <div class="flex justify-between items-start">
+                    <p class="text-[10px] opacity-60 font-black tracking-[0.2em] uppercase">Estimated Revenue</p>
+                    <span class="text-[9px] bg-sexify px-2 py-0.5 rounded-full">VIP Partner</span>
+                </div>
+                <div class="flex items-baseline gap-3 mt-3">
+                    <span class="text-3xl font-black text-white">$4,250</span>
+                    <span class="text-sm opacity-30 line-through font-bold text-gray-400">$1,800</span>
+                </div>
+                <p class="text-[9px] opacity-40 mt-1">累積收益較上月增長 135%</p>
+            </div>
+            <div class="absolute -right-4 -bottom-6 opacity-10 rotate-12">
+                <div class="w-24 h-24 border-8 border-white rounded-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sticky top-[56px] bg-[#f9f9f9] z-20">
+        <div class="flex justify-center space-x-12 py-4">
+            <button class="text-black text-sm font-black border-b-2 border-sexify pb-1">動態</button>
+            <button class="text-gray-400 text-sm font-bold">收藏</button>
+            <button class="text-gray-400 text-sm font-bold">讚過</button>
+        </div>
+    </div>
+
+    <div class="masonry-grid px-2 pb-20">
+        <div class="masonry-item h-40 bg-gray-200 animate-pulse rounded-xl"></div>
+        <div class="masonry-item h-60 bg-gray-200 animate-pulse rounded-xl"></div>
+        <div class="masonry-item h-52 bg-gray-200 animate-pulse rounded-xl"></div>
+        <div class="masonry-item h-44 bg-gray-200 animate-pulse rounded-xl"></div>
+    </div>
+</section>
         </main>
 
 <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2 shadow-2xl">
