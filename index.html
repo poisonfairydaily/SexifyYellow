@@ -301,48 +301,41 @@ function handleFileSelect(input) {
     const file = input.files[0];
     if (!file) return;
 
-    selectedFile = file;
     const reader = new FileReader();
     const isVideo = file.type.startsWith('video/');
     
     reader.onload = (e) => {
-        const previewImg = document.getElementById('file-preview');
-        const previewVid = document.getElementById('video-preview');
+        document.getElementById('upload-prompt').classList.add('hidden');
         const container = document.getElementById('preview-container');
-        const dropArea = document.getElementById('drop-area');
+        const img = document.getElementById('file-preview');
+        const vid = document.getElementById('video-preview');
 
-        dropArea.classList.add('hidden');
         container.classList.remove('hidden');
-
         if (isVideo) {
-            previewImg.classList.add('hidden');
-            previewVid.classList.remove('hidden');
-            previewVid.src = e.target.result;
+            img.classList.add('hidden');
+            vid.classList.remove('hidden');
+            vid.src = e.target.result;
         } else {
-            previewVid.classList.add('hidden');
-            previewImg.classList.remove('hidden');
-            previewImg.src = e.target.result;
+            vid.classList.add('hidden');
+            img.classList.remove('hidden');
+            img.src = e.target.result;
         }
     };
     reader.readAsDataURL(file);
 }
 
 function resetUpload() {
-    selectedFile = null;
     document.getElementById('file-input').value = "";
-    document.getElementById('drop-area').classList.remove('hidden');
     document.getElementById('preview-container').classList.add('hidden');
+    document.getElementById('upload-prompt').classList.remove('hidden');
     document.getElementById('video-preview').src = "";
 }
 
-// 模擬發佈成功
-async function startUpload() {
-    if (!selectedFile) return alert("請先選取內容！");
-    
-    // 這裡可以串接你的 Firebase 程式碼
-    alert("✨ 內容已準備好發佈至 Sexify！");
+function startUpload() {
+    // 模擬上傳成功的動作
+    alert("🚀 動態發佈成功！");
     resetUpload();
-    switchTab('home-tab'); // 發佈完跳回首頁
+    switchTab('home-tab'); 
 }
     </script>
 </body>
