@@ -200,31 +200,39 @@
 <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2 shadow-2xl">
     
     <div class="flex flex-1 justify-around items-center">
-        <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
-            <i class="fa-solid fa-house text-xl text-black"></i>
-            <span class="text-[10px] mt-1 font-bold text-black">首頁</span>
+        <button onclick="switchTab('home-tab', this)" class="flex flex-col items-center">
+            <div class="w-6 h-6 flex items-center justify-center mb-1">
+                <i class="fa-solid fa-house text-lg text-black"></i> </div>
+            <span class="text-[10px] font-bold text-black">發現</span>
         </button>
-        <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-bag-shopping text-xl"></i>
-            <span class="text-[10px] mt-1 font-bold">商店</span>
+        <button onclick="switchTab('shop-tab', this)" class="flex flex-col items-center text-gray-400">
+            <div class="w-6 h-6 flex items-center justify-center mb-1">
+                <i class="fa-solid fa-bag-shopping text-lg"></i>
+            </div>
+            <span class="text-[10px] font-bold">商店</span>
         </button>
     </div>
 
     <div class="w-16 flex justify-center">
         <button onclick="switchTab('upload-tab', this)" 
-                class="w-12 h-8 bg-white border-[1.5px] border-black rounded-lg flex items-center justify-center active:scale-90 transition-transform shadow-sm">
-            <i class="fa-solid fa-plus text-black text-lg font-black"></i>
+                class="w-12 h-8 bg-white border-[1.5px] border-black rounded-lg flex items-center justify-center active:scale-90 transition-transform relative">
+            <div class="absolute w-4 h-[2px] bg-black"></div>
+            <div class="absolute w-[2px] h-4 bg-black"></div>
         </button>
     </div>
 
     <div class="flex flex-1 justify-around items-center">
-        <button class="nav-btn flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-comment-dots text-xl"></i>
-            <span class="text-[10px] mt-1 font-bold">消息</span>
+        <button class="flex flex-col items-center text-gray-400">
+            <div class="w-6 h-6 flex items-center justify-center mb-1">
+                <i class="fa-solid fa-comment-dots text-lg"></i>
+            </div>
+            <span class="text-[10px] font-bold">消息</span>
         </button>
-        <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-            <i class="fa-solid fa-user text-xl"></i>
-            <span class="text-[10px] mt-1 font-bold">我</span>
+        <button onclick="switchTab('profile-tab', this)" class="flex flex-col items-center text-gray-400">
+            <div class="w-6 h-6 flex items-center justify-center mb-1">
+                <i class="fa-solid fa-user text-lg"></i>
+            </div>
+            <span class="text-[10px] font-bold">我</span>
         </button>
     </div>
 </footer>
