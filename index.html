@@ -55,15 +55,19 @@
     <div id="app-content" class="filter blur-2xl pointer-events-none transition-all duration-700">
         
         <header class="sticky top-0 bg-white/90 backdrop-blur-xl border-b z-40 px-5 h-14 flex justify-between items-center">
-            <i class="fa-solid fa-bars text-lg text-gray-400"></i>
-            <div class="flex space-x-6">
-                <button class="text-gray-400 text-sm font-bold">關注</button>
-                <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
-                <button class="text-gray-400 text-sm font-bold">附近</button>
-            </div>
-            <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
-        </header>
-
+        <i class="fa-solid fa-bars text-lg text-gray-400"></i>
+    <div class="flex space-x-6">
+        <button id="follow-btn-header" 
+                onclick="toggleFollow('follow-btn-header')" 
+                class="text-gray-400 text-sm font-bold transition-all">
+            關注
+        </button>
+        
+        <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
+        <button class="text-gray-400 text-sm font-bold">附近</button>
+    </div>
+    <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
+</header>
         <main class="pb-24">
             <section id="home-tab" class="tab-content active">
                 <div class="masonry-grid" id="main-feed">
