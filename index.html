@@ -249,7 +249,16 @@
             </div>
         </div>
     </div>
-
+const postComments = {
+    'card-xaiver': [
+        { user: '酷炫男孩', text: '這驚喜太猛了吧！🔥', time: '2小時前' },
+        { user: '路人甲', text: '求後續更新！', time: '5小時前' }
+    ],
+    'card-mina': [
+        { user: '小雨點', text: '下雨天要注意保暖喔 🌧️', time: '1小時前' },
+        { user: '攝影大師', text: '這張構圖很有氛圍感。', time: '3小時前' }
+    ]
+};
     <script>
         // 1. 年齡驗證
         function verifyAge() {
@@ -277,33 +286,31 @@
         }
 
         // 3. 詳情頁控制
-        function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
-            const detail = document.getElementById('post-detail');
-            document.getElementById('detail-image').src = imgSrc;
-            document.getElementById('detail-avatar').src = avatar;
-            document.getElementById('detail-username').innerText = username;
-            document.getElementById('detail-title').innerText = title;
-            detail.dataset.sourceId = cardId; // 紀錄來源卡片
-            
-            const detailLikeCount = detail.querySelector('.like-count');
-            if(detailLikeCount) detailLikeCount.innerText = likeCount;
+function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
+    const detail = document.getElementById('post-detail');
+    // ... 原有的填寫資料代碼保持不變 ...
+    detail.dataset.sourceId = cardId; 
 
-            // 同步愛心顏色
-            const sourceCard = document.getElementById(cardId);
-            const detailHeart = detail.querySelector('.fa-heart');
-            if(sourceCard && sourceCard.querySelector('.fa-solid')) {
-                detailHeart.classList.replace('fa-regular', 'fa-solid');
-                detailHeart.classList.add('text-sexify');
-            } else {
-                detailHeart.classList.replace('fa-solid', 'fa-regular');
-                detailHeart.classList.remove('text-sexify');
-            }
+    // --- 新增：動態填入留言 ---
+    const commentList = document.getElementById('comment-list');
+    const comments = postComments[cardId] || []; // 取得該卡片的留言，若無則空陣列
+    
+    commentList.innerHTML = comments.map(c => `
+        <div class="flex gap-3 animate-fade-in">
+            <img src="https://i.pravatar.cc/100?u=${c.user}" class="w-8 h-8 rounded-full">
+            <div class="flex-1">
+                <p class="text-[11px] font-bold text-gray-500">${c.user}</p>
+                <p class="text-xs mt-1">${c.text}</p>
+                <p class="text-[10px] text-gray-300 mt-2">${c.time} · 回覆</p>
+            </div>
+        </div>
+    `).join('');
+    // -----------------------
 
-            detail.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-            setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-        }
-
+    // ... 顯示詳情頁的代碼 ...
+    detail.classList.remove('hidden');
+    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
+}
         function closeDetail() {
             const detail = document.getElementById('post-detail');
             detail.classList.add('translate-y-full');
@@ -360,18 +367,35 @@
             document.getElementById('comment-panel').classList.add('translate-y-full');
             setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300);
         }
-        function sendComment() {
-            const input = document.getElementById('comment-input');
-            if (!input.value.trim()) return;
-            const list = document.getElementById('comment-list');
-            const div = document.createElement('div');
-            div.className = 'flex gap-3 animate-fade-in';
-            div.innerHTML = `<img src="https://i.pravatar.cc/100?u=me" class="w-8 h-8 rounded-full">
-                <div class="flex-1"><p class="text-[11px] font-bold text-gray-400">我</p>
-                <p class="text-sm mt-1">${input.value}</p><p class="text-[10px] text-gray-300 mt-2">剛剛 · 回覆</p></div>`;
-            list.prepend(div);
-            input.value = '';
-        }
+      function sendComment() {
+    const input = document.getElementById('comment-input');
+    const detailPage = document.getElementById('post-detail');
+    const sourceId = detailPage.dataset.sourceId; // 拿到目前是哪張卡片
+    if (!input.value.trim() || !sourceId) return;
+
+    // 1. 存入數據對象 (這樣下次點開還會在)
+    if (!postComments[sourceId]) postComments[sourceId] = [];
+    postComments[sourceId].unshift({
+        user: '我',
+        text: input.value,
+        time: '剛剛'
+    });
+
+    // 2. 立即更新畫面 (重跑一次畫面或直接 prepend)
+    const list = document.getElementById('comment-list');
+    const div = document.createElement('div');
+    div.className = 'flex gap-3 animate-fade-in';
+    div.innerHTML = `
+        <img src="https://i.pravatar.cc/100?u=me" class="w-8 h-8 rounded-full">
+        <div class="flex-1">
+            <p class="text-[11px] font-bold text-gray-400">我</p>
+            <p class="text-sm mt-1">${input.value}</p>
+            <p class="text-[10px] text-gray-300 mt-2">剛剛 · 回覆</p>
+        </div>
+    `;
+    list.prepend(div);
+    input.value = '';
+}
 
         // 其餘功能保持
         function toggleFollow(id) {
