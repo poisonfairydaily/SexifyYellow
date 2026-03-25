@@ -46,3 +46,185 @@
 <body class="text-gray-900">
 
     <div id="age-gate" class="fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500">
+        <div class="bg-white p-10 rounded-[2.5rem] w-11/12 max-w-sm text-center shadow-2xl">
+            <h2 class="text-4xl font-black text-sexify mb-3 tracking-tighter">SEXIFY</h2>
+            <p class="text-gray-400 text-sm mb-8 leading-relaxed">此空間包含成人內容<br>進入即代表您已滿 18 歲</p>
+            <button onclick="verifyAge()" class="w-full bg-sexify text-white py-4 rounded-full font-bold shadow-lg active:scale-95 transition">確認進入</button>
+        </div>
+    </div>
+
+    <div id="app-content" class="filter blur-2xl pointer-events-none transition-all duration-700">
+        
+        <header class="sticky top-0 bg-white/90 backdrop-blur-xl border-b z-40 px-5 h-14 flex justify-between items-center">
+            <i class="fa-solid fa-bars text-lg text-gray-400"></i>
+            <div class="flex space-x-6">
+                <button class="text-gray-400 text-sm font-bold">關注</button>
+                <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
+                <button class="text-gray-400 text-sm font-bold">附近</button>
+            </div>
+            <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
+        </header>
+
+        <main class="pb-24">
+            <section id="home-tab" class="tab-content active">
+                <div class="masonry-grid" id="main-feed">
+                    <div class="masonry-item">
+                        <div class="relative">
+                            <img src="https://picsum.photos/400/600?random=11" class="w-full object-cover">
+                            <div class="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center">
+                                <i class="fa-solid fa-lock text-white/80 text-2xl"></i>
+                            </div>
+                        </div>
+                        <div class="p-2.5">
+                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">深夜驚喜！這次的主題大家還喜歡嗎？🍑</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5">
+                                    <img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full">
+                                    <span>小愛 Alice</span>
+                                </div>
+                                <div class="flex items-center gap-0.5"><i class="fa-regular fa-heart"></i> 5.2k</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="masonry-item">
+                        <img src="https://picsum.photos/400/400?random=12" class="w-full object-cover">
+                        <div class="p-2.5">
+                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">今日份的 OOTD，下雨天也要美美的 🌧️</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5">
+                                    <img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full">
+                                    <span>Mina_米娜</span>
+                                </div>
+                                <div class="flex items-center gap-0.5"><i class="fa-regular fa-heart"></i> 892</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="masonry-item">
+                        <div class="relative">
+                            <img src="https://picsum.photos/400/700?random=13" class="w-full object-cover">
+                            <div class="absolute top-2 left-2 bg-sexify text-white text-[9px] px-2 py-0.5 rounded-full font-bold">限定特惠</div>
+                        </div>
+                        <div class="p-2.5">
+                            <h4 class="text-xs font-bold line-clamp-2 leading-snug mb-2">週年限定相簿，最後三小時下架！</h4>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-sexify font-black text-xs">$9.99</span>
+                                <span class="text-[9px] text-gray-400 line-through">$29.99</span> </div>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a3" class="w-4 h-4 rounded-full"><span>Neko酱</span></div>
+                                <div class="flex items-center gap-0.5 text-sexify"><i class="fa-solid fa-heart"></i> 1.5w</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="shop-tab" class="tab-content p-4">
+                <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm">
+                    <h2 class="text-xl font-black mb-1">Sexify Store</h2>
+                    <p class="text-gray-400 text-[10px] tracking-widest uppercase">Premium Merchandise</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3" id="shop-grid">
+                    </div>
+            </section>
+
+            <section id="profile-tab" class="tab-content">
+                <div class="bg-white px-6 pt-12 pb-6 border-b rounded-b-[2.5rem] shadow-sm">
+                    <div class="flex items-center gap-5 mb-6">
+                        <div class="w-20 h-20 bg-gray-100 rounded-full p-1 ring-2 ring-gray-50">
+                            <img src="https://i.pravatar.cc/200?u=master" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black">Creator_Master</h3>
+                            <p class="text-[10px] text-gray-400 mt-1">Sexify ID: 888999</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-8 mb-6">
+                        <div class="text-center"><p class="font-black">128</p><p class="text-[10px] text-gray-400">關注</p></div>
+                        <div class="text-center"><p class="font-black">5.2k</p><p class="text-[10px] text-gray-400">粉絲</p></div>
+                        <div class="text-center"><p class="font-black">1.5w</p><p class="text-[10px] text-gray-400">獲讚與收藏</p></div>
+                    </div>
+                    <button class="w-full bg-gray-100 py-2.5 rounded-full text-xs font-bold active:scale-95 transition">編輯資料</button>
+                </div>
+                
+                <div class="p-4">
+                    <div class="bg-black rounded-[2rem] p-6 text-white relative overflow-hidden">
+                        <div class="relative z-10">
+                            <p class="text-[10px] opacity-50 font-bold tracking-widest uppercase">預估本月收益</p>
+                            <div class="flex items-baseline gap-2 mt-2">
+                                <span class="text-3xl font-black text-sexify">$4,250</span>
+                                <span class="text-sm opacity-30 line-through font-bold">$1,800</span> </div>
+                        </div>
+                        <i class="fa-solid fa-chart-line absolute -right-4 -bottom-4 text-white/5 text-8xl"></i>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t h-16 flex justify-around items-center z-50 px-2">
+            <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active text-gray-300 flex flex-col items-center">
+                <i class="fa-solid fa-house text-lg"></i>
+                <span class="text-[9px] mt-0.5 font-bold">首頁</span>
+            </button>
+            <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-300 flex flex-col items-center">
+                <i class="fa-solid fa-bag-shopping text-lg"></i>
+                <span class="text-[9px] mt-0.5 font-bold">商店</span>
+            </button>
+            <button onclick="switchTab('upload-tab', this)" class="w-12 h-9 bg-sexify text-white rounded-lg flex items-center justify-center shadow-lg active:scale-90 transition">
+                <i class="fa-solid fa-plus text-lg"></i>
+            </button>
+            <button class="nav-btn text-gray-300 flex flex-col items-center">
+                <i class="fa-solid fa-comment-dots text-lg"></i>
+                <span class="text-[9px] mt-0.5 font-bold">消息</span>
+            </button>
+            <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-300 flex flex-col items-center">
+                <i class="fa-solid fa-user text-lg"></i>
+                <span class="text-[9px] mt-0.5 font-bold">我</span>
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        // 初始化商店內容
+        const products = [
+            { name: "1對1 私密聊天", price: 49.0, old: 99.0, img: "https://picsum.photos/300/300?random=21" },
+            { name: "專屬語音包", price: 19.9, old: 35.0, img: "https://picsum.photos/300/300?random=22" }
+        ];
+
+        function renderShop() {
+            document.getElementById('shop-grid').innerHTML = products.map(p => `
+                <div class="bg-white rounded-2xl overflow-hidden shadow-sm">
+                    <img src="${p.img}" class="w-full aspect-square object-cover">
+                    <div class="p-3">
+                        <h4 class="text-[11px] font-bold text-gray-800 truncate">${p.name}</h4>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-sexify font-black text-xs">$${p.price}</span>
+                            <span class="text-[9px] text-gray-300 line-through">$${p.old}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-active'));
+            if(btn && btn.classList.contains('nav-btn')) btn.classList.add('nav-active');
+            
+            if(tabId === 'shop-tab') renderShop();
+            window.scrollTo(0, 0);
+        }
+
+        function verifyAge() {
+            document.getElementById('age-gate').classList.add('opacity-0');
+            setTimeout(() => {
+                document.getElementById('age-gate').style.display = 'none';
+                document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none');
+            }, 500);
+        }
+    </script>
+</body>
+</html>
