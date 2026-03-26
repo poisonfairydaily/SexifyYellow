@@ -47,19 +47,35 @@
     /* 導航欄文字樣式 */
     .nav-active { color: #000 !important; font-weight: 900 !important; transform: none; transition: all 0.2s; }
     
-    /* ✨ 小紅書風格「＋」按鈕專屬樣式 ✨ */
+  /* 確保按鈕本身沒有多餘的外距 */
     .xhs-upload-btn {
         background-color: #000;
         color: #fff;
-        width: 46px;      /* 寬度略大 */
-        height: 32px;     /* 高度較小，形成圓角矩形 */
+        width: 46px; 
+        height: 32px;
         border-radius: 8px;
         display: flex;
         align-items: center;
-        justify-center: center;
-        transition: transform 0.1s active;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        justify-content: center;
+        border: none;
+        outline: none;
+        margin: 0 auto; /* 強制水平置中 */
+        padding: 0;
+        -webkit-appearance: none;
     }
+
+    /* 導航按鈕樣式 */
+    .nav-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        width: 44px; /* 固定寬度，確保左右對稱 */
+    }
+
+    /* 修正選中狀態 */
+    .nav-active { color: #000 !important; }
+    .nav-active span { font-weight: 900; }
     .xhs-upload-btn:active {
         transform: scale(0.9); /* 點擊時縮放手感 */
         opacity: 0.8;
@@ -147,33 +163,34 @@
             </section>
         </main>
 
-<footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t grid grid-cols-5 items-center h-16 z-[999] px-2 shadow-sm">
-    
-    <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center justify-center">
-        <i class="fa-solid fa-house-chimney text-[1.1rem] mb-0.5"></i>
-        <span class="text-[10px] font-bold">發現</span>
-    </button>
+<footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t h-16 z-[999] flex items-center px-4 shadow-sm">
+    <div class="flex-1 flex justify-around pr-8">
+        <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
+            <i class="fa-solid fa-house-chimney text-[1.1rem] mb-0.5"></i>
+            <span class="text-[10px] font-bold">發現</span>
+        </button>
+        <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-bag-shopping text-[1.1rem] mb-0.5"></i>
+            <span class="text-[10px] font-bold">商店</span>
+        </button>
+    </div>
 
-    <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center justify-center text-gray-400">
-        <i class="fa-solid fa-bag-shopping text-[1.1rem] mb-0.5"></i>
-        <span class="text-[10px] font-bold">商店</span>
-    </button>
-
-    <div class="flex justify-center items-center">
-        <button onclick="switchTab('upload-tab')" class="xhs-upload-btn shadow-md active:scale-95 transition">
+    <div class="absolute left-1/2 -translate-x-1/2 flex justify-center items-center w-16">
+        <button onclick="switchTab('upload-tab')" class="xhs-upload-btn shadow-md active:scale-90 transition">
             <i class="fa-solid fa-plus text-lg"></i>
         </button>
     </div>
 
-    <button class="nav-btn flex flex-col items-center justify-center text-gray-400">
-        <i class="fa-regular fa-comment-dots text-[1.1rem] mb-0.5"></i>
-        <span class="text-[10px] font-bold">消息</span>
-    </button>
-
-    <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center justify-center text-gray-400">
-        <i class="fa-regular fa-user text-[1.1rem] mb-0.5"></i>
-        <span class="text-[10px] font-bold">我</span>
-    </button>
+    <div class="flex-1 flex justify-around pl-8">
+        <button class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-regular fa-comment-dots text-[1.1rem] mb-0.5"></i>
+            <span class="text-[10px] font-bold">消息</span>
+        </button>
+        <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-regular fa-user text-[1.1rem] mb-0.5"></i>
+            <span class="text-[10px] font-bold">我</span>
+        </button>
+    </div>
 </footer>
     </div>
 
