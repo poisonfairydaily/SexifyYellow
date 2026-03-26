@@ -15,7 +15,30 @@
     .bg-sexify { background-color: var(--sexify); }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
+    /* 導航欄全局樣式 */
+    .nav-btn {
+        transition: all 0.2s ease;
+        min-width: 50px;
+    }
     
+    /* 導航 Icon 大小控制 */
+    .nav-btn i {
+        font-size: 1.1rem; /* 18px，精緻小巧 */
+    }
+
+    /* 修正選中狀態：顏色變黑，Icon 微微放大增加手感 */
+    .nav-active {
+        color: #000 !important;
+        transform: none !important; /* 確保文字本身不縮放 */
+    }
+    .nav-active i {
+        transform: scale(1.08); /* 僅放大 Icon，文字不變 */
+        color: #000;
+    }
+    .nav-active span {
+        font-weight: 900;
+        color: #000;
+    }
     /* 瀑布流優化：縮小間距更精緻 */
     .masonry-grid { column-count: 2; column-gap: 6px; padding: 6px; }
     .masonry-item { break-inside: avoid; margin-bottom: 6px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
