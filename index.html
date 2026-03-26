@@ -124,28 +124,32 @@
             </section>
         </main>
 
-<footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2">
+<footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t flex items-center h-16 z-[999] px-2 shadow-sm">
     <div class="flex flex-1 justify-around">
         <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
-            <span class="text-[13px] font-bold">首頁</span>
+            <i class="fa-solid fa-house-chimney text-lg mb-0.5 transition-transform duration-200"></i>
+            <span class="text-[10px] font-bold">首頁</span>
         </button>
-        <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-500">
-            <span class="text-[13px] font-bold">商店</span>
+        <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-bag-shopping text-lg mb-0.5"></i>
+            <span class="text-[10px] font-bold">商店</span>
         </button>
     </div>
 
-    <div class="w-20 flex justify-center">
-        <button onclick="switchTab('upload-tab')" class="w-12 h-8 bg-black text-white rounded-lg active:scale-90 transition-transform flex items-center justify-center">
+    <div class="w-16 flex justify-center">
+        <button onclick="switchTab('upload-tab')" class="xhs-upload-btn shadow-md active:scale-95 transition">
             <i class="fa-solid fa-plus text-lg"></i>
         </button>
     </div>
 
     <div class="flex flex-1 justify-around">
-        <button class="nav-btn flex flex-col items-center text-gray-500">
-            <span class="text-[13px] font-bold">消息</span>
+        <button class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-regular fa-comment-dots text-lg mb-0.5"></i>
+            <span class="text-[10px] font-bold">消息</span>
         </button>
-        <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-500">
-            <span class="text-[13px] font-bold">我</span>
+        <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+            <i class="fa-regular fa-user text-lg mb-0.5"></i>
+            <span class="text-[10px] font-bold">我</span>
         </button>
     </div>
 </footer>
