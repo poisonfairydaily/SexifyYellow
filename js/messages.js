@@ -17,10 +17,9 @@ const messagesDB = {
 
 let currentChatId = null;
 let typingState = {};
-let chatRoomInitialized = false;
 
 // ==========================
-// 🔥 Render Chat List（安全版）
+// 🔥 Render Chat List（原UI）
 // ==========================
 function renderMessages() {
     const container = document.getElementById('messages-content');
@@ -53,26 +52,17 @@ function renderMessages() {
 }
 
 // ==========================
-// 🔥 Chat Room（穩定版）
+// 🔥 Chat Room（自動建立，不用HTML）
 // ==========================
-function initChatRoom() {
-    if (chatRoomInitialized) return;
+function ensureChatRoom() {
+    if (document.getElementById('chat-room')) return;
 
     const div = document.createElement('div');
     div.id = 'chat-room';
-    div.style.position = 'fixed';
-    div.style.top = '0';
-    div.style.left = '0';
-    div.style.right = '0';
-    div.style.bottom = '0';
-    div.style.zIndex = '9999';
-    div.style.display = 'none';
-    div.style.background = 'white';
-    div.className = 'flex flex-col';
-
+    div.className = 'fixed inset-0 bg-white z-50 hidden flex flex-col';
     div.innerHTML = `
         <div class="flex items-center gap-3 p-4 border-b border-gray-100">
-            <button onclick="closeChat()" type="button" class="text-gray-500 text-lg">←</button>
+            <button onclick="closeChat()" class="text-gray-500 text-lg">←</button>
             <img id="chat-avatar" class="w-10 h-10 rounded-full object-cover">
             <div class="flex-1">
                 <h3 id="chat-name" class="font-bold text-sm text-gray-800"></h3>
@@ -89,40 +79,24 @@ function initChatRoom() {
                 placeholder="輸入訊息..."
                 class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none">
 
-            <button onclick="sendText(event)" type="button"
-                class="text-sexify font-bold text-sm">送出</button>
+            <button onclick="sendText()" class="text-sexify font-bold text-sm">送出</button>
         </div>
     `;
-
     document.body.appendChild(div);
-    chatRoomInitialized = true;
-
-    // 🔥 Enter 發送（穩定版）
-    document.addEventListener('keydown', function(e) {
-        const input = document.getElementById('chat-input');
-        if (!input) return;
-
-        if (currentChatId && e.key === 'Enter' && document.activeElement === input) {
-            e.preventDefault();
-            sendText();
-        }
-    });
 }
 
 // ==========================
 // 🔥 打開 Chat
 // ==========================
 function openChat(chatId) {
-    initChatRoom();
+    ensureChatRoom();
 
     const chat = chatList.find(c => c.id === chatId);
     if (!chat) return;
 
     currentChatId = chatId;
 
-    const room = document.getElementById('chat-room');
-    room.style.display = 'flex';
-
+    document.getElementById('chat-room').classList.remove('hidden');
     document.getElementById('chat-name').innerText = chat.user;
     document.getElementById('chat-avatar').src = chat.avatar;
 
@@ -146,7 +120,7 @@ function openChat(chatId) {
 
 // ==========================
 function closeChat() {
-    document.getElementById('chat-room').style.display = 'none';
+    document.getElementById('chat-room').classList.add('hidden');
 }
 
 // ==========================
@@ -165,7 +139,7 @@ function renderChatMessages() {
 
                 ${msg.text}
 
-                ${msg.reactions.length ? `
+                ${msg.reactions.length > 0 ? `
                     <div class="text-xs mt-1 opacity-70">
                         ${msg.reactions.map(r => r.emoji).join(' ')}
                     </div>` : ''}
@@ -184,12 +158,8 @@ function renderChatMessages() {
 // ==========================
 // 🔥 發送訊息
 // ==========================
-function sendText(e) {
-    if (e) e.preventDefault();
-
+function sendText() {
     const input = document.getElementById('chat-input');
-    if (!input) return;
-
     const text = input.value.trim();
     if (!text) return;
 
@@ -208,10 +178,13 @@ function sendText(e) {
 }
 
 // ==========================
+// 🔥 新訊息
+// ==========================
 function addMessage(chatId, msg) {
     if (!messagesDB[chatId]) messagesDB[chatId] = [];
 
     msg.id = Date.now();
+
     messagesDB[chatId].push(msg);
 
     const chat = chatList.find(c => c.id === chatId);
@@ -222,6 +195,8 @@ function addMessage(chatId, msg) {
     }
 }
 
+// ==========================
+// 🔥 typing 模擬
 // ==========================
 function simulateTyping(chatId) {
     typingState[chatId] = true;
@@ -243,6 +218,8 @@ function simulateTyping(chatId) {
     }, 2000);
 }
 
+// ==========================
+// 🔥 Ice Breaker
 // ==========================
 function renderIceBreaker() {
     const container = document.getElementById('ice-breaker');
@@ -281,5 +258,4 @@ function getNowTime() {
 // ==========================
 document.addEventListener('DOMContentLoaded', () => {
     renderMessages();
-    initChatRoom(); // 🔥 預先建立，避免動態問題
 });
