@@ -1,4 +1,3 @@
-// 創作者發布引擎
 document.addEventListener('DOMContentLoaded', () => {
     const entry = document.getElementById('creator-entry-point');
     if (entry) {
@@ -6,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="px-6">
                 <button onclick="openUploadModal()" class="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-700 py-3.5 rounded-2xl border border-gray-200 active:scale-95 transition">
                     <i class="fa-solid fa-cloud-arrow-up text-sexify"></i>
-                    <span class="text-sm font-bold">發布專屬作品</span>
+                    <span class="text-sm font-bold">發佈動態或作品</span>
                 </button>
             </div>`;
     }
@@ -58,31 +57,43 @@ function resetUploadForm() {
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
+    document.getElementById('media-preview-container').dataset.mediaType = ''; // 清除類型
 }
 
 function simulatedPublish() {
-    const caption = document.getElementById('post-caption').value || '新發布的作品 ✨';
+    const caption = document.getElementById('post-caption').value.trim();
     const price = parseInt(document.getElementById('post-price').value) || 0;
-    const mediaType = document.getElementById('media-preview-container').dataset.mediaType;
-    if (!mediaType) return alert('請先選取檔案');
+    
+    // 判斷是否有上傳媒體，如果沒有就預設為 text (純文字)
+    let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
+    
+    // 阻擋空白發佈：如果沒圖也沒文字，拒絕發佈
+    if (mediaType === 'text' && !caption) {
+        return alert('請輸入文字內容或上傳相片/影片！');
+    }
 
-    const src = mediaType === 'image' ? document.getElementById('media-preview').src : document.getElementById('video-preview').src;
+    let src = '';
+    if (mediaType === 'image') src = document.getElementById('media-preview').src;
+    if (mediaType === 'video') src = document.getElementById('video-preview').src;
     
     const newPost = {
         id: 'user-post-' + Date.now(),
-        user: 'Me (作者)',
-        avatar: 'https://i.pravatar.cc/150?u=me',
+        user: currentUser.name, // 使用 profile.js 中設定的名稱
+        avatar: currentUser.avatar,
         type: mediaType,
         src: src,
-        title: caption,
+        title: caption || '分享了新內容 ✨',
         likes: 0,
         isPaid: price > 0,
         price: price
     };
 
-    const grid = document.getElementById('discovery-grid');
-    grid.insertAdjacentHTML('afterbegin', generateCardHtml(newPost));
+    // 將新貼文加到全局陣列的最前面
+    if(typeof allPosts !== 'undefined') {
+        allPosts.unshift(newPost);
+        renderDiscovery(); // 重新渲染首頁
+    }
 
-    switchTab('home-tab', document.querySelector('.nav-btn'));
+    switchTab('home-tab', document.querySelector('.nav-btn')); // 切換回首頁
     closeUploadModal();
 }
