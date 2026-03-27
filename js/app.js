@@ -34,3 +34,16 @@ function switchTab(tabId, btn) {
         renderMessages();
     }
 }
+// 控制全站左側設定面板
+function toggleSettings() {
+    const drawer = document.getElementById('settings-drawer');
+    const panel = document.getElementById('settings-panel');
+    
+    if (drawer.classList.contains('hidden')) {
+        drawer.classList.remove('hidden');
+        setTimeout(() => panel.classList.remove('-translate-x-full'), 10);
+    } else {
+        panel.classList.add('-translate-x-full');
+        setTimeout(() => drawer.classList.add('hidden'), 300);
+    }
+}
