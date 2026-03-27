@@ -1,36 +1,47 @@
-// 年齡驗證邏輯
-function verifyAge() {
-    document.getElementById('age-gate').classList.add('opacity-0');
-    setTimeout(() => { 
-        document.getElementById('age-gate').style.display = 'none'; 
-        document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none'); 
-    }, 500);
+// 1. 模擬數據
+const chatList = [
+    { id: 1, user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/100?u=a2', lastMsg: '收到了嗎？那張照片...', time: '14:20', unread: 2 },
+    { id: 2, user: '官方小助手', avatar: 'https://i.pravatar.cc/100?u=admin', lastMsg: '歡迎加入 Sexify，開啟你的專屬美好。', time: '昨天', unread: 0 },
+    { id: 3, user: 'Xaiver', avatar: 'https://i.pravatar.cc/100?u=a1', lastMsg: '下次一起出來喝一杯？', time: '週三', unread: 0 }
+];
+
+// 預留通知數據 (未來擴充用)
+const notificationList = [
+    { type: 'like', user: '酷炫男孩', target: '你的深夜驚喜', time: '5分鐘前' },
+    { type: 'follow', user: '小雨點', target: '關注了你', time: '1小時前' }
+];
+
+// 2. 渲染邏輯
+function renderMessages() {
+    // ⭐ 這裡改成了 messages-list，對應 index.html 裡的 ID ⭐
+    const container = document.getElementById('messages-list');
+    if (!container) return;
+
+    // 將數據轉化為 HTML 結構
+    container.innerHTML = chatList.map(chat => `
+        <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50" onclick="openChat(${chat.id})">
+            <div class="relative flex-shrink-0">
+                <img src="${chat.avatar}" class="w-12 h-12 rounded-full border border-gray-100 object-cover">
+                ${chat.unread > 0 ? `
+                    <span class="absolute -top-1 -right-1 bg-sexify text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+                        ${chat.unread}
+                    </span>` : ''}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-center mb-0.5">
+                    <h4 class="font-bold text-sm truncate text-gray-800">${chat.user}</h4>
+                    <span class="text-[10px] text-gray-400 font-medium">${chat.time}</span>
+                </div>
+                <p class="text-xs text-gray-400 truncate leading-relaxed">${chat.lastMsg}</p>
+            </div>
+        </div>
+    `).join('');
 }
 
-// 底部 Tab 切換邏輯
-function switchTab(tabId, btn) {
-    // 1. 隱藏所有分頁內容，只顯示點擊的那一個
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    
-    // 2. 重置所有導航按鈕顏色為灰色
-    document.querySelectorAll('.nav-btn').forEach(b => { 
-        b.classList.remove('nav-active'); 
-        b.classList.add('text-gray-400'); 
-    });
-    
-    // 3. 將當前點擊的按鈕設為高亮（黑色）
-    if(btn) { 
-        btn.classList.add('nav-active'); 
-        btn.classList.remove('text-gray-400'); 
-    }
-    
-    // 4. 依據對應的模組觸發渲染 (避免重複加載)
-    if(tabId === 'shop-tab' && typeof renderShop === 'function') renderShop();
-    if(tabId === 'profile-tab' && typeof renderProfile === 'function') renderProfile();
-    
-    // ⭐ 消息模組在這裡塞入 ⭐
-    if(tabId === 'messages-tab' && typeof renderMessages === 'function') {
-        renderMessages();
+// 3. 模擬開啟聊天窗口
+function openChat(chatId) {
+    const chat = chatList.find(c => c.id === chatId);
+    if (chat) {
+        alert(`正在與 ${chat.user} 建立加密連線...`);
     }
 }
