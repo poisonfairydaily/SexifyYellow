@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="text-gray-900">
+<body class="text-gray-900 overflow-x-hidden">
 
     <div id="age-gate" class="fixed inset-0 z-[2000] bg-black flex items-center justify-center transition-opacity duration-500">
         <div class="bg-white p-10 rounded-[2.5rem] w-11/12 max-w-sm text-center shadow-2xl">
@@ -18,202 +18,142 @@
         </div>
     </div>
 
-    <div id="app-content" class="filter blur-2xl pointer-events-none transition-all duration-700">
-        <header class="sticky top-0 bg-white/90 backdrop-blur-xl border-b z-40 px-5 h-14 flex justify-between items-center">
-            <i class="fa-solid fa-bars text-lg text-gray-400"></i>
-            <div class="flex space-x-6">
-                <button class="text-gray-400 text-sm font-bold">關注</button>
-                <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
-                <button class="text-gray-400 text-sm font-bold">附近</button>
+    <div id="app-content" class="blur-2xl pointer-events-none pb-24">
+        <div id="home-tab" class="tab-content active">
+            <div class="p-4 pt-6 flex justify-between items-center">
+                <h1 class="text-2xl font-black text-gray-800">發現</h1>
+                <i class="fa-solid fa-magnifying-glass text-gray-400"></i>
             </div>
-            <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
-        </header>
+            <div class="masonry-grid" id="discovery-grid"></div>
+        </div>
 
-        <main class="pb-24">
-            <section id="home-tab" class="tab-content active">
-                <div class="masonry-grid">
-                    <div id="card-xaiver" class="masonry-item cursor-pointer group relative" onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
-                        <div class="relative overflow-hidden rounded-t-xl">
-                            <img src="https://picsum.photos/400/600?random=11" class="w-full transition-transform duration-500 group-hover:scale-110">
-                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
-                                <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
-                            </div>
-                        </div>
-                        <div class="p-2.5 bg-white">
-                            <h4 class="text-xs font-bold mb-2">深夜驚喜！🍆</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full"><span>Xaiver</span></div>
-                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)"><i class="fa-regular fa-heart"></i><span class="like-count">5</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="card-mina" class="masonry-item cursor-pointer group relative" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
-                        <div class="relative overflow-hidden rounded-t-xl">
-                            <img src="https://picsum.photos/400/400?random=12" class="w-full transition-transform duration-500 group-hover:scale-110">
-                        </div>
-                        <div class="p-2.5 bg-white">
-                            <h4 class="text-xs font-bold mb-2">衣服都被雨水打濕了🌧️</h4>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500">
-                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full"><span>Mina_米娜</span></div>
-                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)"><i class="fa-regular fa-heart"></i><span class="like-count">892</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-            
-            <section id="shop-tab" class="tab-content p-4">
-                <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm border border-gray-100 overflow-hidden relative">
-                    <div class="absolute -top-10 -right-10 w-32 h-32 bg-sexify/5 rounded-full"></div>
-                    <div class="relative z-10">
-                        <h2 class="text-2xl font-black mb-1 flex items-center gap-2">
-                            <i class="fa-solid fa-store text-sexify text-xl"></i> Sexify Store
-                        </h2>
-                        <p class="text-gray-400 text-[10px] tracking-widest uppercase font-bold"> PREMIUM SELECTION / 官方嚴選 </p>
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-2.5" id="shop-grid"></div>
-            </section>
+        <div id="shop-tab" class="tab-content">
+            <div class="p-4 pt-6"><h1 class="text-2xl font-black text-gray-800">嚴選商城</h1></div>
+            <div id="shop-grid" class="p-4 grid grid-cols-2 gap-4"></div>
+        </div>
 
-            <section id="messages-tab" class="tab-content bg-white min-h-screen">
-                <div class="sticky top-14 bg-white z-20 px-4 py-3 border-b flex justify-center gap-8">
-                    <button class="text-sm font-black border-b-2 border-sexify pb-1">聊天</button>
-                    <button class="text-sm font-bold text-gray-400 pb-1">通知</button>
-                </div>
-                <div id="messages-list" class="divide-y divide-gray-50"></div>
-            </section>
+        <div id="messages-tab" class="tab-content">
+            <div class="p-4 pt-6"><h1 class="text-2xl font-black text-gray-800">消息</h1></div>
+            <div id="messages-list" class="divide-y divide-gray-50"></div>
+        </div>
 
-            <section id="profile-tab" class="tab-content">
-                <div class="bg-white p-8 pt-12 text-center border-b">
-                    <div class="relative w-24 h-24 mx-auto mb-4">
-                        <img src="https://i.pravatar.cc/300?u=me" class="rounded-full border-4 border-white shadow-lg">
-                        <div class="absolute bottom-0 right-0 bg-sexify text-white p-1.5 rounded-full border-2 border-white"><i class="fa-solid fa-camera text-[10px]"></i></div>
-                    </div>
-                    <h3 class="text-lg font-black">Sexify User #808</h3>
-                    <p class="text-gray-400 text-xs mt-1">台北市</p>
-                    <div class="flex justify-center gap-8 mt-6">
-                        <div class="text-center"><p class="font-black">12</p><p class="text-[10px] text-gray-400">動態</p></div>
-                        <div class="text-center"><p class="font-black">8.5k</p><p class="text-[10px] text-gray-400">粉絲</p></div>
-                    </div>
+        <div id="profile-tab" class="tab-content">
+            <div class="p-6 pt-8 flex items-center gap-5 bg-white">
+                <img src="https://i.pravatar.cc/150?u=me" class="w-20 h-20 rounded-full border-2 border-sexify p-0.5 object-cover">
+                <div>
+                    <h2 class="text-xl font-black text-gray-800 mb-1">Me (Sexify User)</h2>
+                    <p class="text-xs text-gray-400 font-medium">ID: 8083321</p>
                 </div>
-                <div class="grid grid-cols-3 gap-0.5 mt-1 bg-white" id="user-gallery"></div>
-            </section>
-        </main>
-
-        <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t h-16 z-[999] flex items-center px-4 shadow-sm">
-            <div class="flex-1 flex justify-around pr-8">
-                <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
-                    <i class="fa-solid fa-house-chimney text-[1.1rem] mb-0.5"></i>
-                    <span class="text-[10px] font-bold">發現</span>
-                </button>
-                <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-                    <i class="fa-solid fa-bag-shopping text-[1.1rem] mb-0.5"></i>
-                    <span class="text-[10px] font-bold">商店</span>
-                </button>
             </div>
-
-            <div class="absolute left-1/2 -translate-x-1/2 flex justify-center items-center w-16">
-                <button class="xhs-upload-btn shadow-md active:scale-90 transition">
-                    <i class="fa-solid fa-plus text-lg"></i>
-                </button>
-            </div>
-
-            <div class="flex-1 flex justify-around pl-8">
-                <button onclick="switchTab('messages-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-                    <i class="fa-regular fa-comment-dots text-[1.1rem] mb-0.5"></i>
-                    <span class="text-[10px] font-bold">消息</span>
-                </button>
-                <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
-                    <i class="fa-regular fa-user text-[1.1rem] mb-0.5"></i>
-                    <span class="text-[10px] font-bold">我</span>
-                </button>
-            </div>
-        </footer>
+            <div id="creator-entry-point" class="bg-white pb-4"></div>
+            <div id="user-gallery" class="grid grid-cols-3 gap-1 bg-white"></div>
+        </div>
     </div>
 
-    <div id="post-detail" class="fixed inset-0 z-[1000] bg-white translate-y-full transition-transform duration-300 ease-out overflow-y-auto hidden">
-        <div class="sticky top-0 bg-white/80 backdrop-blur-md flex items-center justify-between px-4 h-14 z-10 border-b">
-            <button onclick="closeDetail()" class="text-2xl px-2 font-light">✕</button>
-            <div class="flex items-center gap-2"><img id="detail-avatar" src="" class="w-8 h-8 rounded-full"><span id="detail-username" class="text-sm font-bold"></span></div>
-            <button class="bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold">關注</button>
+    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 flex justify-around items-center py-2 pb-6 z-[500]">
+        <button class="nav-btn nav-active flex flex-col items-center gap-1" onclick="switchTab('home-tab', this)">
+            <i class="fa-solid fa-house"></i><span class="text-[10px]">首頁</span>
+        </button>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('shop-tab', this)">
+            <i class="fa-solid fa-bag-shopping"></i><span class="text-[10px]">商店</span>
+        </button>
+        <div class="relative w-16 flex justify-center items-center -top-4">
+            <button onclick="openUploadModal()" class="shadow-xl active:scale-90 transition w-12 h-10 bg-black text-white rounded-[14px] flex items-center justify-center">
+                <i class="fa-solid fa-plus text-lg"></i>
+            </button>
         </div>
-        <div class="pb-24">
-            <img id="detail-image" src="" class="block mx-auto w-auto max-w-full max-h-[65vh] object-contain">
-            <div class="p-5">
-                <h2 id="detail-title" class="text-xl font-black mb-3"></h2>
-                <p class="text-sm text-gray-600 leading-relaxed mb-6">分享生活與美好 ✨</p>
-                <div class="text-[10px] text-gray-400 border-t pt-4">發佈於 2026-03-25</div>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('messages-tab', this)">
+            <i class="fa-solid fa-message"></i><span class="text-[10px]">消息</span>
+        </button>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('profile-tab', this)">
+            <i class="fa-solid fa-user"></i><span class="text-[10px]">我</span>
+        </button>
+    </div>
+
+    <div id="post-detail" class="fixed inset-0 z-[1000] bg-white translate-y-full transition-transform duration-300 hidden overflow-y-auto">
+        <button onclick="closeDetail()" class="absolute top-5 left-5 z-10 w-9 h-9 bg-black/40 backdrop-blur-md text-white rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
+        <div id="detail-media-container" class="w-full bg-gray-100 min-h-[40vh] flex items-center justify-center">
             </div>
-        </div>
-        <div class="fixed bottom-0 left-0 right-0 bg-white border-t flex items-center justify-between px-4 h-16 z-50">
-            <div class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-gray-400 text-xs mr-4" onclick="openComments()">說點什麼...</div>
-            <div class="flex items-center space-x-5 px-2">
-                <div class="flex flex-col items-center" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xl"></i><span class="text-[10px] like-count font-bold mt-0.5">0</span></div>
-                <div class="flex flex-col items-center" onclick="openComments()"><i class="fa-regular fa-message text-xl"></i><span class="text-[10px] font-bold mt-0.5">留言</span></div>
+        <div class="p-5 pb-20">
+            <div class="flex items-center gap-3 mb-4">
+                <img id="detail-avatar" src="" class="w-10 h-10 rounded-full border border-gray-100">
+                <span id="detail-username" class="font-bold text-sm text-gray-800"></span>
+            </div>
+            <h3 id="detail-title" class="font-bold text-[15px] mb-5 leading-relaxed text-gray-800"></h3>
+            <div class="flex items-center gap-6 text-gray-500 border-t border-gray-100 pt-4">
+                <div class="flex flex-col items-center cursor-pointer group" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xl group-active:scale-110 transition"></i><span class="text-[10px] like-count font-bold mt-1">0</span></div>
+                <div class="flex flex-col items-center cursor-pointer group" onclick="openComments()"><i class="fa-regular fa-message text-xl group-active:scale-110 transition"></i><span class="text-[10px] font-bold mt-1">留言</span></div>
             </div>
         </div>
     </div>
 
     <div id="comment-sheet" class="fixed inset-0 z-[1100] hidden">
-        <div class="absolute inset-0 bg-black/40" onclick="closeComments()"></div>
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeComments()"></div>
         <div id="comment-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] h-[75vh] translate-y-full transition-transform duration-300 flex flex-col">
             <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-[2rem]">
-                <span class="font-black text-sm">評論 128</span>
-                <button onclick="closeComments()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full">✕</button>
+                <span class="font-black text-sm">全部留言</span>
+                <button onclick="closeComments()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition">✕</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-6" id="comment-list"></div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-5" id="comment-list"></div>
             <div class="p-4 border-t pb-10 flex items-center gap-3 bg-white">
-                <input type="text" id="comment-input" placeholder="留個言..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 outline-none text-sm">
-                <button onclick="sendComment()" class="text-sexify font-bold text-sm">發送</button>
+                <input type="text" id="comment-input" placeholder="說點什麼..." class="flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+                <button onclick="sendComment()" class="text-sexify font-bold px-3 py-2 active:scale-95 transition">發送</button>
             </div>
         </div>
     </div>
 
+    <div id="upload-modal" class="fixed inset-0 z-[1500] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeUploadModal()"></div>
+        <div id="upload-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] h-[85vh] translate-y-full transition-transform duration-300 flex flex-col overflow-hidden shadow-2xl">
+            <div class="p-5 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-[2rem] z-10">
+                <h3 class="text-lg font-black flex items-center gap-2"><i class="fa-solid fa-cloud-arrow-up text-sexify"></i>發布作品</h3>
+                <button onclick="closeUploadModal()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-6 pb-20">
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-400">上傳相片或影片</label>
+                    <div id="media-preview-container" class="aspect-[4/3] bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer" onclick="document.getElementById('file-input').click()">
+                        <img id="media-preview" src="" class="absolute inset-0 w-full h-full object-cover hidden">
+                        <video id="video-preview" src="" class="absolute inset-0 w-full h-full object-cover hidden" controls></video>
+                        <div id="media-placeholder" class="text-center p-5 space-y-2">
+                            <i class="fa-solid fa-images text-4xl text-gray-300"></i>
+                            <p class="text-[11px] text-gray-400 font-medium">點擊選擇檔案</p>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" accept="image/*,video/*" class="hidden" onchange="handleFileSelect(event)">
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-400">作品描述</label>
+                    <textarea id="post-caption" rows="3" placeholder="寫點什麼..." class="w-full bg-gray-50 rounded-2xl p-4 text-sm outline-none resize-none border border-transparent focus:border-gray-200 transition"></textarea>
+                </div>
+                <div class="space-y-3">
+                    <label class="block text-xs font-bold text-gray-400">觀看權限</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="border border-gray-100 rounded-2xl p-3 flex items-center gap-3 cursor-pointer transition has-[:checked]:border-sexify has-[:checked]:bg-sexify/5" onclick="setPrice(0)">
+                            <input type="radio" name="view-type" id="view-free" value="free" checked class="w-4 h-4 accent-sexify">
+                            <label for="view-free" class="flex-1 cursor-pointer"><p class="text-sm font-bold text-gray-800">免費</p></label>
+                        </div>
+                        <div class="border border-gray-100 rounded-2xl p-3 flex items-center gap-3 cursor-pointer transition has-[:checked]:border-sexify has-[:checked]:bg-sexify/5" onclick="setPrice(99)">
+                            <input type="radio" name="view-type" id="view-paid" value="paid" class="w-4 h-4 accent-sexify">
+                            <label for="view-paid" class="flex-1 cursor-pointer"><p class="text-sm font-bold text-gray-800">付費 <i class="fa-solid fa-lock text-[10px]"></i></p></label>
+                        </div>
+                    </div>
+                    <div id="price-input-container" class="bg-gray-50 rounded-2xl p-4 flex items-center gap-3 border border-gray-100 hidden">
+                        <i class="fa-solid fa-coins text-lg text-amber-400"></i>
+                        <input type="number" id="post-price" placeholder="設定金幣" class="flex-1 bg-transparent text-sm outline-none font-black text-sexify" value="0">
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-50 bg-white sticky bottom-0 z-10 flex gap-4">
+                <button onclick="closeUploadModal()" class="flex-1 bg-gray-100 text-gray-600 py-3.5 rounded-full font-bold active:scale-95 transition text-sm">取消</button>
+                <button onclick="simulatedPublish()" class="flex-[2] bg-sexify text-white py-3.5 rounded-full font-bold shadow-lg shadow-sexify/30 active:scale-95 transition flex items-center justify-center gap-2 text-sm">發布</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
     <script src="js/shop.js"></script>
     <script src="js/profile.js"></script>
-    <script src="js/discovery.js"></script>
     <script src="js/messages.js"></script>
-    <script src="js/app.js"></script>
-
-    <script>
-        function closeDetail() { 
-            const detail = document.getElementById('post-detail');
-            detail.classList.add('translate-y-full'); 
-            document.body.style.overflow = ''; 
-            setTimeout(() => detail.classList.add('hidden'), 300); 
-        }
-        function openComments() { 
-            document.getElementById('comment-sheet').classList.remove('hidden'); 
-            setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
-        }
-        function closeComments() { 
-            document.getElementById('comment-panel').classList.add('translate-y-full'); 
-            setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
-        }
-
-        function toggleLike(el) {
-            const heart = el.querySelector('i');
-            const countSpan = el.querySelector('.like-count');
-            let count = parseInt(countSpan.innerText);
-            if (heart.classList.contains('fa-regular')) {
-                heart.className = 'fa-solid fa-heart text-sexify animated heartPop';
-                count++;
-            } else {
-                heart.className = 'fa-regular fa-heart animated heartPop';
-                count--;
-            }
-            countSpan.innerText = count;
-        }
-
-        function sendComment() {
-            const input = document.getElementById('comment-input');
-            const sid = document.getElementById('post-detail').dataset.sourceId;
-            if(!input.value.trim() || !sid) return;
-            if(!postComments[sid]) postComments[sid] = [];
-            postComments[sid].unshift({ user: '我', text: input.value, time: '剛剛' });
-            loadComments(sid);
-            input.value = '';
-        }
-    </script>
-</body>
+    <script src="js/discovery.js"></script> <script src="js/create.js"></script>    </body>
 </html>
