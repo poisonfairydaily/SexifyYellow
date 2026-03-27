@@ -1,85 +1,151 @@
-// 1. 模擬評論數據庫
+// 1. 範例數據庫 (模擬後端回傳)
+const initialPosts = [
+    {
+        id: 'ex-1',
+        user: 'Mina_米娜',
+        avatar: 'https://i.pravatar.cc/150?u=mina',
+        type: 'image',
+        src: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80',
+        title: '今天的天氣很好，適合出門走走 ☀️',
+        likes: 1205,
+        isPaid: false,
+        price: 0
+    },
+    {
+        id: 'ex-2',
+        user: 'Xaiver',
+        avatar: 'https://i.pravatar.cc/150?u=xaiver',
+        type: 'image',
+        src: 'https://images.unsplash.com/photo-1529139513065-07b2ee722f5a?w=500&q=80',
+        title: '【VIP限定】深夜的私人空間...這是我沒公開過的樣子。',
+        likes: 892,
+        isPaid: true,
+        price: 99
+    },
+    {
+        id: 'ex-3',
+        user: 'Sweetie_糖糖',
+        avatar: 'https://i.pravatar.cc/150?u=sweet',
+        type: 'video',
+        src: 'https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-light-1282-large.mp4',
+        title: '跟著音樂動起來 🎵 快來訂閱看更多福利影片！',
+        likes: 3421,
+        isPaid: false,
+        price: 0
+    },
+    {
+        id: 'ex-4',
+        user: 'Queen_K',
+        avatar: 'https://i.pravatar.cc/150?u=queen',
+        type: 'image',
+        src: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500&q=80',
+        title: '解鎖這張照片，看看我為你準備的驚喜 🎁',
+        likes: 567,
+        isPaid: true,
+        price: 199
+    }
+];
+
 const postComments = {
-    'card-xaiver': [{ user: '酷炫男孩', text: '這驚喜太猛了吧！🔥', time: '2小時前' }],
-    'card-mina': [{ user: '小雨點', text: '下雨天要注意保暖喔 🌧️', time: '1小時前' }]
+    'ex-1': [{ user: '酷炫男孩', text: '照片拍得好美！', time: '2小時前' }],
+    'ex-2': [{ user: '神祕客', text: '已經付費支持了，真的很值得！🔥', time: '1小時前' }]
 };
 
-// 2. 開啟貼文詳情 (包含付費攔截邏輯)
-function openDetail(imgSrc, username, avatar, title, likeCount, cardId, isPaid = false, price = 0) {
-    // 【新增】如果這是一張付費圖片，先跳出模擬付費確認
+// 2. 渲染發現頁貼文
+function renderDiscovery() {
+    const grid = document.getElementById('discovery-grid');
+    if (!grid) return;
+    
+    // 將預設範例轉為 HTML
+    const html = initialPosts.map(post => generateCardHtml(post)).join('');
+    grid.innerHTML = html;
+}
+
+// 產生卡片 HTML 的共用函數 (發布新貼文也會用到)
+function generateCardHtml(post) {
+    let mediaHtml = post.type === 'image' 
+        ? `<img src="${post.src}" class="w-full h-full object-cover">`
+        : `<video src="${post.src}" class="w-full h-full object-cover" muted autoplay loop></video><div class="video-mark"><i class="fa-solid fa-play"></i> VIDEO</div>`;
+    
+    let lockHtml = post.isPaid ? `<div class="paid-lock"><i class="fa-solid fa-lock text-3xl mb-2 drop-shadow-md"></i><span class="font-black text-sm">${post.price} 金幣</span></div>` : '';
+
+    return `
+        <div id="${post.id}" class="masonry-item cursor-pointer animate-fade-in" onclick="openDetail('${post.src}', '${post.user}', '${post.avatar}', '${post.title}', '${post.likes}', '${post.id}', ${post.isPaid}, ${post.price}, '${post.type}')">
+            <div class="relative overflow-hidden aspect-[4/5] bg-gray-100">
+                ${mediaHtml}
+                ${lockHtml}
+            </div>
+            <div class="p-3 bg-white">
+                <h4 class="text-[13px] font-bold mb-2 text-gray-800 line-clamp-2 leading-snug">${post.title}</h4>
+                <div class="flex justify-between items-center text-[10px] text-gray-500">
+                    <div class="flex items-center gap-1.5"><img src="${post.avatar}" class="w-4 h-4 rounded-full object-cover"><span>${post.user}</span></div>
+                    <div class="flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this)"><i class="fa-regular fa-heart text-xs"></i><span class="like-count">${post.likes}</span></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 3. 詳情頁邏輯 (含付費攔截)
+function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
     if (isPaid && price > 0) {
-        const confirmUnlock = confirm(`【解鎖提示】\n這是一個專屬付費作品，需要 ${price} 金幣解鎖。\n\n你要模擬支付解鎖觀看嗎？`);
-        if (!confirmUnlock) return; // 點取消就不打開
+        if (!confirm(`【解鎖提示】\n這是一個專屬付費作品，需要 ${price} 金幣解鎖。\n\n確認解鎖觀看嗎？`)) return;
     }
 
     const detail = document.getElementById('post-detail');
-    document.getElementById('detail-image').src = imgSrc;
-    document.getElementById('detail-avatar').src = avatar;
-    document.getElementById('detail-username').innerText = username;
-    document.getElementById('detail-title').innerText = title;
-    detail.dataset.sourceId = cardId;
-    detail.querySelector('.like-count').innerText = likeCount;
+    const container = document.getElementById('detail-media-container');
     
-    // 同步愛心狀態
-    const sourceCard = document.getElementById(cardId);
-    if(sourceCard) {
-        const sourceHeart = sourceCard.querySelector('i');
-        const detailHeart = detail.querySelector('.fa-heart');
-        if (sourceHeart && sourceHeart.classList.contains('fa-solid')) {
-            detailHeart.className = 'fa-solid fa-heart text-xl text-sexify animate-fade-in';
-        } else {
-            detailHeart.className = 'fa-regular fa-heart text-xl';
-        }
+    // 根據類型插入圖片或影片
+    if (type === 'video') {
+        container.innerHTML = `<video src="${src}" class="w-full max-h-[65vh] object-contain" controls autoplay></video>`;
+    } else {
+        container.innerHTML = `<img src="${src}" class="w-full object-contain max-h-[65vh]">`;
     }
 
-    loadComments(cardId);
+    document.getElementById('detail-avatar').src = avatar;
+    document.getElementById('detail-username').innerText = user;
+    document.getElementById('detail-title').innerText = title;
+    detail.dataset.sourceId = id;
+    detail.querySelector('.like-count').innerText = likes;
+
+    loadComments(id);
     detail.classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // 鎖定背景滾動
+    document.body.style.overflow = 'hidden';
     setTimeout(() => detail.classList.remove('translate-y-full'), 10);
 }
 
-// 關閉貼文詳情
 function closeDetail() {
     document.getElementById('post-detail').classList.add('translate-y-full');
     setTimeout(() => {
         document.getElementById('post-detail').classList.add('hidden');
+        document.getElementById('detail-media-container').innerHTML = ''; // 清空影片防聲音殘留
         document.body.style.overflow = ''; 
     }, 300);
 }
 
-// 3. 點讚邏輯
+// 其他點讚留言邏輯 (同前)
 function toggleLike(el) {
     const heart = el.querySelector('i');
     const countSpan = el.querySelector('.like-count');
     let count = parseInt(countSpan.innerText) || 0;
-    
-    if (heart.classList.contains('fa-regular')) {
-        heart.className = 'fa-solid fa-heart text-xl text-sexify heartPop';
-        count++;
-    } else {
-        heart.className = 'fa-regular fa-heart text-xl heartPop';
-        count--;
-    }
+    heart.classList.toggle('fa-regular');
+    heart.classList.toggle('fa-solid');
+    heart.classList.toggle('text-sexify');
+    heart.classList.contains('fa-solid') ? count++ : count--;
     countSpan.innerText = count;
 }
 
-// 4. 載入與發送留言邏輯
 function loadComments(id) {
     const list = document.getElementById('comment-list');
     const cms = postComments[id] || [];
-    if(cms.length === 0) { 
-        list.innerHTML = `<p class="text-center text-gray-300 text-xs py-10">尚無評論，快來搶沙發！</p>`; 
-        return; 
-    }
-    list.innerHTML = cms.map(c => `
-        <div class="flex gap-3 animate-fade-in">
-            <img src="https://i.pravatar.cc/100?u=${c.user}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100">
-            <div class="flex-1 bg-gray-50 p-3.5 rounded-2xl rounded-tl-none">
+    list.innerHTML = cms.length ? cms.map(c => `
+        <div class="flex gap-3">
+            <img src="https://i.pravatar.cc/100?u=${c.user}" class="w-8 h-8 rounded-full">
+            <div class="flex-1 bg-gray-50 p-3 rounded-2xl">
                 <p class="text-[11px] font-bold text-gray-400">${c.user}</p>
-                <p class="text-[13px] mt-1 text-gray-800 leading-relaxed">${c.text}</p>
-                <p class="text-[10px] text-gray-300 mt-2 font-medium">${c.time}</p>
+                <p class="text-sm mt-1 text-gray-800">${c.text}</p>
             </div>
-        </div>`).join('');
+        </div>`).join('') : '<p class="text-center text-gray-300 py-10">尚無留言</p>';
 }
 
 function openComments() { 
@@ -95,9 +161,12 @@ function closeComments() {
 function sendComment() {
     const input = document.getElementById('comment-input');
     const sid = document.getElementById('post-detail').dataset.sourceId;
-    if(!input.value.trim() || !sid) return;
+    if(!input.value.trim()) return;
     if(!postComments[sid]) postComments[sid] = [];
-    postComments[sid].unshift({ user: 'Me (作者)', text: input.value, time: '剛剛' });
+    postComments[sid].unshift({ user: 'Me', text: input.value, time: '剛剛' });
     loadComments(sid);
     input.value = '';
 }
+
+// 初始化渲染
+document.addEventListener('DOMContentLoaded', renderDiscovery);
