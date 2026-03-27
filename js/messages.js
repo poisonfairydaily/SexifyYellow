@@ -20,7 +20,7 @@ let typingState = {};
 let chatRoomInitialized = false;
 
 // ==========================
-// 🔥 Render Chat List（安全版）
+// 🔥 Render Chat List
 // ==========================
 function renderMessages() {
     const container = document.getElementById('messages-content');
@@ -53,13 +53,15 @@ function renderMessages() {
 }
 
 // ==========================
-// 🔥 Chat Room（穩定版）
+// 🔥 Chat Room 初始化（重點修正）
 // ==========================
 function initChatRoom() {
     if (chatRoomInitialized) return;
 
     const div = document.createElement('div');
     div.id = 'chat-room';
+
+    // 🔥 關鍵：初始完全不可互動
     div.style.position = 'fixed';
     div.style.top = '0';
     div.style.left = '0';
@@ -67,8 +69,10 @@ function initChatRoom() {
     div.style.bottom = '0';
     div.style.zIndex = '9999';
     div.style.display = 'none';
-    div.style.background = 'white';
-    div.className = 'flex flex-col';
+    div.style.pointerEvents = 'none'; // 🔥 防止擋 click
+    div.style.visibility = 'hidden';  // 🔥 完全隱藏
+
+    div.className = 'flex flex-col bg-white';
 
     div.innerHTML = `
         <div class="flex items-center gap-3 p-4 border-b border-gray-100">
@@ -97,7 +101,7 @@ function initChatRoom() {
     document.body.appendChild(div);
     chatRoomInitialized = true;
 
-    // 🔥 Enter 發送（穩定版）
+    // Enter 發送
     document.addEventListener('keydown', function(e) {
         const input = document.getElementById('chat-input');
         if (!input) return;
@@ -110,7 +114,7 @@ function initChatRoom() {
 }
 
 // ==========================
-// 🔥 打開 Chat
+// 🔥 打開 Chat（修正）
 // ==========================
 function openChat(chatId) {
     initChatRoom();
@@ -121,7 +125,11 @@ function openChat(chatId) {
     currentChatId = chatId;
 
     const room = document.getElementById('chat-room');
+
+    // 🔥 恢復顯示 + 可互動
     room.style.display = 'flex';
+    room.style.pointerEvents = 'auto';
+    room.style.visibility = 'visible';
 
     document.getElementById('chat-name').innerText = chat.user;
     document.getElementById('chat-avatar').src = chat.avatar;
@@ -136,17 +144,18 @@ function openChat(chatId) {
 
     renderMessages();
     renderChatMessages();
-
-    if (!messagesDB[chatId] || messagesDB[chatId].length === 0) {
-        renderIceBreaker();
-    }
-
     simulateTyping(chatId);
 }
 
 // ==========================
+// 🔥 關閉 Chat（關鍵修正）
+// ==========================
 function closeChat() {
-    document.getElementById('chat-room').style.display = 'none';
+    const room = document.getElementById('chat-room');
+
+    room.style.display = 'none';
+    room.style.pointerEvents = 'none'; // 🔥 不再擋 click
+    room.style.visibility = 'hidden';
 }
 
 // ==========================
@@ -164,11 +173,6 @@ function renderChatMessages() {
                     : 'bg-white text-gray-800 border border-gray-100'}">
 
                 ${msg.text}
-
-                ${msg.reactions.length ? `
-                    <div class="text-xs mt-1 opacity-70">
-                        ${msg.reactions.map(r => r.emoji).join(' ')}
-                    </div>` : ''}
 
                 ${msg.sender === 'me' ? `
                     <div class="text-[10px] mt-1 opacity-60 text-right">
@@ -218,7 +222,6 @@ function addMessage(chatId, msg) {
     if (chat) {
         chat.lastMsg = msg.text;
         chat.time = '現在';
-        if (msg.sender === 'them') chat.unread++;
     }
 }
 
@@ -244,33 +247,6 @@ function simulateTyping(chatId) {
 }
 
 // ==========================
-function renderIceBreaker() {
-    const container = document.getElementById('ice-breaker');
-    const prompts = [
-        "你最近聽咩音樂？",
-        "你平時放假做咩？",
-        "最鍾意邊套電影？"
-    ];
-
-    container.classList.remove('hidden');
-
-    container.innerHTML = `
-        <div class="flex gap-2 overflow-x-auto">
-            ${prompts.map(p => `
-                <button onclick="useIceBreaker('${p}')"
-                    class="text-xs bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
-                    ${p}
-                </button>
-            `).join('')}
-        </div>
-    `;
-}
-
-function useIceBreaker(text) {
-    document.getElementById('chat-input').value = text;
-}
-
-// ==========================
 function getNowTime() {
     const d = new Date();
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
@@ -281,5 +257,5 @@ function getNowTime() {
 // ==========================
 document.addEventListener('DOMContentLoaded', () => {
     renderMessages();
-    initChatRoom(); // 🔥 預先建立，避免動態問題
+    initChatRoom();
 });
