@@ -1,87 +1,219 @@
-// 評論數據
-const postComments = {
-    'card-xaiver': [{ user: '酷炫男孩', text: '這驚驚喜太猛了吧！🔥', time: '2小時前' }],
-    'card-mina': [{ user: '小雨點', text: '下雨天要注意保暖喔 🌧️', time: '1小時前' }]
-};
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sexify - 發現你的專屬美好</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="text-gray-900">
 
-// 開啟帖子詳情
-function openDetail(imgSrc, username, avatar, title, likeCount, cardId) {
-    const detail = document.getElementById('post-detail');
-    document.getElementById('detail-image').src = imgSrc;
-    document.getElementById('detail-avatar').src = avatar;
-    document.getElementById('detail-username').innerText = username;
-    document.getElementById('detail-title').innerText = title;
-    detail.dataset.sourceId = cardId;
-    detail.querySelector('.like-count').innerText = likeCount;
-    
-    // 同步愛心狀態
-    const sourceCard = document.getElementById(cardId);
-    const sourceHeart = sourceCard.querySelector('i');
-    const detailHeart = detail.querySelector('.fa-heart');
-    if (sourceHeart.classList.contains('fa-solid')) {
-        detailHeart.className = 'fa-solid fa-heart text-xl text-sexify animate-fade-in';
-    } else {
-        detailHeart.className = 'fa-regular fa-heart text-xl';
-    }
+    <div id="age-gate" class="fixed inset-0 z-[2000] bg-black flex items-center justify-center transition-opacity duration-500">
+        <div class="bg-white p-10 rounded-[2.5rem] w-11/12 max-w-sm text-center shadow-2xl">
+            <h2 class="text-4xl font-black text-sexify mb-3 tracking-tighter">SEXIFY</h2>
+            <p class="text-gray-400 text-sm mb-8 leading-relaxed">此空間包含成人內容<br>進入即代表您已滿 18 歲</p>
+            <button onclick="verifyAge()" class="w-full bg-sexify text-white py-4 rounded-full font-bold shadow-lg active:scale-95 transition">確認進入</button>
+        </div>
+    </div>
 
-    loadComments(cardId);
-    detail.classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // 鎖定背景
-    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-}
+    <div id="app-content" class="filter blur-2xl pointer-events-none transition-all duration-700">
+        <header class="sticky top-0 bg-white/90 backdrop-blur-xl border-b z-40 px-5 h-14 flex justify-between items-center">
+            <i class="fa-solid fa-bars text-lg text-gray-400"></i>
+            <div class="flex space-x-6">
+                <button class="text-gray-400 text-sm font-bold">關注</button>
+                <button class="text-black text-base font-black border-b-2 border-sexify pb-0.5">發現</button>
+                <button class="text-gray-400 text-sm font-bold">附近</button>
+            </div>
+            <i class="fa-solid fa-magnifying-glass text-lg text-gray-400"></i>
+        </header>
 
-// 關閉帖子詳情
-function closeDetail() { 
-    document.getElementById('post-detail').classList.add('translate-y-full'); 
-    document.body.style.overflow = 'auto'; 
-    setTimeout(() => document.getElementById('post-detail').classList.add('hidden'), 300); 
-}
+        <main class="pb-24">
+            <section id="home-tab" class="tab-content active">
+                <div class="masonry-grid">
+                    <div id="card-xaiver" class="masonry-item cursor-pointer group relative" onclick="openDetail('https://picsum.photos/400/600?random=11', 'Xaiver', 'https://i.pravatar.cc/100?u=a1', '深夜驚喜！🍆', '5', 'card-xaiver')">
+                        <div class="relative overflow-hidden rounded-t-xl">
+                            <img src="https://picsum.photos/400/600?random=11" class="w-full transition-transform duration-500 group-hover:scale-110">
+                            <div class="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+                                <i class="fa-solid fa-lock text-white/80 text-2xl shadow-xl"></i>
+                            </div>
+                        </div>
+                        <div class="p-2.5 bg-white">
+                            <h4 class="text-xs font-bold mb-2">深夜驚喜！🍆</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a1" class="w-4 h-4 rounded-full"><span>Xaiver</span></div>
+                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)"><i class="fa-regular fa-heart"></i><span class="like-count">5</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="card-mina" class="masonry-item cursor-pointer group relative" onclick="openDetail('https://picsum.photos/400/400?random=12', 'Mina_米娜', 'https://i.pravatar.cc/100?u=a2', '衣服都被雨水打濕了🌧️', '892', 'card-mina')">
+                        <div class="relative overflow-hidden rounded-t-xl">
+                            <img src="https://picsum.photos/400/400?random=12" class="w-full transition-transform duration-500 group-hover:scale-110">
+                        </div>
+                        <div class="p-2.5 bg-white">
+                            <h4 class="text-xs font-bold mb-2">衣服都被雨水打濕了🌧️</h4>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500">
+                                <div class="flex items-center gap-1.5"><img src="https://i.pravatar.cc/100?u=a2" class="w-4 h-4 rounded-full"><span>Mina_米娜</span></div>
+                                <div class="flex items-center gap-0.5" onclick="event.stopPropagation(); toggleLike(this)"><i class="fa-regular fa-heart"></i><span class="like-count">892</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="shop-tab" class="tab-content p-4">
+                <div class="bg-white rounded-3xl p-6 mb-4 shadow-sm border border-gray-100 overflow-hidden relative">
+                    <div class="absolute -top-10 -right-10 w-32 h-32 bg-sexify/5 rounded-full"></div>
+                    <div class="relative z-10">
+                        <h2 class="text-2xl font-black mb-1 flex items-center gap-2">
+                            <i class="fa-solid fa-store text-sexify text-xl"></i> Sexify Store
+                        </h2>
+                        <p class="text-gray-400 text-[10px] tracking-widest uppercase font-bold"> PREMIUM SELECTION / 官方嚴選 </p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2.5" id="shop-grid"></div>
+            </section>
 
-// 點讚邏輯
-function toggleLike(el) {
-    const heart = el.querySelector('i');
-    const countSpan = el.querySelector('.like-count');
-    let count = parseInt(countSpan.innerText);
-    if (heart.classList.contains('fa-regular')) {
-        heart.className = 'fa-solid fa-heart text-sexify animated heartPop';
-        count++;
-    } else {
-        heart.className = 'fa-regular fa-heart animated heartPop';
-        count--;
-    }
-    countSpan.innerText = count;
-}
+            <section id="messages-tab" class="tab-content bg-white min-h-screen">
+                <div class="sticky top-14 bg-white z-20 px-4 py-3 border-b flex justify-center gap-8">
+                    <button class="text-sm font-black border-b-2 border-sexify pb-1">聊天</button>
+                    <button class="text-sm font-bold text-gray-400 pb-1">通知</button>
+                </div>
+                <div id="messages-list" class="divide-y divide-gray-50"></div>
+            </section>
 
-// 載入評論
-function loadComments(id) {
-    const list = document.getElementById('comment-list');
-    const cms = postComments[id] || [];
-    if(cms.length === 0) { 
-        list.innerHTML = `<p class="text-center text-gray-300 text-xs py-10">尚無評論，快來搶沙發！</p>`; 
-        return; 
-    }
-    list.innerHTML = cms.map(c => `<div class="flex gap-3 animate-fade-in"><img src="https://i.pravatar.cc/100?u=${c.user}" class="w-8 h-8 rounded-full shadow-sm"><div class="flex-1 bg-gray-50 p-3 rounded-2xl rounded-tl-none"><p class="text-[11px] font-bold text-gray-400">${c.user}</p><p class="text-sm mt-1 text-gray-700 leading-relaxed">${c.text}</p><p class="text-[10px] text-gray-300 mt-2 font-medium">${c.time}</p></div></div>`).join('');
-}
+            <section id="profile-tab" class="tab-content">
+                <div class="bg-white p-8 pt-12 text-center border-b">
+                    <div class="relative w-24 h-24 mx-auto mb-4">
+                        <img src="https://i.pravatar.cc/300?u=me" class="rounded-full border-4 border-white shadow-lg">
+                        <div class="absolute bottom-0 right-0 bg-sexify text-white p-1.5 rounded-full border-2 border-white"><i class="fa-solid fa-camera text-[10px]"></i></div>
+                    </div>
+                    <h3 class="text-lg font-black">Sexify User #808</h3>
+                    <p class="text-gray-400 text-xs mt-1">台北市</p>
+                    <div class="flex justify-center gap-8 mt-6">
+                        <div class="text-center"><p class="font-black">12</p><p class="text-[10px] text-gray-400">動態</p></div>
+                        <div class="text-center"><p class="font-black">8.5k</p><p class="text-[10px] text-gray-400">粉絲</p></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-0.5 mt-1 bg-white" id="user-gallery"></div>
+            </section>
+        </main>
 
-// 開啟評論面板
-function openComments() { 
-    document.getElementById('comment-sheet').classList.remove('hidden'); 
-    setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
-}
+        <footer class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t h-16 z-[999] flex items-center px-4 shadow-sm">
+            <div class="flex-1 flex justify-around pr-8">
+                <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center">
+                    <i class="fa-solid fa-house-chimney text-[1.1rem] mb-0.5"></i>
+                    <span class="text-[10px] font-bold">發現</span>
+                </button>
+                <button onclick="switchTab('shop-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+                    <i class="fa-solid fa-bag-shopping text-[1.1rem] mb-0.5"></i>
+                    <span class="text-[10px] font-bold">商店</span>
+                </button>
+            </div>
 
-// 關閉評論面板
-function closeComments() { 
-    document.getElementById('comment-panel').classList.add('translate-y-full'); 
-    setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
-}
+            <div class="absolute left-1/2 -translate-x-1/2 flex justify-center items-center w-16">
+                <button class="xhs-upload-btn shadow-md active:scale-90 transition">
+                    <i class="fa-solid fa-plus text-lg"></i>
+                </button>
+            </div>
 
-// 發送評論
-function sendComment() {
-    const input = document.getElementById('comment-input');
-    const sid = document.getElementById('post-detail').dataset.sourceId;
-    if(!input.value.trim() || !sid) return;
-    if(!postComments[sid]) postComments[sid] = [];
-    postComments[sid].unshift({ user: '我', text: input.value, time: '剛剛' });
-    loadComments(sid);
-    input.value = '';
-}
+            <div class="flex-1 flex justify-around pl-8">
+                <button onclick="switchTab('messages-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+                    <i class="fa-regular fa-comment-dots text-[1.1rem] mb-0.5"></i>
+                    <span class="text-[10px] font-bold">消息</span>
+                </button>
+                <button onclick="switchTab('profile-tab', this)" class="nav-btn flex flex-col items-center text-gray-400">
+                    <i class="fa-regular fa-user text-[1.1rem] mb-0.5"></i>
+                    <span class="text-[10px] font-bold">我</span>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <div id="post-detail" class="fixed inset-0 z-[1000] bg-white translate-y-full transition-transform duration-300 ease-out overflow-y-auto hidden">
+        <div class="sticky top-0 bg-white/80 backdrop-blur-md flex items-center justify-between px-4 h-14 z-10 border-b">
+            <button onclick="closeDetail()" class="text-2xl px-2 font-light">✕</button>
+            <div class="flex items-center gap-2"><img id="detail-avatar" src="" class="w-8 h-8 rounded-full"><span id="detail-username" class="text-sm font-bold"></span></div>
+            <button class="bg-sexify text-white px-4 py-1.5 rounded-full text-xs font-bold">關注</button>
+        </div>
+        <div class="pb-24">
+            <img id="detail-image" src="" class="block mx-auto w-auto max-w-full max-h-[65vh] object-contain">
+            <div class="p-5">
+                <h2 id="detail-title" class="text-xl font-black mb-3"></h2>
+                <p class="text-sm text-gray-600 leading-relaxed mb-6">分享生活與美好 ✨</p>
+                <div class="text-[10px] text-gray-400 border-t pt-4">發佈於 2026-03-25</div>
+            </div>
+        </div>
+        <div class="fixed bottom-0 left-0 right-0 bg-white border-t flex items-center justify-between px-4 h-16 z-50">
+            <div class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-gray-400 text-xs mr-4" onclick="openComments()">說點什麼...</div>
+            <div class="flex items-center space-x-5 px-2">
+                <div class="flex flex-col items-center" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xl"></i><span class="text-[10px] like-count font-bold mt-0.5">0</span></div>
+                <div class="flex flex-col items-center" onclick="openComments()"><i class="fa-regular fa-message text-xl"></i><span class="text-[10px] font-bold mt-0.5">留言</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="comment-sheet" class="fixed inset-0 z-[1100] hidden">
+        <div class="absolute inset-0 bg-black/40" onclick="closeComments()"></div>
+        <div id="comment-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] h-[75vh] translate-y-full transition-transform duration-300 flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-[2rem]">
+                <span class="font-black text-sm">評論 128</span>
+                <button onclick="closeComments()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-6" id="comment-list"></div>
+            <div class="p-4 border-t pb-10 flex items-center gap-3 bg-white">
+                <input type="text" id="comment-input" placeholder="留個言..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 outline-none text-sm">
+                <button onclick="sendComment()" class="text-sexify font-bold text-sm">發送</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/shop.js"></script>
+    <script src="js/profile.js"></script>
+    <script src="js/discovery.js"></script>
+    <script src="js/messages.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        function closeDetail() { 
+            const detail = document.getElementById('post-detail');
+            detail.classList.add('translate-y-full'); 
+            document.body.style.overflow = ''; 
+            setTimeout(() => detail.classList.add('hidden'), 300); 
+        }
+        function openComments() { 
+            document.getElementById('comment-sheet').classList.remove('hidden'); 
+            setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
+        }
+        function closeComments() { 
+            document.getElementById('comment-panel').classList.add('translate-y-full'); 
+            setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
+        }
+
+        function toggleLike(el) {
+            const heart = el.querySelector('i');
+            const countSpan = el.querySelector('.like-count');
+            let count = parseInt(countSpan.innerText);
+            if (heart.classList.contains('fa-regular')) {
+                heart.className = 'fa-solid fa-heart text-sexify animated heartPop';
+                count++;
+            } else {
+                heart.className = 'fa-regular fa-heart animated heartPop';
+                count--;
+            }
+            countSpan.innerText = count;
+        }
+
+        function sendComment() {
+            const input = document.getElementById('comment-input');
+            const sid = document.getElementById('post-detail').dataset.sourceId;
+            if(!input.value.trim() || !sid) return;
+            if(!postComments[sid]) postComments[sid] = [];
+            postComments[sid].unshift({ user: '我', text: input.value, time: '剛剛' });
+            loadComments(sid);
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
