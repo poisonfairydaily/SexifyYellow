@@ -34,3 +34,7 @@ function switchTab(tabId, btn) {
         renderMessages();
     }
 }
+// 在檔案最末尾加入
+window.onload = () => {
+    if(typeof renderHome === 'function') renderHome();
+};
