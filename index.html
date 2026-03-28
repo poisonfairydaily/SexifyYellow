@@ -38,8 +38,9 @@
                 <button class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-box-open w-5"></i> <span data-i18n="menu_purchased">已購買內容</span></button>
                 <button class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-sexify font-bold"><i class="fa-solid fa-star w-5"></i> <span data-i18n="menu_creator">成為創作者</span></button>
                 <div class="h-px bg-gray-100 my-2"></div>
+                <button onclick="alert('正在為您連接客服中心...')" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-circle-question w-5"></i> <span data-i18n="menu_help">幫助中心</span></button>
                 <button onclick="toggleLanguage()" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-language w-5"></i> <span data-i18n="menu_lang">切換語言 (EN/ZH)</span></button>
-                <button onclick="alert('已登出 (Logout)')" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-red-500 font-bold"><i class="fa-solid fa-right-from-bracket w-5"></i> <span data-i18n="menu_logout">註銷帳號</span></button>
+                <button onclick="if(confirm('確定要登出帳號嗎？')) location.reload();" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-red-500 font-bold"><i class="fa-solid fa-right-from-bracket w-5"></i> <span data-i18n="menu_logout">登出帳號</span></button>
             </div>
         </div>
     </div>
@@ -106,7 +107,10 @@
         </div>
         <div class="px-5 pb-5 relative -mt-12 flex justify-between items-end mb-3">
             <img id="other-avatar" src="" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
-            <button class="bg-sexify text-white px-6 py-2 rounded-full text-sm font-bold active:scale-95 shadow-lg shadow-sexify/30 flex items-center gap-2 transition"><i class="fa-solid fa-heart"></i> <span data-i18n="subscribe">訂閱</span></button>
+            <div class="flex gap-2">
+                <button onclick="openChatFromProfile()" class="bg-gray-100 text-gray-800 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 transition shadow-sm"><i class="fa-solid fa-comment-dots"></i></button>
+                <button id="btn-subscribe" onclick="toggleSubscribe(this)" class="bg-sexify text-white px-5 py-2 rounded-full text-sm font-bold active:scale-95 shadow-lg shadow-sexify/30 flex items-center gap-2 transition"><i class="fa-solid fa-heart"></i> <span data-i18n="subscribe">訂閱</span></button>
+            </div>
         </div>
         <div class="px-5 pb-4">
             <h2 id="other-name" class="text-xl font-black text-gray-800"></h2>
@@ -139,6 +143,7 @@
             </div>
             <input type="text" id="edit-name" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
             <textarea id="edit-bio" rows="3" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none resize-none"></textarea>
+            <input type="text" id="edit-avatar-url" placeholder="頭像圖片網址 URL" data-i18n="edit_avatar" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
             <input type="text" id="edit-banner-url" placeholder="橫幅圖片網址 URL" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
             <button onclick="saveProfile()" class="w-full bg-sexify text-white py-3.5 rounded-full font-bold shadow-lg mt-2 active:scale-95 transition">儲存</button>
         </div>
@@ -152,7 +157,7 @@
                 <img id="detail-avatar" src="" class="w-10 h-10 rounded-full border border-gray-100 object-cover">
                 <span id="detail-username" class="font-bold text-sm text-gray-800"></span>
             </div>
-            <h3 id="detail-title" class="font-bold text-[15px] mb-5 leading-relaxed text-gray-800"></h3>
+            <h3 id="detail-title" class="font-bold text-[15px] mb-5 leading-relaxed text-gray-800 whitespace-pre-wrap"></h3>
             <div class="flex items-center gap-6 text-gray-500 border-t border-gray-100 pt-4">
                 <div class="flex flex-col items-center cursor-pointer group" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xl group-active:scale-110 transition"></i><span class="text-[10px] like-count font-bold mt-1">0</span></div>
                 <div class="flex flex-col items-center cursor-pointer group" onclick="openComments()"><i class="fa-regular fa-message text-xl group-active:scale-110 transition"></i><span class="text-[10px] font-bold mt-1">留言</span></div>
@@ -225,12 +230,26 @@
         </div>
     </div>
 
+    <div id="chat-modal" class="fixed inset-0 z-[2100] bg-white translate-x-full transition-transform duration-300 hidden flex flex-col">
+        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm">
+            <button onclick="closeChat()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
+            <img id="chat-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-gray-100">
+            <h3 id="chat-name" class="font-black text-sm text-gray-800"></h3>
+        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col">
+            </div>
+        <div class="p-4 border-t bg-white flex items-center gap-3 pb-8">
+            <input type="text" id="chat-input" data-i18n="chat_input" placeholder="發送私訊..." class="flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+            <button onclick="sendChatMessage()" class="bg-sexify text-white font-bold px-5 py-2.5 rounded-full shadow-md active:scale-95 transition" data-i18n="send">發送</button>
+        </div>
+    </div>
+
     <script src="js/i18n.js"></script>
     <script src="js/app.js"></script>
     <script src="js/shop.js"></script>
+    <script src="js/discovery.js"></script>
     <script src="js/profile.js"></script>
     <script src="js/messages.js"></script>
-    <script src="js/discovery.js"></script>
     <script src="js/create.js"></script>
 </body>
 </html>

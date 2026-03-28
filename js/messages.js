@@ -5,21 +5,13 @@ const chatList = [
     { id: 3, user: 'Xaiver', avatar: 'https://i.pravatar.cc/100?u=a1', lastMsg: '下次一起出來喝一杯？', time: '週三', unread: 0 }
 ];
 
-// 預留通知數據 (未來擴充用)
-const notificationList = [
-    { type: 'like', user: '酷炫男孩', target: '你的深夜驚喜', time: '5分鐘前' },
-    { type: 'follow', user: '小雨點', target: '關注了你', time: '1小時前' }
-];
-
 // 2. 渲染邏輯
 function renderMessages() {
-    // ⭐ 這裡改成了 messages-list，對應 index.html 裡的 ID ⭐
     const container = document.getElementById('messages-list');
     if (!container) return;
 
-    // 將數據轉化為 HTML 結構
     container.innerHTML = chatList.map(chat => `
-        <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50" onclick="openChat(${chat.id})">
+        <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50 cursor-pointer" onclick="openChat('${chat.user}', '${chat.avatar}')">
             <div class="relative flex-shrink-0">
                 <img src="${chat.avatar}" class="w-12 h-12 rounded-full border border-gray-100 object-cover">
                 ${chat.unread > 0 ? `
@@ -38,10 +30,57 @@ function renderMessages() {
     `).join('');
 }
 
-// 3. 模擬開啟聊天窗口
-function openChat(chatId) {
-    const chat = chatList.find(c => c.id === chatId);
-    if (chat) {
-        alert(`正在與 ${chat.user} 建立加密連線...`);
-    }
+// 從他人主頁點擊開啟私訊
+function openChatFromProfile() {
+    const name = document.getElementById('other-name').innerText;
+    const avatar = document.getElementById('other-avatar').src;
+    openChat(name, avatar);
+}
+
+// 3. 私訊對話視窗展開
+function openChat(username, avatarUrl) {
+    document.getElementById('chat-name').innerText = username;
+    document.getElementById('chat-avatar').src = avatarUrl;
+    
+    // 初始化一條預設訊息
+    const chatContainer = document.getElementById('chat-messages');
+    chatContainer.innerHTML = `
+        <div class="text-center text-xs text-gray-400 my-4">今天</div>
+        <div class="flex gap-2 max-w-[85%]">
+            <img src="${avatarUrl}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
+            <div class="bg-white p-3 rounded-2xl rounded-tl-sm text-sm text-gray-800 shadow-sm leading-relaxed">
+                嗨！很高興認識你 🥰
+            </div>
+        </div>
+    `;
+
+    document.getElementById('chat-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('chat-modal').classList.remove('translate-x-full'), 10);
+}
+
+function closeChat() {
+    document.getElementById('chat-modal').classList.add('translate-x-full');
+    setTimeout(() => document.getElementById('chat-modal').classList.add('hidden'), 300);
+}
+
+// 發送私訊邏輯
+function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // 將自己的訊息加入對話框
+    const chatContainer = document.getElementById('chat-messages');
+    chatContainer.innerHTML += `
+        <div class="flex gap-2 justify-end mt-4 max-w-[85%] self-end ml-auto flex-row-reverse">
+            <img src="${currentUser.avatar}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover">
+            <div class="bg-sexify text-white p-3 rounded-2xl rounded-tr-sm text-sm shadow-sm leading-relaxed">
+                ${text}
+            </div>
+        </div>
+    `;
+
+    input.value = '';
+    // 自動滾動到底部
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 }

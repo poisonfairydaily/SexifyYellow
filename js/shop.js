@@ -39,7 +39,6 @@ function renderShop(filterKeyword = '') {
     `).join('');
 }
 
-// 供商城搜尋框呼叫
 function searchShop() {
     const keyword = document.getElementById('shop-search').value;
     renderShop(keyword);

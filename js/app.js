@@ -29,11 +29,11 @@ function switchTab(tabId, btn) {
     if(tabId === 'shop-tab' && typeof renderShop === 'function') renderShop();
     if(tabId === 'profile-tab' && typeof renderProfile === 'function') renderProfile();
     
-    // ⭐ 消息模組在這裡塞入 ⭐
     if(tabId === 'messages-tab' && typeof renderMessages === 'function') {
         renderMessages();
     }
 }
+
 // 控制全站左側設定面板
 function toggleSettings() {
     const drawer = document.getElementById('settings-drawer');

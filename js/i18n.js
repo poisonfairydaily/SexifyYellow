@@ -15,13 +15,18 @@ const dict = {
         'stats_rev': '本月收入',
         'menu_purchased': '已購買內容',
         'menu_creator': '成為創作者',
+        'menu_help': '幫助中心',
         'menu_lang': '切換語言 (EN/ZH)',
-        'menu_logout': '註銷帳號',
+        'menu_logout': '登出帳號',
         'edit_profile': '編輯資料',
+        'edit_avatar': '頭像圖片網址 URL',
         'edit_banner': '更換橫幅',
         'post_free': '免費公開',
         'post_paid': '付費解鎖',
-        'subscribe': '訂閱解鎖',
+        'subscribe': '訂閱',
+        'subscribed': '已訂閱',
+        'chat_input': '發送私訊...',
+        'send': '發送',
         'no_content': '找不到相關內容...',
         'age_title': '此空間包含成人內容',
         'age_desc': '進入即代表您已滿 18 歲',
@@ -40,15 +45,20 @@ const dict = {
         'settings': 'Settings & Analytics',
         'stats_subs': 'Subscribers',
         'stats_rev': 'Revenue',
-        'menu_purchased': 'Purchased Content',
+        'menu_purchased': 'Purchased',
         'menu_creator': 'Become a Creator',
-        'menu_lang': 'Switch Language (中/EN)',
+        'menu_help': 'Help Center',
+        'menu_lang': 'Language (中/EN)',
         'menu_logout': 'Logout',
         'edit_profile': 'Edit Profile',
+        'edit_avatar': 'Avatar Image URL',
         'edit_banner': 'Change Banner',
         'post_free': 'Free',
         'post_paid': 'Paid',
         'subscribe': 'Subscribe',
+        'subscribed': 'Subscribed',
+        'chat_input': 'Send a message...',
+        'send': 'Send',
         'no_content': 'No content found...',
         'age_title': 'Adult Content Warning',
         'age_desc': 'By entering, you confirm you are 18+',
@@ -61,7 +71,7 @@ let currentLang = 'zh';
 function toggleLanguage() {
     currentLang = currentLang === 'zh' ? 'en' : 'zh';
     translatePage();
-    if(typeof renderDiscovery === 'function') renderDiscovery(); // 重新渲染貼文以更新語言
+    if(typeof renderDiscovery === 'function') renderDiscovery();
 }
 
 function translatePage() {

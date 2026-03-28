@@ -57,17 +57,15 @@ function resetUploadForm() {
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
-    document.getElementById('media-preview-container').dataset.mediaType = ''; // 清除類型
+    document.getElementById('media-preview-container').dataset.mediaType = ''; 
 }
 
 function simulatedPublish() {
     const caption = document.getElementById('post-caption').value.trim();
     const price = parseInt(document.getElementById('post-price').value) || 0;
     
-    // 判斷是否有上傳媒體，如果沒有就預設為 text (純文字)
     let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
     
-    // 阻擋空白發佈：如果沒圖也沒文字，拒絕發佈
     if (mediaType === 'text' && !caption) {
         return alert('請輸入文字內容或上傳相片/影片！');
     }
@@ -78,7 +76,7 @@ function simulatedPublish() {
     
     const newPost = {
         id: 'user-post-' + Date.now(),
-        user: currentUser.name, // 使用 profile.js 中設定的名稱
+        user: currentUser.name, 
         avatar: currentUser.avatar,
         type: mediaType,
         src: src,
@@ -88,12 +86,11 @@ function simulatedPublish() {
         price: price
     };
 
-    // 將新貼文加到全局陣列的最前面
     if(typeof allPosts !== 'undefined') {
         allPosts.unshift(newPost);
-        renderDiscovery(); // 重新渲染首頁
+        renderDiscovery(); 
     }
 
-    switchTab('home-tab', document.querySelector('.nav-btn')); // 切換回首頁
+    switchTab('home-tab', document.querySelector('.nav-btn')); 
     closeUploadModal();
 }

@@ -1,6 +1,6 @@
 // js/discovery.js
 let allPosts = [
-    { id: 'ex-1', user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/150?u=mina', type: 'image', src: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80', title: '今天天氣很好', likes: 1205, isPaid: false, price: 0 },
+    { id: 'ex-1', user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/150?u=mina', type: 'image', src: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80', title: '今天天氣很好，出門透透氣✨', likes: 1205, isPaid: false, price: 0 },
     { id: 'ex-2', user: 'Xaiver_Fitness', avatar: 'https://i.pravatar.cc/150?u=xaiver', type: 'image', src: 'https://images.unsplash.com/photo-1529139513065-07b2ee722f5a?w=500&q=80', title: '深蹲破紀錄！', likes: 892, isPaid: true, price: 99 }
 ];
 
@@ -32,17 +32,16 @@ function searchPosts() {
 
 function generateCardHtml(post) {
     let mediaHtml = '';
-    if (post.type === 'image') {
+    if (post.type === 'image' && post.src) {
         mediaHtml = `<img src="${post.src}" class="w-full h-full object-cover">`;
-    } else if (post.type === 'video') {
+    } else if (post.type === 'video' && post.src) {
         mediaHtml = `<video src="${post.src}" class="w-full h-full object-cover" muted autoplay loop></video><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-md font-bold"><i class="fa-solid fa-play"></i></div>`;
     } else {
-        mediaHtml = `<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-4 text-center"><p class="font-bold text-gray-800 text-sm line-clamp-4 leading-relaxed">${post.title}</p></div>`;
+        // 如果是純文字貼文，顯示帶背景的文字框
+        mediaHtml = `<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-6 text-center"><p class="font-bold text-gray-800 text-sm line-clamp-4">${post.title}</p></div>`;
     }
     
     let lockHtml = post.isPaid ? `<div class="absolute inset-0 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center text-white"><i class="fa-solid fa-lock text-3xl mb-2"></i><span class="font-black text-sm">${post.price} 金幣</span></div>` : '';
-
-    // 注意：把單引號轉義，避免 onclick 報錯
     const safeTitle = post.title.replace(/'/g, "\\'");
 
     return `
@@ -65,7 +64,6 @@ function generateCardHtml(post) {
     `;
 }
 
-// 完整還原：打開貼文詳情 (包含付費解鎖邏輯)
 function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
     if (isPaid && price > 0) {
         if (!confirm(`【解鎖提示】\n這是一個專屬付費作品，需要 ${price} 金幣解鎖。\n\n確認解鎖觀看嗎？`)) return;
@@ -74,12 +72,12 @@ function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
     const detail = document.getElementById('post-detail');
     const container = document.getElementById('detail-media-container');
     
-    if (type === 'video') {
+    if (type === 'video' && src) {
         container.innerHTML = `<video src="${src}" class="w-full max-h-[65vh] object-contain bg-black" controls autoplay></video>`;
-    } else if (type === 'image') {
+    } else if (type === 'image' && src) {
         container.innerHTML = `<img src="${src}" class="w-full object-contain max-h-[65vh]">`;
     } else {
-        container.innerHTML = `<div class="w-full h-full min-h-[40vh] flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-8 text-center"><p class="font-bold text-gray-800 text-lg leading-relaxed">${title}</p></div>`;
+        container.innerHTML = `<div class="w-full h-full min-h-[40vh] flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-8 text-center"><p class="font-bold text-gray-800 text-lg">${title}</p></div>`;
     }
 
     document.getElementById('detail-avatar').src = avatar;
@@ -87,7 +85,6 @@ function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
     document.getElementById('detail-title').innerText = title;
     detail.dataset.sourceId = id;
     
-    // 每次打開重新設定點讚數
     detail.querySelector('.like-count').innerText = likes;
 
     loadComments(id);
@@ -105,7 +102,6 @@ function closeDetail() {
     }, 300);
 }
 
-// 還原：點讚功能
 function toggleLike(el) {
     const heart = el.querySelector('i.fa-heart');
     const countSpan = el.querySelector('.like-count');
@@ -117,22 +113,13 @@ function toggleLike(el) {
     countSpan.innerText = count;
 }
 
-// 新增：收藏功能 (Bookmark)
 function toggleBookmark(el) {
     const bookmark = el.querySelector('i.fa-bookmark');
     bookmark.classList.toggle('fa-regular');
     bookmark.classList.toggle('fa-solid');
-    bookmark.classList.toggle('text-yellow-500'); // 收藏變成黃色
-    
-    if(bookmark.classList.contains('fa-solid')) {
-        // 這裡未來可以寫入後端 API，將 post ID 存入使用者的收藏庫
-        console.log("已加入收藏");
-    } else {
-        console.log("已取消收藏");
-    }
+    bookmark.classList.toggle('text-yellow-500'); 
 }
 
-// 還原：留言系統
 function loadComments(id) {
     const list = document.getElementById('comment-list');
     const cms = postComments[id] || [];
