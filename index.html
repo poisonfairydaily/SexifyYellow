@@ -10,7 +10,7 @@
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
 
-    <div id="age-gate" class="fixed inset-0 z-[2000] bg-black flex items-center justify-center transition-opacity duration-500">
+    <div id="age-gate" class="fixed inset-0 z-[3000] bg-black flex items-center justify-center transition-opacity duration-500">
         <div class="bg-white p-10 rounded-[2.5rem] w-11/12 max-w-sm text-center shadow-2xl">
             <h2 class="text-4xl font-black text-sexify mb-3">SEXIFY</h2>
             <p class="text-gray-400 text-sm mb-8" data-i18n="age_title">此空間包含成人內容<br><span data-i18n="age_desc">進入即代表您已滿 18 歲</span></p>
@@ -35,6 +35,9 @@
                 </div>
             </div>
             <div class="flex-1 overflow-y-auto py-4">
+                <button onclick="openPersonalCenter()" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-800 font-bold"><i class="fa-solid fa-user-shield w-5"></i> <span data-i18n="menu_personal">個人中心</span></button>
+                <button onclick="openFansSubsModal()" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-800 font-bold"><i class="fa-solid fa-users w-5"></i> <span data-i18n="menu_fans_subs">粉絲與訂閱用戶</span></button>
+                <div class="h-px bg-gray-100 my-2"></div>
                 <button class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-box-open w-5"></i> <span data-i18n="menu_purchased">已購買內容</span></button>
                 <button class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-sexify font-bold"><i class="fa-solid fa-star w-5"></i> <span data-i18n="menu_creator">成為創作者</span></button>
                 <div class="h-px bg-gray-100 my-2"></div>
@@ -50,11 +53,17 @@
         <div id="home-tab" class="tab-content active">
             <div class="p-4 pt-6 flex justify-between items-center gap-3 bg-white/80 backdrop-blur-md sticky top-0 z-[100]">
                 <button onclick="toggleSettings()" class="text-gray-800 text-xl active:scale-90 transition"><i class="fa-solid fa-bars"></i></button>
-                <h1 class="text-xl font-black text-gray-800 hidden md:block" data-i18n="app_title">發現</h1>
-                <div class="flex-1 relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input type="text" id="home-search" oninput="searchPosts()" data-i18n="search_placeholder" placeholder="搜尋用戶或內容..." class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-sexify/20 transition">
+                
+                <div class="flex-1 relative flex items-center">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="home-search" oninput="handleSearch()" data-i18n="search_placeholder" placeholder="搜尋用戶或內容..." class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-10 text-sm outline-none focus:ring-2 focus:ring-sexify/20 transition">
+                    <button id="search-clear-btn" onclick="clearSearch()" class="absolute right-3 text-gray-400 hidden active:scale-90"><i class="fa-solid fa-circle-xmark"></i></button>
                 </div>
+
+                <button onclick="openNotifications()" class="relative text-gray-800 text-xl active:scale-90 transition">
+                    <i class="fa-regular fa-bell"></i>
+                    <span class="absolute -top-1 -right-1 bg-sexify text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-white">3</span>
+                </button>
             </div>
             <div class="masonry-grid" id="discovery-grid"></div>
         </div>
@@ -73,7 +82,7 @@
         <div id="messages-tab" class="tab-content">
             <div class="p-4 pt-6 bg-white/80 backdrop-blur-md sticky top-0 z-[100] flex items-center gap-3">
                 <button onclick="toggleSettings()" class="text-gray-800 text-xl active:scale-90 transition"><i class="fa-solid fa-bars"></i></button>
-                <h1 class="text-2xl font-black text-gray-800" data-i18n="msg_title">消息</h1>
+                <h1 class="text-2xl font-black text-gray-800" data-i18n="msg_title">訊息</h1>
             </div>
             <div id="messages-list" class="divide-y divide-gray-50"></div>
         </div>
@@ -100,6 +109,16 @@
         </div>
     </div>
 
+    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 flex justify-around items-center py-2 pb-6 z-[500]">
+        <button class="nav-btn nav-active flex flex-col items-center gap-1" onclick="switchTab('home-tab', this)"><i class="fa-solid fa-house"></i><span class="text-[10px]" data-i18n="nav_home">首頁</span></button>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('shop-tab', this)"><i class="fa-solid fa-bag-shopping"></i><span class="text-[10px]" data-i18n="nav_shop">商城</span></button>
+        <div class="relative w-16 flex justify-center items-center -top-4">
+            <button onclick="openUploadModal()" class="shadow-xl active:scale-90 transition w-12 h-10 bg-black text-white rounded-[14px] flex items-center justify-center"><i class="fa-solid fa-plus text-lg"></i></button>
+        </div>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('messages-tab', this)"><i class="fa-solid fa-message"></i><span class="text-[10px]" data-i18n="nav_msg">訊息</span></button>
+        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('profile-tab', this)"><i class="fa-solid fa-user"></i><span class="text-[10px]" data-i18n="nav_me">我</span></button>
+    </div>
+
     <div id="other-profile-modal" class="fixed inset-0 z-[1600] bg-white translate-x-full transition-transform duration-300 overflow-y-auto hidden">
         <div class="relative w-full h-40 bg-gray-200">
             <img id="other-banner" src="" class="w-full h-full object-cover">
@@ -124,16 +143,6 @@
         <div id="other-gallery" class="grid grid-cols-3 gap-1 bg-white"></div>
     </div>
 
-    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 flex justify-around items-center py-2 pb-6 z-[500]">
-        <button class="nav-btn nav-active flex flex-col items-center gap-1" onclick="switchTab('home-tab', this)"><i class="fa-solid fa-house"></i><span class="text-[10px]" data-i18n="nav_home">首頁</span></button>
-        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('shop-tab', this)"><i class="fa-solid fa-bag-shopping"></i><span class="text-[10px]" data-i18n="nav_shop">商城</span></button>
-        <div class="relative w-16 flex justify-center items-center -top-4">
-            <button onclick="openUploadModal()" class="shadow-xl active:scale-90 transition w-12 h-10 bg-black text-white rounded-[14px] flex items-center justify-center"><i class="fa-solid fa-plus text-lg"></i></button>
-        </div>
-        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('messages-tab', this)"><i class="fa-solid fa-message"></i><span class="text-[10px]" data-i18n="nav_msg">消息</span></button>
-        <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('profile-tab', this)"><i class="fa-solid fa-user"></i><span class="text-[10px]" data-i18n="nav_me">我</span></button>
-    </div>
-
     <div id="edit-profile-modal" class="fixed inset-0 z-[1600] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeEditProfile()"></div>
         <div id="edit-profile-panel" class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] p-6 pb-12 translate-y-full transition-transform duration-300 flex flex-col space-y-4 shadow-2xl">
@@ -141,10 +150,18 @@
                 <h3 class="font-black text-lg" data-i18n="edit_profile">編輯資料</h3>
                 <button onclick="closeEditProfile()" class="w-8 h-8 bg-gray-100 rounded-full transition active:scale-90">✕</button>
             </div>
-            <input type="text" id="edit-name" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
-            <textarea id="edit-bio" rows="3" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none resize-none"></textarea>
-            <input type="text" id="edit-avatar-url" placeholder="頭像圖片網址 URL" data-i18n="edit_avatar" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
-            <input type="text" id="edit-banner-url" placeholder="橫幅圖片網址 URL" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
+            <input type="text" id="edit-name" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none" placeholder="暱稱">
+            <textarea id="edit-bio" rows="3" class="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none resize-none" placeholder="個人簡介"></textarea>
+            
+            <div class="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm">
+                <span class="text-gray-500 font-bold">更換頭像</span>
+                <input type="file" id="edit-avatar-file" accept="image/*" class="text-xs w-1/2">
+            </div>
+            <div class="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm">
+                <span class="text-gray-500 font-bold">更換橫幅</span>
+                <input type="file" id="edit-banner-file" accept="image/*" class="text-xs w-1/2">
+            </div>
+
             <button onclick="saveProfile()" class="w-full bg-sexify text-white py-3.5 rounded-full font-bold shadow-lg mt-2 active:scale-95 transition">儲存</button>
         </div>
     </div>
@@ -236,11 +253,62 @@
             <img id="chat-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-gray-100">
             <h3 id="chat-name" class="font-black text-sm text-gray-800"></h3>
         </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col">
-            </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col"></div>
         <div class="p-4 border-t bg-white flex items-center gap-3 pb-8">
-            <input type="text" id="chat-input" data-i18n="chat_input" placeholder="發送私訊..." class="flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
-            <button onclick="sendChatMessage()" class="bg-sexify text-white font-bold px-5 py-2.5 rounded-full shadow-md active:scale-95 transition" data-i18n="send">發送</button>
+            <input type="text" id="chat-input" placeholder="發送訊息..." class="flex-1 bg-gray-100 rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+            <button onclick="sendChatMessage()" class="bg-sexify text-white font-bold px-5 py-2.5 rounded-full shadow-md active:scale-95 transition">發送</button>
+        </div>
+    </div>
+
+    <div id="notifications-modal" class="fixed inset-0 z-[2200] bg-white translate-x-full transition-transform duration-300 hidden flex flex-col">
+        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm">
+            <button onclick="closeNotifications()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
+            <h3 class="font-black text-lg text-gray-800">通知</h3>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
+            <div class="bg-white p-4 rounded-xl flex items-center gap-3 shadow-sm"><i class="fa-solid fa-heart text-sexify text-lg"></i><div><p class="text-sm font-bold text-gray-800">Xaiver 喜歡了你的貼文</p><p class="text-xs text-gray-400">5 分鐘前</p></div></div>
+            <div class="bg-white p-4 rounded-xl flex items-center gap-3 shadow-sm"><i class="fa-solid fa-user-plus text-blue-500 text-lg"></i><div><p class="text-sm font-bold text-gray-800">小雨點 訂閱了你</p><p class="text-xs text-gray-400">1 小時前</p></div></div>
+            <div class="bg-white p-4 rounded-xl flex items-center gap-3 shadow-sm"><i class="fa-solid fa-coins text-amber-500 text-lg"></i><div><p class="text-sm font-bold text-gray-800">Mina_米娜 打賞了 50 金幣</p><p class="text-xs text-gray-400">昨天</p></div></div>
+        </div>
+    </div>
+
+    <div id="personal-center-modal" class="fixed inset-0 z-[2200] bg-white translate-x-full transition-transform duration-300 hidden flex flex-col">
+        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm">
+            <button onclick="closePersonalCenter()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
+            <h3 class="font-black text-lg text-gray-800" data-i18n="menu_personal">個人中心</h3>
+        </div>
+        <div class="flex-1 overflow-y-auto py-4 bg-gray-50 space-y-2">
+            <div class="bg-white p-4 border-y">
+                <h4 class="font-bold text-gray-800 mb-3 text-sm">社交媒體連結</h4>
+                <button class="w-full flex items-center justify-between py-2"><span class="text-sm text-gray-600"><i class="fa-brands fa-instagram text-pink-500 w-5"></i> Instagram</span><span class="text-xs text-sexify font-bold">綁定</span></button>
+                <button class="w-full flex items-center justify-between py-2"><span class="text-sm text-gray-600"><i class="fa-brands fa-twitter text-blue-400 w-5"></i> Twitter (X)</span><span class="text-xs text-gray-400">已綁定</span></button>
+            </div>
+            <div class="bg-white p-4 border-y">
+                <h4 class="font-bold text-gray-800 mb-3 text-sm">私隱設定</h4>
+                <div class="flex items-center justify-between py-2"><span class="text-sm text-gray-600">允許其他人搜尋到我</span><input type="checkbox" checked class="accent-sexify w-4 h-4"></div>
+                <div class="flex items-center justify-between py-2"><span class="text-sm text-gray-600">公開我的訂閱名單</span><input type="checkbox" class="accent-sexify w-4 h-4"></div>
+            </div>
+            <div class="bg-white p-4 border-y">
+                <h4 class="font-bold text-gray-800 mb-3 text-sm">通知設定</h4>
+                <div class="flex items-center justify-between py-2"><span class="text-sm text-gray-600">接收新訊息通知</span><input type="checkbox" checked class="accent-sexify w-4 h-4"></div>
+                <div class="flex items-center justify-between py-2"><span class="text-sm text-gray-600">接收電子郵件動態</span><input type="checkbox" checked class="accent-sexify w-4 h-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="fans-subs-modal" class="fixed inset-0 z-[2200] bg-white translate-x-full transition-transform duration-300 hidden flex flex-col">
+        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm">
+            <button onclick="closeFansSubsModal()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
+            <h3 class="font-black text-lg text-gray-800" data-i18n="menu_fans_subs">粉絲與訂閱用戶</h3>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <h4 class="font-bold text-xs text-gray-400 mb-2">我的訂閱 (我追蹤的人)</h4>
+            <div id="subs-list" class="space-y-2"></div>
+            <h4 class="font-bold text-xs text-gray-400 mb-2 mt-6">我的粉絲</h4>
+            <div id="fans-list" class="space-y-2">
+                <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm"><img src="https://i.pravatar.cc/100?u=fan1" class="w-10 h-10 rounded-full"><span class="font-bold text-sm text-gray-800">路人甲</span></div>
+                <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm"><img src="https://i.pravatar.cc/100?u=fan2" class="w-10 h-10 rounded-full"><span class="font-bold text-sm text-gray-800">神秘客</span></div>
+            </div>
         </div>
     </div>
 

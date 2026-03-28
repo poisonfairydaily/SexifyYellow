@@ -1,8 +1,8 @@
-// 1. 模擬數據
-const chatList = [
-    { id: 1, user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/100?u=a2', lastMsg: '收到了嗎？那張照片...', time: '14:20', unread: 2 },
+// 1. 全域模擬數據
+window.chatList = [
+    { id: 1, user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/100?u=mina', lastMsg: '收到了嗎？那張照片...', time: '14:20', unread: 2 },
     { id: 2, user: '官方小助手', avatar: 'https://i.pravatar.cc/100?u=admin', lastMsg: '歡迎加入 Sexify，開啟你的專屬美好。', time: '昨天', unread: 0 },
-    { id: 3, user: 'Xaiver', avatar: 'https://i.pravatar.cc/100?u=a1', lastMsg: '下次一起出來喝一杯？', time: '週三', unread: 0 }
+    { id: 3, user: 'Xaiver_Fitness', avatar: 'https://i.pravatar.cc/100?u=xaiver', lastMsg: '下次一起出來喝一杯？', time: '週三', unread: 0 }
 ];
 
 // 2. 渲染邏輯
@@ -10,8 +10,8 @@ function renderMessages() {
     const container = document.getElementById('messages-list');
     if (!container) return;
 
-    container.innerHTML = chatList.map(chat => `
-        <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50 cursor-pointer" onclick="openChat('${chat.user}', '${chat.avatar}')">
+    container.innerHTML = window.chatList.map(chat => `
+        <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50 cursor-pointer" onclick="openChat('${chat.user}', '${chat.avatar}', ${chat.id})">
             <div class="relative flex-shrink-0">
                 <img src="${chat.avatar}" class="w-12 h-12 rounded-full border border-gray-100 object-cover">
                 ${chat.unread > 0 ? `
@@ -30,19 +30,19 @@ function renderMessages() {
     `).join('');
 }
 
-// 從他人主頁點擊開啟私訊
+let activeChatId = null;
+
 function openChatFromProfile() {
     const name = document.getElementById('other-name').innerText;
     const avatar = document.getElementById('other-avatar').src;
-    openChat(name, avatar);
+    openChat(name, avatar, null);
 }
 
-// 3. 私訊對話視窗展開
-function openChat(username, avatarUrl) {
+function openChat(username, avatarUrl, id) {
+    activeChatId = id;
     document.getElementById('chat-name').innerText = username;
     document.getElementById('chat-avatar').src = avatarUrl;
     
-    // 初始化一條預設訊息
     const chatContainer = document.getElementById('chat-messages');
     chatContainer.innerHTML = `
         <div class="text-center text-xs text-gray-400 my-4">今天</div>
@@ -61,15 +61,15 @@ function openChat(username, avatarUrl) {
 function closeChat() {
     document.getElementById('chat-modal').classList.add('translate-x-full');
     setTimeout(() => document.getElementById('chat-modal').classList.add('hidden'), 300);
+    activeChatId = null;
 }
 
-// 發送私訊邏輯
+// 發送訊息並更新列表預覽
 function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if (!text) return;
 
-    // 將自己的訊息加入對話框
     const chatContainer = document.getElementById('chat-messages');
     chatContainer.innerHTML += `
         <div class="flex gap-2 justify-end mt-4 max-w-[85%] self-end ml-auto flex-row-reverse">
@@ -80,7 +80,17 @@ function sendChatMessage() {
         </div>
     `;
 
+    // 同步更新訊息列表的「最新一則」
+    if(activeChatId !== null) {
+        const chatItem = window.chatList.find(c => c.id === activeChatId);
+        if(chatItem) {
+            chatItem.lastMsg = text;
+            chatItem.time = '剛剛';
+            chatItem.unread = 0; // 自己發完消除未讀
+            renderMessages();
+        }
+    }
+
     input.value = '';
-    // 自動滾動到底部
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }

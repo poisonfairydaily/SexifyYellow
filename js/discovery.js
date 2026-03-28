@@ -1,4 +1,3 @@
-// js/discovery.js
 let allPosts = [
     { id: 'ex-1', user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/150?u=mina', type: 'image', src: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80', title: '今天天氣很好，出門透透氣✨', likes: 1205, isPaid: false, price: 0 },
     { id: 'ex-2', user: 'Xaiver_Fitness', avatar: 'https://i.pravatar.cc/150?u=xaiver', type: 'image', src: 'https://images.unsplash.com/photo-1529139513065-07b2ee722f5a?w=500&q=80', title: '深蹲破紀錄！', likes: 892, isPaid: true, price: 99 }
@@ -37,11 +36,11 @@ function generateCardHtml(post) {
     } else if (post.type === 'video' && post.src) {
         mediaHtml = `<video src="${post.src}" class="w-full h-full object-cover" muted autoplay loop></video><div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-md font-bold"><i class="fa-solid fa-play"></i></div>`;
     } else {
-        // 如果是純文字貼文，顯示帶背景的文字框
         mediaHtml = `<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-6 text-center"><p class="font-bold text-gray-800 text-sm line-clamp-4">${post.title}</p></div>`;
     }
     
     let lockHtml = post.isPaid ? `<div class="absolute inset-0 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center text-white"><i class="fa-solid fa-lock text-3xl mb-2"></i><span class="font-black text-sm">${post.price} 金幣</span></div>` : '';
+
     const safeTitle = post.title.replace(/'/g, "\\'");
 
     return `
@@ -77,7 +76,7 @@ function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
     } else if (type === 'image' && src) {
         container.innerHTML = `<img src="${src}" class="w-full object-contain max-h-[65vh]">`;
     } else {
-        container.innerHTML = `<div class="w-full h-full min-h-[40vh] flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-8 text-center"><p class="font-bold text-gray-800 text-lg">${title}</p></div>`;
+        container.innerHTML = `<div class="w-full h-full min-h-[40vh] flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-8 text-center"><p class="font-bold text-gray-800 text-lg leading-relaxed">${title}</p></div>`;
     }
 
     document.getElementById('detail-avatar').src = avatar;

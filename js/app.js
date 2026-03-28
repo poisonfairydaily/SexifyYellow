@@ -9,29 +9,22 @@ function verifyAge() {
 
 // 底部 Tab 切換邏輯
 function switchTab(tabId, btn) {
-    // 1. 隱藏所有分頁內容，只顯示點擊的那一個
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     
-    // 2. 重置所有導航按鈕顏色為灰色
     document.querySelectorAll('.nav-btn').forEach(b => { 
         b.classList.remove('nav-active'); 
         b.classList.add('text-gray-400'); 
     });
     
-    // 3. 將當前點擊的按鈕設為高亮（黑色）
     if(btn) { 
         btn.classList.add('nav-active'); 
         btn.classList.remove('text-gray-400'); 
     }
     
-    // 4. 依據對應的模組觸發渲染 (避免重複加載)
     if(tabId === 'shop-tab' && typeof renderShop === 'function') renderShop();
     if(tabId === 'profile-tab' && typeof renderProfile === 'function') renderProfile();
-    
-    if(tabId === 'messages-tab' && typeof renderMessages === 'function') {
-        renderMessages();
-    }
+    if(tabId === 'messages-tab' && typeof renderMessages === 'function') renderMessages();
 }
 
 // 控制全站左側設定面板
@@ -46,4 +39,53 @@ function toggleSettings() {
         panel.classList.add('-translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
+}
+
+// 搜尋一鍵刪除邏輯
+function handleSearch() {
+    const val = document.getElementById('home-search').value;
+    const clearBtn = document.getElementById('search-clear-btn');
+    if(val.length > 0) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+    
+    if(typeof searchPosts === 'function') searchPosts();
+}
+
+function clearSearch() {
+    document.getElementById('home-search').value = '';
+    document.getElementById('search-clear-btn').classList.add('hidden');
+    if(typeof searchPosts === 'function') searchPosts();
+}
+
+// 開關通知中心
+function openNotifications() {
+    document.getElementById('notifications-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('notifications-modal').classList.remove('translate-x-full'), 10);
+}
+function closeNotifications() {
+    document.getElementById('notifications-modal').classList.add('translate-x-full');
+    setTimeout(() => document.getElementById('notifications-modal').classList.add('hidden'), 300);
+}
+
+// 開關個人中心
+function openPersonalCenter() {
+    toggleSettings();
+    document.getElementById('personal-center-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('personal-center-modal').classList.remove('translate-x-full'), 10);
+}
+function closePersonalCenter() {
+    document.getElementById('personal-center-modal').classList.add('translate-x-full');
+    setTimeout(() => document.getElementById('personal-center-modal').classList.add('hidden'), 300);
+}
+
+// 開關粉絲與訂閱名單
+function openFansSubsModal() {
+    toggleSettings();
+    renderSubsList(); // 從 profile.js 讀取渲染
+    document.getElementById('fans-subs-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('fans-subs-modal').classList.remove('translate-x-full'), 10);
+}
+function closeFansSubsModal() {
+    document.getElementById('fans-subs-modal').classList.add('translate-x-full');
+    setTimeout(() => document.getElementById('fans-subs-modal').classList.add('hidden'), 300);
 }

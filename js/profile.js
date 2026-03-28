@@ -1,4 +1,3 @@
-// js/profile.js
 let currentUser = {
     name: 'Chloe_Kim 🇺🇸🇰🇷',
     bio: '喜歡流汗的感覺 💦 健身房是我的第二個家。\n這裡是我的私密視角，訂閱解鎖更多訓練後的浴室自拍 🛁✨',
@@ -6,7 +5,7 @@ let currentUser = {
     banner: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80'
 };
 
-// 全域訂閱清單狀態管理
+// 訂閱名單狀態
 window.mySubscriptions = [];
 
 const sportsGallery = [
@@ -38,8 +37,9 @@ function updateProfileUI() {
 function openEditProfile() {
     document.getElementById('edit-name').value = currentUser.name;
     document.getElementById('edit-bio').value = currentUser.bio;
-    document.getElementById('edit-avatar-url').value = currentUser.avatar;
-    document.getElementById('edit-banner-url').value = currentUser.banner;
+    // 重置檔案選取框
+    document.getElementById('edit-avatar-file').value = '';
+    document.getElementById('edit-banner-file').value = '';
     document.getElementById('edit-profile-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('edit-profile-panel').classList.remove('translate-y-full'), 10);
 }
@@ -53,17 +53,36 @@ function saveProfile() {
     currentUser.name = document.getElementById('edit-name').value || currentUser.name;
     currentUser.bio = document.getElementById('edit-bio').value || currentUser.bio;
     
-    // 儲存頭像與橫幅
-    const newAvatar = document.getElementById('edit-avatar-url').value.trim();
-    if(newAvatar) currentUser.avatar = newAvatar;
-    
-    const newBanner = document.getElementById('edit-banner-url').value.trim();
-    if(newBanner) currentUser.banner = newBanner;
+    // 電腦版/手機原生選擇檔案轉為 Base64 顯示 (Avatar)
+    const avatarFile = document.getElementById('edit-avatar-file').files[0];
+    if (avatarFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            currentUser.avatar = e.target.result;
+            updateProfileUI();
+        }
+        reader.readAsDataURL(avatarFile);
+    }
 
-    updateProfileUI();
+    // 電腦版/手機原生選擇檔案轉為 Base64 顯示 (Banner)
+    const bannerFile = document.getElementById('edit-banner-file').files[0];
+    if (bannerFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            currentUser.banner = e.target.result;
+            updateProfileUI();
+        }
+        reader.readAsDataURL(bannerFile);
+    }
+
+    if (!avatarFile && !bannerFile) {
+        updateProfileUI();
+    }
+    
     closeEditProfile();
 }
 
+// === 他人專頁與訂閱邏輯 ===
 function openOtherProfile(username, avatarUrl) {
     const modal = document.getElementById('other-profile-modal');
     modal.classList.remove('hidden');
@@ -73,17 +92,16 @@ function openOtherProfile(username, avatarUrl) {
     document.getElementById('other-banner').src = 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800'; 
     document.getElementById('other-bio').innerText = `這是 ${username} 的專屬空間。訂閱我解鎖更多私密內容！`;
     
-    // 初始化訂閱按鈕狀態
     const btnSub = document.getElementById('btn-subscribe');
-    const isSubbed = window.mySubscriptions.includes(username);
+    const isSubbed = window.mySubscriptions.some(sub => sub.name === username);
     if(isSubbed) {
         btnSub.classList.replace('bg-sexify', 'bg-gray-200');
         btnSub.classList.replace('text-white', 'text-gray-800');
-        btnSub.innerHTML = `<i class="fa-solid fa-check"></i> <span data-i18n="subscribed">${t('subscribed') || '已訂閱'}</span>`;
+        btnSub.innerHTML = `<i class="fa-solid fa-check"></i> <span>${t('subscribed') || '已訂閱'}</span>`;
     } else {
         btnSub.classList.replace('bg-gray-200', 'bg-sexify');
         btnSub.classList.replace('text-gray-800', 'text-white');
-        btnSub.innerHTML = `<i class="fa-solid fa-heart"></i> <span data-i18n="subscribe">${t('subscribe') || '訂閱'}</span>`;
+        btnSub.innerHTML = `<i class="fa-solid fa-heart"></i> <span>${t('subscribe') || '訂閱'}</span>`;
     }
 
     const otherGrid = document.getElementById('other-gallery');
@@ -97,24 +115,37 @@ function closeOtherProfile() {
     setTimeout(() => document.getElementById('other-profile-modal').classList.add('hidden'), 300);
 }
 
-// 切換訂閱狀態功能
 function toggleSubscribe(btn) {
     const username = document.getElementById('other-name').innerText;
-    const index = window.mySubscriptions.indexOf(username);
+    const avatar = document.getElementById('other-avatar').src;
+    const index = window.mySubscriptions.findIndex(s => s.name === username);
     
     if(index > -1) {
-        // 取消訂閱
         window.mySubscriptions.splice(index, 1);
         btn.classList.replace('bg-gray-200', 'bg-sexify');
         btn.classList.replace('text-gray-800', 'text-white');
-        btn.innerHTML = `<i class="fa-solid fa-heart"></i> <span data-i18n="subscribe">${t('subscribe') || '訂閱'}</span>`;
+        btn.innerHTML = `<i class="fa-solid fa-heart"></i> <span>${t('subscribe') || '訂閱'}</span>`;
     } else {
-        // 加入訂閱
-        window.mySubscriptions.push(username);
+        window.mySubscriptions.push({ name: username, avatar: avatar });
         btn.classList.replace('bg-sexify', 'bg-gray-200');
         btn.classList.replace('text-white', 'text-gray-800');
-        btn.innerHTML = `<i class="fa-solid fa-check"></i> <span data-i18n="subscribed">${t('subscribed') || '已訂閱'}</span>`;
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>${t('subscribed') || '已訂閱'}</span>`;
     }
+}
+
+function renderSubsList() {
+    const container = document.getElementById('subs-list');
+    if(window.mySubscriptions.length === 0) {
+        container.innerHTML = `<p class="text-xs text-gray-400">目前沒有訂閱任何人</p>`;
+        return;
+    }
+    container.innerHTML = window.mySubscriptions.map(sub => `
+        <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); setTimeout(()=>openOtherProfile('${sub.name}', '${sub.avatar}'), 300)">
+            <img src="${sub.avatar}" class="w-10 h-10 rounded-full object-cover">
+            <span class="font-bold text-sm text-gray-800 flex-1">${sub.name}</span>
+            <i class="fa-solid fa-chevron-right text-gray-300"></i>
+        </div>
+    `).join('');
 }
 
 document.addEventListener('DOMContentLoaded', updateProfileUI);
