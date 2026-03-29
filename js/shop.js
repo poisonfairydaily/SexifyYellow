@@ -1,4 +1,3 @@
-// 1. 在資料中加入 id 與 desc (商品描述)
 let globalProducts = [
     { id: 1, name: "福利私密圖", price: 49.0, oldPrice: 99.0, img: "https://picsum.photos/300/300?random=20", desc: "內含 15 張未公開高畫質精美福利圖，解鎖專屬誘惑。" },
     { id: 2, name: "1對1 私密聊天", price: 149.0, oldPrice: 299.0, img: "https://picsum.photos/300/300?random=21", desc: "專屬 30 分鐘線上私密語音/文字聊天，享受獨處時光。" },
@@ -10,7 +9,10 @@ let globalProducts = [
 
 function renderShop(filterKeyword = '') {
     const grid = document.getElementById('shop-grid');
-    if (!grid) return;
+    if (!grid) {
+        console.error("找不到 shop-grid，請確認 HTML 結構");
+        return;
+    }
 
     let displayProducts = globalProducts;
     if (filterKeyword.trim() !== '') {
@@ -23,7 +25,6 @@ function renderShop(filterKeyword = '') {
         return;
     }
 
-    // 2. 在外層 div 加上 cursor-pointer 與 onclick="openProductModal(${p.id})"
     grid.innerHTML = displayProducts.map(p => `
         <div onclick="openProductModal(${p.id})" class="cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100/50 relative transform transition-transform active:scale-95">
             <div class="absolute top-2 left-2 bg-sexify text-white text-[9px] font-black px-2 py-0.5 rounded-full z-10 shadow">HOT</div>
@@ -46,13 +47,10 @@ function searchShop() {
     renderShop(keyword);
 }
 
-// 3. 新增彈出詳情視窗的功能
 function openProductModal(productId) {
-    // 找出對應的商品資料
     const product = globalProducts.find(p => p.id === productId);
     if (!product) return;
 
-    // 檢查是否已經有 modal 容器，沒有就建一個
     let modalContainer = document.getElementById('product-modal-container');
     if (!modalContainer) {
         modalContainer = document.createElement('div');
@@ -60,13 +58,12 @@ function openProductModal(productId) {
         document.body.appendChild(modalContainer);
     }
 
-    // 將彈窗 HTML 注入到容器中
     modalContainer.innerHTML = `
-        <div class="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeProductModal()">
+        <div class="fixed inset-0 bg-black/60 z-[3500] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeProductModal()">
             <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden flex flex-col relative shadow-2xl" onclick="event.stopPropagation()">
                 
                 <button onclick="closeProductModal()" class="absolute top-4 right-4 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center z-10 backdrop-blur-md transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
 
                 <div class="w-full aspect-square bg-gray-50">
@@ -93,22 +90,31 @@ function openProductModal(productId) {
     `;
 }
 
-// 關閉彈窗功能
 function closeProductModal() {
     const modalContainer = document.getElementById('product-modal-container');
     if (modalContainer) {
-        modalContainer.innerHTML = ''; // 清空內容即關閉
+        modalContainer.innerHTML = ''; 
     }
 }
 
-// 處理購買邏輯
 function confirmPurchase(productId) {
     const product = globalProducts.find(p => p.id === productId);
     if (!product) return;
     
-    // 這裡可以串接你的扣款系統或 API
-    alert(\`購買成功！\\n已解鎖「\${product.name}」\\n扣除金幣：\${product.price}\`);
-    
-    // 購買完成後關閉彈窗
+    alert(`購買成功！\n已解鎖「${product.name}」\n扣除金幣：${product.price}`);
     closeProductModal();
 }
+
+// === 關鍵修復點：確保頁面載入後自動渲染商城 ===
+// 寫法 1: 監聽 DOM 載入完成
+document.addEventListener('DOMContentLoaded', () => {
+    // 先檢查當前是不是在商城 tab，或者直接渲染確保資料就緒
+    renderShop();
+});
+
+// 寫法 2: 雙重保險 (因為你的 script 放在 body 最下面，DOMContentLoaded 可能已觸發)
+setTimeout(() => {
+    if (document.getElementById('shop-grid') && document.getElementById('shop-grid').innerHTML === '') {
+        renderShop();
+    }
+}, 100);
