@@ -30,7 +30,8 @@ const dict = {
         'no_content': '找不到相關內容...',
         'age_title': '此空間包含成人內容',
         'age_desc': '進入即代表您已滿 18 歲',
-        'age_btn': '確認進入'
+        'age_btn': '確認進入',
+        'tip': '打賞'
     },
     'en': {
         'app_title': 'Discover',
@@ -63,7 +64,8 @@ const dict = {
         'no_content': 'No content found...',
         'age_title': 'Adult Content Warning',
         'age_desc': 'By entering, you confirm you are 18+',
-        'age_btn': 'Enter'
+        'age_btn': 'Enter',
+        'tip': 'Tip'
     }
 };
 

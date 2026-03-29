@@ -44,7 +44,23 @@ function renderShop(filterKeyword = '') {
 
 function searchShop() {
     const keyword = document.getElementById('shop-search').value;
+    const clearBtn = document.getElementById('shop-search-clear-btn');
+    
+    // 控制一鍵刪除按鈕顯示/隱藏
+    if(clearBtn) {
+        if(keyword.length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+    
     renderShop(keyword);
+}
+
+// 商店搜尋一鍵刪除功能
+function clearShopSearch() {
+    document.getElementById('shop-search').value = '';
+    const clearBtn = document.getElementById('shop-search-clear-btn');
+    if(clearBtn) clearBtn.classList.add('hidden');
+    renderShop('');
 }
 
 function openProductModal(productId) {
@@ -105,14 +121,10 @@ function confirmPurchase(productId) {
     closeProductModal();
 }
 
-// === 關鍵修復點：確保頁面載入後自動渲染商城 ===
-// 寫法 1: 監聽 DOM 載入完成
 document.addEventListener('DOMContentLoaded', () => {
-    // 先檢查當前是不是在商城 tab，或者直接渲染確保資料就緒
     renderShop();
 });
 
-// 寫法 2: 雙重保險 (因為你的 script 放在 body 最下面，DOMContentLoaded 可能已觸發)
 setTimeout(() => {
     if (document.getElementById('shop-grid') && document.getElementById('shop-grid').innerHTML === '') {
         renderShop();

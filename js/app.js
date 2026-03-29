@@ -57,8 +57,11 @@ function clearSearch() {
     if(typeof searchPosts === 'function') searchPosts();
 }
 
-// 開關通知中心
+// 開關通知中心 - 點擊後消除未讀提示
 function openNotifications() {
+    const badge = document.getElementById('notification-badge');
+    if(badge) badge.style.display = 'none'; // 隱藏未讀提示
+
     document.getElementById('notifications-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('notifications-modal').classList.remove('translate-x-full'), 10);
 }
@@ -81,7 +84,9 @@ function closePersonalCenter() {
 // 開關粉絲與訂閱名單
 function openFansSubsModal() {
     toggleSettings();
-    renderSubsList(); // 從 profile.js 讀取渲染
+    if(typeof renderSubsList === 'function') renderSubsList();
+    if(typeof renderFansList === 'function') renderFansList(); // 調用 profile.js 中的粉絲列表渲染
+    
     document.getElementById('fans-subs-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('fans-subs-modal').classList.remove('translate-x-full'), 10);
 }

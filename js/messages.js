@@ -1,11 +1,9 @@
-// 1. 全域模擬數據
 window.chatList = [
     { id: 1, user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/100?u=mina', lastMsg: '收到了嗎？那張照片...', time: '14:20', unread: 2 },
     { id: 2, user: '官方小助手', avatar: 'https://i.pravatar.cc/100?u=admin', lastMsg: '歡迎加入 Sexify，開啟你的專屬美好。', time: '昨天', unread: 0 },
     { id: 3, user: 'Xaiver_Fitness', avatar: 'https://i.pravatar.cc/100?u=xaiver', lastMsg: '下次一起出來喝一杯？', time: '週三', unread: 0 }
 ];
 
-// 2. 渲染邏輯
 function renderMessages() {
     const container = document.getElementById('messages-list');
     if (!container) return;
@@ -64,7 +62,6 @@ function closeChat() {
     activeChatId = null;
 }
 
-// 發送訊息並更新列表預覽
 function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
@@ -80,13 +77,12 @@ function sendChatMessage() {
         </div>
     `;
 
-    // 同步更新訊息列表的「最新一則」
     if(activeChatId !== null) {
         const chatItem = window.chatList.find(c => c.id === activeChatId);
         if(chatItem) {
             chatItem.lastMsg = text;
             chatItem.time = '剛剛';
-            chatItem.unread = 0; // 自己發完消除未讀
+            chatItem.unread = 0; 
             renderMessages();
         }
     }

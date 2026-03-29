@@ -62,7 +62,7 @@
 
                 <button onclick="openNotifications()" class="relative text-gray-800 text-xl active:scale-90 transition">
                     <i class="fa-regular fa-bell"></i>
-                    <span class="absolute -top-1 -right-1 bg-sexify text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-white">3</span>
+                    <span id="notification-badge" class="absolute -top-1 -right-1 bg-sexify text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-white">3</span>
                 </button>
             </div>
             <div class="masonry-grid" id="discovery-grid"></div>
@@ -71,9 +71,10 @@
         <div id="shop-tab" class="tab-content">
             <div class="p-4 pt-6 flex justify-between items-center gap-3 bg-white/80 backdrop-blur-md sticky top-0 z-[100]">
                 <button onclick="toggleSettings()" class="text-gray-800 text-xl active:scale-90 transition"><i class="fa-solid fa-bars"></i></button>
-                <div class="flex-1 relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input type="text" id="shop-search" oninput="searchShop()" data-i18n="shop_search" placeholder="搜尋寫真或商品..." class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-sexify/20 transition">
+                <div class="flex-1 relative flex items-center">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="shop-search" oninput="searchShop()" data-i18n="shop_search" placeholder="搜尋寫真或商品..." class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-10 text-sm outline-none focus:ring-2 focus:ring-sexify/20 transition">
+                    <button id="shop-search-clear-btn" onclick="clearShopSearch()" class="absolute right-3 text-gray-400 hidden active:scale-90"><i class="fa-solid fa-circle-xmark"></i></button>
                 </div>
             </div>
             <div id="shop-grid" class="p-4 grid grid-cols-2 gap-4"></div>
@@ -170,14 +171,15 @@
         <button onclick="closeDetail()" class="absolute top-5 left-5 z-10 w-9 h-9 bg-black/40 backdrop-blur-md text-white rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
         <div id="detail-media-container" class="w-full bg-gray-100 min-h-[40vh] flex items-center justify-center"></div>
         <div class="p-5 pb-20">
-            <div class="flex items-center gap-3 mb-4">
+            <div class="flex items-center gap-3 mb-4 cursor-pointer active:scale-95 inline-flex" onclick="goToProfileFromDetail()">
                 <img id="detail-avatar" src="" class="w-10 h-10 rounded-full border border-gray-100 object-cover">
-                <span id="detail-username" class="font-bold text-sm text-gray-800"></span>
+                <span id="detail-username" class="font-bold text-sm text-gray-800 hover:underline"></span>
             </div>
             <h3 id="detail-title" class="font-bold text-[15px] mb-5 leading-relaxed text-gray-800 whitespace-pre-wrap"></h3>
             <div class="flex items-center gap-6 text-gray-500 border-t border-gray-100 pt-4">
                 <div class="flex flex-col items-center cursor-pointer group" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xl group-active:scale-110 transition"></i><span class="text-[10px] like-count font-bold mt-1">0</span></div>
                 <div class="flex flex-col items-center cursor-pointer group" onclick="openComments()"><i class="fa-regular fa-message text-xl group-active:scale-110 transition"></i><span class="text-[10px] font-bold mt-1">留言</span></div>
+                <div class="flex flex-col items-center cursor-pointer group" onclick="giveTip()"><i class="fa-solid fa-coins text-xl text-yellow-500 group-active:scale-110 transition"></i><span class="text-[10px] font-bold mt-1" data-i18n="tip">打賞</span></div>
                 <div class="flex flex-col items-center cursor-pointer group ml-auto" onclick="toggleBookmark(this)"><i class="fa-regular fa-bookmark text-xl group-active:scale-110 transition"></i><span class="text-[10px] font-bold mt-1">收藏</span></div>
             </div>
         </div>
@@ -305,10 +307,7 @@
             <h4 class="font-bold text-xs text-gray-400 mb-2">我的訂閱 (我追蹤的人)</h4>
             <div id="subs-list" class="space-y-2"></div>
             <h4 class="font-bold text-xs text-gray-400 mb-2 mt-6">我的粉絲</h4>
-            <div id="fans-list" class="space-y-2">
-                <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm"><img src="https://i.pravatar.cc/100?u=fan1" class="w-10 h-10 rounded-full"><span class="font-bold text-sm text-gray-800">路人甲</span></div>
-                <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm"><img src="https://i.pravatar.cc/100?u=fan2" class="w-10 h-10 rounded-full"><span class="font-bold text-sm text-gray-800">神秘客</span></div>
-            </div>
+            <div id="fans-list" class="space-y-2"></div>
         </div>
     </div>
 
