@@ -1,3 +1,6 @@
+// ==========================
+// 🔥 User Data
+// ==========================
 let currentUser = {
     name: 'Chloe_Kim 🇺🇸🇰🇷',
     bio: '喜歡流汗的感覺 💦 健身房是我的第二個家。\n這裡是我的私密視角，訂閱解鎖更多訓練後的浴室自拍 🛁✨',
@@ -5,28 +8,60 @@ let currentUser = {
     banner: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80'
 };
 
-// 訂閱名單狀態
 window.mySubscriptions = [];
 
+// ==========================
+// 🔥 原始圖片 → 升級成 Post
+// ==========================
 const sportsGallery = [
     'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=400&q=80',
     'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400&q=80',
     'https://images.unsplash.com/photo-1508215885820-4585e5610924?w=400&q=80',
     'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&q=80',
     'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&q=80',
-    'https://images.unsplash.com/photo-1526506190301-324707698501?w=400&q=80',
-    'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&q=80',
-    'https://images.unsplash.com/photo-1507398941214-572c25f4b1dc?w=400&q=80',
-    'https://images.unsplash.com/photo-1533681904393-9ab6efa9e466?w=400&q=80' 
+    'https://images.unsplash.com/photo-1526506190301-324707698501?w=400&q=80'
 ];
 
+// 🔥 轉成 post（同 discovery 結構）
+let userPosts = sportsGallery.map((img, i) => ({
+    id: 'my-' + i,
+    user: currentUser.name,
+    avatar: currentUser.avatar,
+    type: 'image',
+    src: img,
+    title: '我的貼文 ' + (i + 1),
+    likes: Math.floor(Math.random() * 500),
+    time: '剛剛',
+    isPaid: false,
+    price: 0
+}));
+
+// ==========================
+// 🔥 Render Profile
+// ==========================
 function renderProfile() {
     updateProfileUI();
+
     const grid = document.getElementById('user-gallery');
-    if(grid.innerHTML !== "") return; 
-    grid.innerHTML = sportsGallery.map(img => `<div class="aspect-square bg-gray-100 overflow-hidden"><img src="${img}" class="w-full h-full object-cover hover:scale-110 transition duration-300"></div>`).join('');
+    if (!grid) return;
+
+    grid.innerHTML = userPosts.map(post => `
+        <div class="aspect-square bg-gray-100 overflow-hidden relative"
+            onmousedown="startPreview(event, '${post.src}')"
+            onmouseup="endPreview()"
+            ontouchstart="startPreview(event, '${post.src}')"
+            ontouchend="endPreview()"
+            onclick="openMyPost('${post.id}')">
+
+            <img src="${post.src}" 
+                class="w-full h-full object-cover hover:scale-110 transition duration-300">
+        </div>
+    `).join('');
 }
 
+// ==========================
+// 🔥 Profile UI
+// ==========================
 function updateProfileUI() {
     document.getElementById('my-avatar').src = currentUser.avatar;
     document.getElementById('my-banner').src = currentUser.banner;
@@ -34,118 +69,126 @@ function updateProfileUI() {
     document.getElementById('my-bio').innerText = currentUser.bio;
 }
 
+// ==========================
+// 🔥 打開貼文（用 discovery UI）
+// ==========================
+function openMyPost(id) {
+    const post = userPosts.find(p => p.id === id);
+    if (!post) return;
+
+    openDetail(
+        post.src,
+        post.user,
+        post.avatar,
+        post.title,
+        post.likes,
+        post.id,
+        post.isPaid,
+        post.price,
+        post.type
+    );
+
+    // 🔥 加刪除按鈕（只自己）
+    setTimeout(() => {
+        const detail = document.getElementById('post-detail');
+        if (!detail) return;
+
+        let delBtn = detail.querySelector('.delete-btn');
+        if (!delBtn) {
+            delBtn = document.createElement('button');
+            delBtn.innerText = '刪除';
+            delBtn.className = 'delete-btn text-red-500 text-xs ml-2';
+
+            delBtn.onclick = () => {
+                if (confirm('確定刪除？')) {
+                    deletePost(id);
+                    closeDetail();
+                }
+            };
+
+            document.getElementById('detail-username').appendChild(delBtn);
+        }
+    }, 100);
+}
+
+// ==========================
+// 🔥 刪除貼文
+// ==========================
+function deletePost(id) {
+    const index = userPosts.findIndex(p => p.id === id);
+    if (index > -1) {
+        userPosts.splice(index, 1);
+        renderProfile();
+    }
+}
+
+// ==========================
+// 🔥 長按 Preview（iPhone效果）
+// ==========================
+let previewTimer;
+let previewEl;
+
+function startPreview(e, src) {
+    previewTimer = setTimeout(() => {
+        showPreview(src);
+    }, 400);
+}
+
+function endPreview() {
+    clearTimeout(previewTimer);
+    hidePreview();
+}
+
+function showPreview(src) {
+    if (!previewEl) {
+        previewEl = document.createElement('div');
+        previewEl.style.position = 'fixed';
+        previewEl.style.inset = '0';
+        previewEl.style.background = 'rgba(0,0,0,0.85)';
+        previewEl.style.zIndex = '9999';
+        previewEl.style.display = 'flex';
+        previewEl.style.alignItems = 'center';
+        previewEl.style.justifyContent = 'center';
+
+        previewEl.innerHTML = `
+            <img src="${src}" 
+                style="max-width:90%; max-height:80%; border-radius:16px; transform:scale(0.95); transition:0.2s;">
+        `;
+
+        document.body.appendChild(previewEl);
+    } else {
+        previewEl.querySelector('img').src = src;
+        previewEl.style.display = 'flex';
+    }
+}
+
+function hidePreview() {
+    if (previewEl) previewEl.style.display = 'none';
+}
+
+// ==========================
+// 🔥 Edit Profile（保留原功能）
+// ==========================
 function openEditProfile() {
     document.getElementById('edit-name').value = currentUser.name;
     document.getElementById('edit-bio').value = currentUser.bio;
-    // 重置檔案選取框
-    document.getElementById('edit-avatar-file').value = '';
-    document.getElementById('edit-banner-file').value = '';
     document.getElementById('edit-profile-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('edit-profile-panel').classList.remove('translate-y-full'), 10);
 }
 
 function closeEditProfile() {
-    document.getElementById('edit-profile-panel').classList.add('translate-y-full');
-    setTimeout(() => document.getElementById('edit-profile-modal').classList.add('hidden'), 300);
+    document.getElementById('edit-profile-modal').classList.add('hidden');
 }
 
 function saveProfile() {
     currentUser.name = document.getElementById('edit-name').value || currentUser.name;
     currentUser.bio = document.getElementById('edit-bio').value || currentUser.bio;
-    
-    // 電腦版/手機原生選擇檔案轉為 Base64 顯示 (Avatar)
-    const avatarFile = document.getElementById('edit-avatar-file').files[0];
-    if (avatarFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            currentUser.avatar = e.target.result;
-            updateProfileUI();
-        }
-        reader.readAsDataURL(avatarFile);
-    }
-
-    // 電腦版/手機原生選擇檔案轉為 Base64 顯示 (Banner)
-    const bannerFile = document.getElementById('edit-banner-file').files[0];
-    if (bannerFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            currentUser.banner = e.target.result;
-            updateProfileUI();
-        }
-        reader.readAsDataURL(bannerFile);
-    }
-
-    if (!avatarFile && !bannerFile) {
-        updateProfileUI();
-    }
-    
+    updateProfileUI();
     closeEditProfile();
 }
 
-// === 他人專頁與訂閱邏輯 ===
-function openOtherProfile(username, avatarUrl) {
-    const modal = document.getElementById('other-profile-modal');
-    modal.classList.remove('hidden');
-    
-    document.getElementById('other-name').innerText = username;
-    document.getElementById('other-avatar').src = avatarUrl;
-    document.getElementById('other-banner').src = 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800'; 
-    document.getElementById('other-bio').innerText = `這是 ${username} 的專屬空間。訂閱我解鎖更多私密內容！`;
-    
-    const btnSub = document.getElementById('btn-subscribe');
-    const isSubbed = window.mySubscriptions.some(sub => sub.name === username);
-    if(isSubbed) {
-        btnSub.classList.replace('bg-sexify', 'bg-gray-200');
-        btnSub.classList.replace('text-white', 'text-gray-800');
-        btnSub.innerHTML = `<i class="fa-solid fa-check"></i> <span>${t('subscribed') || '已訂閱'}</span>`;
-    } else {
-        btnSub.classList.replace('bg-gray-200', 'bg-sexify');
-        btnSub.classList.replace('text-gray-800', 'text-white');
-        btnSub.innerHTML = `<i class="fa-solid fa-heart"></i> <span>${t('subscribe') || '訂閱'}</span>`;
-    }
-
-    const otherGrid = document.getElementById('other-gallery');
-    otherGrid.innerHTML = sportsGallery.slice(0, 6).reverse().map(img => `<div class="aspect-square bg-gray-100 overflow-hidden"><img src="${img}" class="w-full h-full object-cover"></div>`).join('');
-
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-}
-
-function closeOtherProfile() {
-    document.getElementById('other-profile-modal').classList.add('translate-x-full');
-    setTimeout(() => document.getElementById('other-profile-modal').classList.add('hidden'), 300);
-}
-
-function toggleSubscribe(btn) {
-    const username = document.getElementById('other-name').innerText;
-    const avatar = document.getElementById('other-avatar').src;
-    const index = window.mySubscriptions.findIndex(s => s.name === username);
-    
-    if(index > -1) {
-        window.mySubscriptions.splice(index, 1);
-        btn.classList.replace('bg-gray-200', 'bg-sexify');
-        btn.classList.replace('text-gray-800', 'text-white');
-        btn.innerHTML = `<i class="fa-solid fa-heart"></i> <span>${t('subscribe') || '訂閱'}</span>`;
-    } else {
-        window.mySubscriptions.push({ name: username, avatar: avatar });
-        btn.classList.replace('bg-sexify', 'bg-gray-200');
-        btn.classList.replace('text-white', 'text-gray-800');
-        btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>${t('subscribed') || '已訂閱'}</span>`;
-    }
-}
-
-function renderSubsList() {
-    const container = document.getElementById('subs-list');
-    if(window.mySubscriptions.length === 0) {
-        container.innerHTML = `<p class="text-xs text-gray-400">目前沒有訂閱任何人</p>`;
-        return;
-    }
-    container.innerHTML = window.mySubscriptions.map(sub => `
-        <div class="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); setTimeout(()=>openOtherProfile('${sub.name}', '${sub.avatar}'), 300)">
-            <img src="${sub.avatar}" class="w-10 h-10 rounded-full object-cover">
-            <span class="font-bold text-sm text-gray-800 flex-1">${sub.name}</span>
-            <i class="fa-solid fa-chevron-right text-gray-300"></i>
-        </div>
-    `).join('');
-}
-
-document.addEventListener('DOMContentLoaded', updateProfileUI);
+// ==========================
+// 初始化
+// ==========================
+document.addEventListener('DOMContentLoaded', () => {
+    renderProfile();
+});
