@@ -11,7 +11,7 @@ let currentUser = {
 window.mySubscriptions = [];
 
 // ==========================
-// 🔥 原始圖片 → 升級成 Post
+// 🔥 原始圖片 → Post
 // ==========================
 const sportsGallery = [
     'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=400&q=80',
@@ -22,7 +22,6 @@ const sportsGallery = [
     'https://images.unsplash.com/photo-1526506190301-324707698501?w=400&q=80'
 ];
 
-// 🔥 轉成 post（同 discovery 結構）
 let userPosts = sportsGallery.map((img, i) => ({
     id: 'my-' + i,
     user: currentUser.name,
@@ -49,8 +48,12 @@ function renderProfile() {
         <div class="aspect-square bg-gray-100 overflow-hidden relative"
             onmousedown="startPreview(event, '${post.src}')"
             onmouseup="endPreview()"
+            onmouseleave="endPreview()"
+
             ontouchstart="startPreview(event, '${post.src}')"
             ontouchend="endPreview()"
+            ontouchcancel="endPreview()"
+
             onclick="openMyPost('${post.id}')">
 
             <img src="${post.src}" 
@@ -70,7 +73,7 @@ function updateProfileUI() {
 }
 
 // ==========================
-// 🔥 打開貼文（用 discovery UI）
+// 🔥 打開貼文（Discovery UI）
 // ==========================
 function openMyPost(id) {
     const post = userPosts.find(p => p.id === id);
@@ -88,7 +91,7 @@ function openMyPost(id) {
         post.type
     );
 
-    // 🔥 加刪除按鈕（只自己）
+    // 🔥 加刪除
     setTimeout(() => {
         const detail = document.getElementById('post-detail');
         if (!detail) return;
@@ -123,20 +126,32 @@ function deletePost(id) {
 }
 
 // ==========================
-// 🔥 長按 Preview（iPhone效果）
+// 🔥 Preview（完整穩定版）
 // ==========================
 let previewTimer;
 let previewEl;
+let isPreviewing = false;
 
 function startPreview(e, src) {
+    cancelPreview();
+
     previewTimer = setTimeout(() => {
+        isPreviewing = true;
         showPreview(src);
     }, 400);
 }
 
 function endPreview() {
+    cancelPreview();
+}
+
+function cancelPreview() {
     clearTimeout(previewTimer);
-    hidePreview();
+
+    if (isPreviewing) {
+        hidePreview();
+        isPreviewing = false;
+    }
 }
 
 function showPreview(src) {
@@ -167,7 +182,17 @@ function hidePreview() {
 }
 
 // ==========================
-// 🔥 Edit Profile（保留原功能）
+// 🔥 全局事件（解決卡住問題）
+// ==========================
+document.addEventListener('touchmove', cancelPreview);
+document.addEventListener('touchend', cancelPreview);
+document.addEventListener('touchcancel', cancelPreview);
+document.addEventListener('mouseup', cancelPreview);
+document.addEventListener('mouseleave', cancelPreview);
+document.addEventListener('scroll', cancelPreview);
+
+// ==========================
+// 🔥 Edit Profile（保留）
 // ==========================
 function openEditProfile() {
     document.getElementById('edit-name').value = currentUser.name;
