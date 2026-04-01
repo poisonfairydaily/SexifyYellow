@@ -1,241 +1,282 @@
 // ==========================================
-// js/messages.js - 1對1 私密聊天升級版 (全替換)
+// js/messages.js - Instagram 風格成熟版 (含即時通知與好友系統)
 // ==========================================
 
 window.activeRoomId = null;
 window.activeChatTarget = null;
-window.realtimeChannel = null;
+window.roomChannel = null;     // 專屬房間的監聽
+window.globalChannel = null;   // 全局通知的監聽
 let selectedImageFile = null;
 
-// 1. 初始化你的專屬暱稱
+// 1. 初始化使用者與全局 UI
 let myChatName = localStorage.getItem('myChatName');
 if (!myChatName) {
-    let name = prompt("【1對1 私密聊天】請輸入你的專屬暱稱：\n(其他人將透過此暱稱與你聊天)", "用戶" + Math.floor(Math.random() * 1000));
+    let name = prompt("【IG風格聊天室】請輸入你的專屬帳號 (這將是你的唯一識別)：", "User_" + Math.floor(Math.random() * 10000));
     localStorage.setItem('myChatName', name || "神秘使用者");
     myChatName = localStorage.getItem('myChatName');
 }
 
-// 2. 獲取本地的聊天紀錄列表 (類似 Line 的聊天清單)
-function getChatSessions() {
-    try {
-        return JSON.parse(localStorage.getItem('chatSessions')) || [];
-    } catch (e) {
-        return [];
-    }
-}
+// 動態注入通知彈窗 (Toast) 的 CSS 與 HTML 容器
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+    .toast-enter { animation: slideDownFade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .toast-leave { animation: slideUpFade 0.3s ease-in forwards; }
+    @keyframes slideDownFade { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUpFade { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
+    .ig-inbox-item:active { background-color: #f3f4f6; }
+</style>
+`);
+document.body.insertAdjacentHTML('beforeend', `<div id="global-toast-container" class="fixed top-4 left-0 w-full px-4 z-[9999] pointer-events-none flex flex-col gap-2"></div>`);
 
-// 儲存/更新聊天列表
-function saveChatSession(targetName, targetAvatar, lastMsg) {
-    let sessions = getChatSessions();
-    let existingIndex = sessions.findIndex(s => s.name === targetName);
-    let session = {
-        name: targetName,
-        avatar: targetAvatar || `https://i.pravatar.cc/150?u=${targetName}`,
-        lastMsg: lastMsg || '開始聊天...',
-        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-    };
-
-    if (existingIndex >= 0) {
-        sessions[existingIndex] = session; // 更新現有對話
-    } else {
-        sessions.unshift(session); // 新增對話到最上方
-    }
-    localStorage.setItem('chatSessions', JSON.stringify(sessions));
-    renderMessageList();
-}
-
-// 🔥 核心演算法：產生唯一的房間 ID (確保 A找B 和 B找A 是同一個房間)
+// 核心演算法：產生唯一的房間 ID
 function generateRoomId(user1, user2) {
     return [user1, user2].sort().join('_');
 }
 
-// 3. 渲染首頁的「訊息列表」與「新增按鈕」
-window.renderMessages = function() {
-    renderMessageList();
-};
+// 2. 本地好友/聯絡人系統 (Add Friend)
+function getFriends() {
+    return JSON.parse(localStorage.getItem('myFriends')) || [];
+}
+function addFriend() {
+    const friendName = prompt("請輸入你想添加的好友帳號：");
+    if (!friendName || friendName.trim() === "") return;
+    if (friendName.trim() === myChatName) return alert("不能添加自己為好友！");
+    
+    let friends = getFriends();
+    if (!friends.includes(friendName.trim())) {
+        friends.push(friendName.trim());
+        localStorage.setItem('myFriends', JSON.stringify(friends));
+        alert(`🎉 成功添加 ${friendName.trim()} 為好友！`);
+        renderMessages(); // 重新渲染畫面
+    } else {
+        alert("這個人已經在你的好友名單中囉！");
+    }
+}
 
-function renderMessageList() {
+// 3. 渲染首頁收件匣 (Inbox) 與好友列
+window.renderMessages = async function() {
     const container = document.getElementById('messages-list');
     if (!container) return;
 
-    const sessions = getChatSessions();
+    container.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-sexify text-2xl"></i><p class="mt-2 text-gray-400 text-sm">載入收件匣中...</p></div>`;
 
-    // 頂部新增「發起新聊天」按鈕
-    let html = `
-        <div class="p-4 border-b border-gray-100">
-            <button onclick="startNewChatPrompt()" class="w-full bg-sexify text-white font-bold py-3.5 rounded-2xl shadow-md active:scale-95 transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-comment-medical text-lg"></i> 發起 1 對 1 聊天
-            </button>
-        </div>
-    `;
+    try {
+        // 從資料庫抓取與我有關的訊息 (我是發送者或接收者)
+        const { data: inboxData, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .or(`sender.eq.${myChatName},receiver.eq.${myChatName}`)
+            .order('created_at', { ascending: false })
+            .limit(500);
 
-    if (sessions.length === 0) {
-        html += `<div class="text-center text-gray-400 py-12 text-sm flex flex-col items-center"><i class="fa-regular fa-comments text-4xl mb-3 text-gray-200"></i>目前沒有聊天紀錄，點擊上方按鈕開始吧！</div>`;
-    } else {
-        html += sessions.map(chat => `
-            <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition border-b border-gray-50 cursor-pointer"
-                 onclick="openChat('${chat.name}', '${chat.avatar}')">
-                <img src="${chat.avatar}" class="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm">
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-baseline mb-1">
-                        <h3 class="font-bold text-gray-800 truncate">${chat.name}</h3>
-                        <span class="text-xs text-gray-400">${chat.time}</span>
-                    </div>
-                    <p class="text-sm text-gray-500 truncate">${chat.lastMsg}</p>
-                </div>
+        if (error) throw error;
+
+        // 整理最新的對話紀錄 (Group by room_id)
+        let roomsMap = {};
+        (inboxData || []).forEach(msg => {
+            if (!roomsMap[msg.room_id]) {
+                const targetUser = msg.sender === myChatName ? msg.receiver : msg.sender;
+                roomsMap[msg.room_id] = {
+                    targetUser: targetUser,
+                    lastMsg: msg.content ? msg.content : (msg.image_url ? '傳送了一張圖片' : '傳送了附件'),
+                    time: new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    timestamp: new Date(msg.created_at).getTime(),
+                    isUnread: msg.receiver === myChatName // 簡單未讀邏輯
+                };
+            }
+        });
+
+        // 轉成陣列並加上手動添加的好友 (如果還沒聊過天)
+        let inboxArray = Object.values(roomsMap);
+        let friends = getFriends();
+        friends.forEach(f => {
+            if (!inboxArray.find(r => r.targetUser === f)) {
+                inboxArray.push({ targetUser: f, lastMsg: '開始你們的第一次對話吧！', time: '', timestamp: 0, isUnread: false });
+            }
+        });
+        inboxArray.sort((a, b) => b.timestamp - a.timestamp);
+
+        // 渲染 UI (類似 IG 的橫向好友列 + 直向訊息列)
+        let html = `
+            <div class="p-4 bg-white border-b border-gray-100 sticky top-0 z-10 flex justify-between items-center">
+                <h2 class="font-black text-xl text-gray-800">${myChatName} <i class="fa-solid fa-angle-down text-sm ml-1"></i></h2>
+                <button onclick="addFriend()" class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-800 active:scale-90 transition">
+                    <i class="fa-solid fa-user-plus"></i>
+                </button>
             </div>
-        `).join('');
-    }
+        `;
 
-    container.innerHTML = html;
-}
-
-// 透過彈窗發起新聊天
-window.startNewChatPrompt = function() {
-    const targetName = prompt(`你的暱稱是「${myChatName}」。\n請輸入你想聊天的【對方暱稱】：`);
-    if (targetName && targetName.trim() !== "") {
-        if (targetName.trim() === myChatName) {
-            alert("不能跟自己聊天啦！");
-            return;
+        if (inboxArray.length === 0) {
+            html += `<div class="text-center text-gray-400 py-20 flex flex-col items-center"><i class="fa-brands fa-instagram text-5xl mb-4 text-gray-200"></i><p>目前沒有訊息<br>點擊右上角添加好友開始聊天！</p></div>`;
+        } else {
+            html += `<div class="pb-20">` + inboxArray.map(chat => `
+                <div class="ig-inbox-item flex items-center gap-4 p-4 transition border-b border-gray-50 cursor-pointer"
+                     onclick="openChat('${chat.targetUser}')">
+                    <div class="relative">
+                        <img src="https://i.pravatar.cc/150?u=${chat.targetUser}" class="w-14 h-14 rounded-full object-cover border border-gray-100">
+                        ${chat.isUnread ? `<div class="absolute right-0 bottom-0 w-3.5 h-3.5 bg-sexify border-2 border-white rounded-full"></div>` : ''}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-gray-900 truncate ${chat.isUnread ? '' : 'text-gray-700'}">${chat.targetUser}</h3>
+                        <div class="flex justify-between items-center mt-0.5">
+                            <p class="text-sm truncate ${chat.isUnread ? 'text-gray-900 font-bold' : 'text-gray-500'}">${chat.lastMsg}</p>
+                            <span class="text-xs text-gray-400 whitespace-nowrap ml-2">${chat.time}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('') + `</div>`;
         }
-        openChat(targetName.trim(), `https://i.pravatar.cc/150?u=${targetName.trim()}`);
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error("載入收件匣失敗", err);
+        container.innerHTML = `<div class="text-center text-red-400 py-10">連線失敗，請重整頁面</div>`;
     }
 };
 
-// 4. 開啟特定 1對1 聊天室並讀取歷史紀錄
-window.openChat = async function(targetName, targetAvatar) {
+// 4. 全局通知監聽器 (Global Notification) - 隨時接收別人發給我的訊息
+function setupGlobalRealtime() {
+    if (window.globalChannel) return; // 避免重複建立
+    
+    window.globalChannel = window.supabaseClient.channel('global_notifications')
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `receiver=eq.${myChatName}` // 🔥 關鍵：只監聽發給「我」的訊息
+        }, payload => {
+            const msg = payload.new;
+            
+            // 如果我正在跟這個人聊天，就不顯示頂部通知
+            if (window.activeChatTarget === msg.sender && document.getElementById('chat-modal').classList.contains('hidden') === false) {
+                return; 
+            }
+
+            // 顯示 IG 風格通知彈窗
+            showToastNotification(msg.sender, msg.content || '傳送了一張圖片', `https://i.pravatar.cc/150?u=${msg.sender}`);
+            
+            // 重新整理收件匣，讓未讀狀態更新
+            if (document.getElementById('messages-tab').classList.contains('active')) {
+                renderMessages();
+            }
+        })
+        .subscribe();
+}
+
+function showToastNotification(sender, text, avatar) {
+    const container = document.getElementById('global-toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast-enter pointer-events-auto w-full max-w-sm mx-auto bg-white/95 backdrop-blur-md shadow-xl rounded-2xl p-4 flex items-center gap-3 cursor-pointer border border-gray-100`;
+    toast.innerHTML = `
+        <img src="${avatar}" class="w-10 h-10 rounded-full object-cover">
+        <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-gray-900">${sender}</p>
+            <p class="text-sm text-gray-500 truncate">${text}</p>
+        </div>
+        <div class="w-2 h-2 bg-sexify rounded-full"></div>
+    `;
+    
+    // 點擊通知直接開聊
+    toast.onclick = () => {
+        toast.style.display = 'none';
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById('messages-tab').classList.add('active');
+        openChat(sender);
+    };
+
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.replace('toast-enter', 'toast-leave');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// 5. 開啟專屬聊天室
+window.openChat = async function(targetName) {
     window.activeChatTarget = targetName;
     window.activeRoomId = generateRoomId(myChatName, targetName);
 
-    // UI 切換與載入狀態
     const modal = document.getElementById('chat-modal');
-    const headerTitle = modal ? modal.querySelector('h2') : null; // 動態抓取標題
+    const headerTitle = modal.querySelector('h2');
     const chatMessages = document.getElementById('chat-messages');
 
-    if (headerTitle) headerTitle.innerHTML = `<i class="fa-solid fa-lock text-sm text-gray-400 mr-2"></i>與 ${targetName} 聊天中`;
-    if (chatMessages) chatMessages.innerHTML = `<div class="text-center text-gray-400 py-10"><i class="fa-solid fa-circle-notch fa-spin text-2xl"></i><p class="mt-2 text-sm">載入加密訊息中...</p></div>`;
+    headerTitle.innerHTML = `<div class="flex items-center gap-2"><img src="https://i.pravatar.cc/150?u=${targetName}" class="w-8 h-8 rounded-full border border-gray-200"> ${targetName}</div>`;
+    chatMessages.innerHTML = `<div class="text-center text-gray-400 py-10"><i class="fa-solid fa-circle-notch fa-spin text-2xl"></i></div>`;
 
-    if (modal) {
-        modal.classList.remove('hidden');
-        setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-    }
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
 
-    // 將此人加入首頁列表
-    saveChatSession(targetName, targetAvatar, "進入聊天室...");
-
-    // 從 Supabase 抓取「指定房間」的歷史訊息
     try {
-        const { data, error } = await window.supabaseClient
-            .from('messages')
-            .select('*')
-            .eq('room_id', window.activeRoomId)
-            .order('created_at', { ascending: true });
-
-        if (error) {
-            if (error.message.includes('column "room_id" does not exist')) {
-                alert('⚠️ 系統錯誤：請先到 Supabase 的 messages 資料表新增「room_id」欄位！');
-                closeChat();
-                return;
-            }
-            console.error(error);
-        }
-
+        const { data, error } = await window.supabaseClient.from('messages')
+            .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
+        if (error) throw error;
+        
         drawMessages(data || []);
-        setupRealtime();
-
+        setupRoomRealtime();
     } catch (err) {
-        console.error("載入訊息失敗", err);
+        console.error(err);
+        chatMessages.innerHTML = "載入失敗";
     }
 };
 
-// 5. 繪製對話氣泡
+// 6. 渲染聊天氣泡
 function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
-    if (!container) return;
-
     if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-gray-400 py-10 text-sm">這是你與 ${window.activeChatTarget} 的 1對1 專屬空間<br>傳個訊息打招呼吧！</div>`;
+        container.innerHTML = `<div class="text-center text-gray-400 py-10 mt-10 text-sm"><img src="https://i.pravatar.cc/150?u=${window.activeChatTarget}" class="w-24 h-24 mx-auto rounded-full mb-4 opacity-50"><p>你們已經互相加為好友<br>現在可以發送訊息了</p></div>`;
         return;
     }
 
     container.innerHTML = messages.map(msg => {
         const isMe = msg.sender === myChatName;
         const align = isMe ? 'justify-end' : 'justify-start';
-        const bg = isMe ? 'bg-sexify text-white' : 'bg-gray-100 text-gray-800';
-        const radius = isMe ? 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm' : 'rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-sm';
+        const bg = isMe ? 'bg-[#ff2442] text-white' : 'bg-gray-100 text-gray-900';
+        const radius = isMe ? 'rounded-l-2xl rounded-tr-2xl rounded-br-sm' : 'rounded-r-2xl rounded-tl-2xl rounded-bl-sm';
 
-        let mediaHtml = '';
-        if (msg.image_url) {
-            mediaHtml = `<img src="${msg.image_url}" class="max-w-[200px] sm:max-w-xs rounded-lg mb-2 cursor-pointer" onclick="window.open('${msg.image_url}')">`;
-        }
+        let mediaHtml = msg.image_url ? `<img src="${msg.image_url}" class="max-w-[200px] sm:max-w-xs rounded-xl mb-1 cursor-pointer border border-black/5" onclick="window.open('${msg.image_url}')">` : '';
 
         return `
             <div class="flex ${align} mb-4">
                 <div class="max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
-                    ${!isMe ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${msg.sender}</span>` : ''}
-                    <div class="${bg} ${radius} px-4 py-2.5 shadow-sm inline-block break-words">
+                    <div class="${bg} ${radius} px-4 py-2.5 shadow-sm inline-block break-words text-[15px]">
                         ${mediaHtml}
-                        ${msg.content ? `<p class="text-[15px] leading-relaxed">${msg.content}</p>` : ''}
+                        ${msg.content ? `<span>${msg.content}</span>` : ''}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
-
     container.scrollTop = container.scrollHeight;
 }
 
-// 6. 監聽專屬房間的即時訊息 (Realtime)
-function setupRealtime() {
-    if (window.realtimeChannel) {
-        window.supabaseClient.removeChannel(window.realtimeChannel);
-    }
+// 7. 專屬房間即時監聽 (對方正在輸入 / 收到訊息)
+function setupRoomRealtime() {
+    if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
 
-    // 🔥 這裡加上了 filter，保證只收到目前這個 1對1 房間的推播
-    window.realtimeChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
-        .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `room_id=eq.${window.activeRoomId}` 
-        }, payload => {
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
             const newMsg = payload.new;
             const container = document.getElementById('chat-messages');
-
-            if (container.innerHTML.includes('專屬空間')) container.innerHTML = '';
+            
+            if (container.innerHTML.includes('現在可以發送訊息')) container.innerHTML = '';
 
             const isMe = newMsg.sender === myChatName;
             const align = isMe ? 'justify-end' : 'justify-start';
-            const bg = isMe ? 'bg-sexify text-white' : 'bg-gray-100 text-gray-800';
-            const radius = isMe ? 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm' : 'rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-sm';
-
-            let mediaHtml = '';
-            if (newMsg.image_url) {
-                mediaHtml = `<img src="${newMsg.image_url}" class="max-w-[200px] sm:max-w-xs rounded-lg mb-2 cursor-pointer" onclick="window.open('${newMsg.image_url}')">`;
-            }
+            const bg = isMe ? 'bg-[#ff2442] text-white' : 'bg-gray-100 text-gray-900';
+            const radius = isMe ? 'rounded-l-2xl rounded-tr-2xl rounded-br-sm' : 'rounded-r-2xl rounded-tl-2xl rounded-bl-sm';
+            
+            let mediaHtml = newMsg.image_url ? `<img src="${newMsg.image_url}" class="max-w-[200px] rounded-xl mb-1">` : '';
 
             const msgDiv = document.createElement('div');
-            msgDiv.className = `flex ${align} mb-4 transition-opacity duration-300 opacity-100`;
-            msgDiv.innerHTML = `
-                <div class="max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
-                    ${!isMe ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${newMsg.sender}</span>` : ''}
-                    <div class="${bg} ${radius} px-4 py-2.5 shadow-sm inline-block break-words">
-                        ${mediaHtml}
-                        ${newMsg.content ? `<p class="text-[15px] leading-relaxed">${newMsg.content}</p>` : ''}
-                    </div>
-                </div>
-            `;
+            msgDiv.className = `flex ${align} mb-4 toast-enter`;
+            msgDiv.innerHTML = `<div class="max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}"><div class="${bg} ${radius} px-4 py-2.5 shadow-sm break-words text-[15px]">${mediaHtml}${newMsg.content || ''}</div></div>`;
+            
             container.appendChild(msgDiv);
             container.scrollTop = container.scrollHeight;
-
-            // 即時更新外層列表的最後訊息預覽
-            let previewText = newMsg.image_url ? "[傳送了一張圖片]" : newMsg.content;
-            saveChatSession(window.activeChatTarget, `https://i.pravatar.cc/150?u=${window.activeChatTarget}`, previewText);
-        })
-        .subscribe();
+        }).subscribe();
 }
 
-// 7. 發送訊息 (綁定房間 ID)
+// 8. 發送訊息核心邏輯 (包含修復後的圖片上傳)
 window.handleSendAction = async function() {
     const input = document.getElementById('chat-input');
     const text = input.value;
@@ -243,56 +284,55 @@ window.handleSendAction = async function() {
     if (!text.trim() && !selectedImageFile) return;
 
     input.value = '';
-
     let uploadedImageUrl = null;
 
+    // 處理圖片上傳
     if (selectedImageFile) {
         const pg = document.getElementById('chat-upload-progress');
         if(pg) { pg.classList.remove('hidden'); pg.classList.add('flex'); }
 
-        const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
-        const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-            .from('chat-images')
-            .upload(fileName, selectedImageFile);
+        // 確保檔名安全
+        const fileExt = selectedImageFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${fileExt}`;
+        
+        try {
+            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
+                .from('chat-images')
+                .upload(fileName, selectedImageFile, { cacheControl: '3600', upsert: false });
 
-        if (uploadError) {
-            console.error("圖片上傳失敗", uploadError);
-            alert("圖片上傳失敗，請稍後再試");
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = window.supabaseClient.storage.from('chat-images').getPublicUrl(fileName);
+            uploadedImageUrl = publicUrlData.publicUrl;
+        } catch (err) {
+            console.error("圖片上傳失敗詳細原因:", err);
+            alert("圖片上傳失敗，請確認 Storage 權限 (RLS) 已開啟！");
             cancelImageSelection();
             return;
         }
-
-        const { data: publicUrlData } = window.supabaseClient.storage
-            .from('chat-images')
-            .getPublicUrl(fileName);
-
-        uploadedImageUrl = publicUrlData.publicUrl;
         cancelImageSelection();
     }
 
-    // 🔥 寫入資料庫時，將 room_id 一併存入
+    // 將資料寫入 Database (包含 receiver 欄位以觸發對方通知)
     const { error } = await window.supabaseClient.from('messages').insert([{
         room_id: window.activeRoomId, 
         sender: myChatName,
+        receiver: window.activeChatTarget,  // 🔥 關鍵新增：指定接收者是誰
         content: text.trim() || null,
         image_url: uploadedImageUrl
     }]);
 
     if (error) {
-        console.error("訊息發送失敗", error);
+        console.error("發送失敗", error);
         alert("發送失敗: " + error.message);
-    } else {
-        let previewText = uploadedImageUrl ? "[圖片]" : text.trim();
-        saveChatSession(window.activeChatTarget, `https://i.pravatar.cc/150?u=${window.activeChatTarget}`, previewText);
     }
 };
 
-// 8. 圖片選擇與取消預覽 (保持原有功能)
+// 圖片選擇與取消預覽 (保持原有)
 window.handleImageSelection = function(input) {
     const file = input.files[0];
     if (!file) return;
     selectedImageFile = file;
-
     const reader = new FileReader();
     reader.onload = e => {
         const p = document.getElementById('chat-image-preview');
@@ -301,7 +341,6 @@ window.handleImageSelection = function(input) {
     };
     reader.readAsDataURL(file);
 };
-
 window.cancelImageSelection = function() {
     selectedImageFile = null;
     const i = document.getElementById('chat-image-input');
@@ -312,26 +351,29 @@ window.cancelImageSelection = function() {
     if (pg) { pg.classList.add('hidden'); pg.classList.remove('flex'); }
 };
 
-// 9. 關閉聊天室並清理監聽器
 window.closeChat = function() {
     const modal = document.getElementById('chat-modal');
-    if (modal) {
-        modal.classList.add('translate-x-full');
-        setTimeout(() => {
-            modal.classList.add('hidden');
-            document.getElementById('chat-messages').innerHTML = ''; // 清空畫面避免殘影
-        }, 300);
-    }
-    
-    if (window.realtimeChannel) {
-        window.supabaseClient.removeChannel(window.realtimeChannel); // 離開房間時關閉即時監聽
-        window.realtimeChannel = null;
+    modal.classList.add('translate-x-full');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        document.getElementById('chat-messages').innerHTML = ''; 
+    }, 300);
+    if (window.roomChannel) {
+        window.supabaseClient.removeChannel(window.roomChannel);
+        window.roomChannel = null;
     }
     window.activeRoomId = null;
     window.activeChatTarget = null;
+    renderMessages(); // 退回列表時刷新最新對話
 };
 
-// 網頁載入時自動渲染列表
+// 系統啟動時，初始化通知監聽
 document.addEventListener('DOMContentLoaded', () => {
-    renderMessageList();
+    // 延遲一點等 Supabase 準備好
+    setTimeout(() => {
+        setupGlobalRealtime();
+        if (document.getElementById('messages-tab').classList.contains('active')) {
+            renderMessages();
+        }
+    }, 1000);
 });
