@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 完整全替換式 (轉圈圈修復版)
+// js/messages.js - 完整全替換式 (終極穩定版)
 // ==========================================
 
 // 1. 全域變數與防衝突宣告
@@ -85,7 +85,7 @@ async function openChat(username, avatarUrl, id) {
         .subscribe();
 }
 
-// 4. 訊息氣泡生成邏輯
+// 4. 訊息氣泡生成邏輯 (🔥 嚴格防護亂碼版)
 function appendMessageToUI(msg, isNewMessage) {
     const chatContainer = document.getElementById('chat-messages');
     const isMe = msg.sender_name === myChatName;
@@ -95,22 +95,34 @@ function appendMessageToUI(msg, isNewMessage) {
     const avatar = isMe ? `https://i.pravatar.cc/100?u=me-${myChatName}` : `https://i.pravatar.cc/100?u=${msg.sender_name}`;
     const nameColor = isMe ? "text-pink-100" : "text-gray-400";
 
-    // 處理圖片內容
+    // 處理圖片內容：確保網址存在且不是 "null" 字串
     let mediaHtml = '';
-    if (msg.image_url) {
+    if (msg.image_url && typeof msg.image_url === 'string' && msg.image_url.trim() !== '' && msg.image_url !== 'null') {
         mediaHtml = `
-            <div class="relative max-w-sm rounded-xl overflow-hidden mb-2 mt-1 shadow-inner image-loading" style="aspect-ratio: 16/9; min-width: 150px;">
-                <img src="${msg.image_url}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.parentElement.classList.remove('image-loading'); this.classList.remove('opacity-0');">
+            <div class="relative max-w-sm rounded-xl overflow-hidden mb-2 mt-1 shadow-sm bg-gray-100/50 flex items-center justify-center min-h-[120px]">
+                <img src="${msg.image_url}" class="w-full h-auto max-h-[250px] object-cover" 
+                     onload="this.parentElement.classList.remove('bg-gray-100/50');"
+                     onerror="this.outerHTML='<div class=\\'p-3 text-xs text-gray-400 text-center bg-gray-100 rounded-xl\\'>⚠️ 圖片載入失敗</div>'">
             </div>
         `;
     }
 
-    const textHtml = msg.content ? `<div>${msg.content}</div>` : (msg.image_url ? '' : '<div class="italic text-gray-300">內容已存入</div>');
+    // 處理文字內容：嚴格轉型，防止印出奇怪的數字或物件
+    let safeText = '';
+    if (msg.content && msg.content !== 'null') {
+        safeText = String(msg.content).trim();
+    }
+    
+    // 增加 break-words 避免如果真有長字串時把版面撐破
+    const textHtml = safeText ? `<div class="break-words whitespace-pre-wrap">${safeText}</div>` : '';
+
+    // 防呆：如果沒有圖片也沒有文字，就不要畫出空泡泡
+    if (!mediaHtml && !textHtml) return;
 
     const msgHtml = `
         <div class="flex ${alignClass} gap-3 mb-2 animate-fade-in ${isMe ? 'ml-auto' : 'mr-auto'} max-w-[85%]">
             <img src="${avatar}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover shadow-sm">
-            <div class="${bgClass} p-3 rounded-2xl text-sm shadow-sm leading-relaxed">
+            <div class="${bgClass} p-3 rounded-2xl text-sm shadow-sm leading-relaxed min-w-[60px]">
                 <div class="text-[9px] ${nameColor} mb-1 font-bold">${isMe ? '我' : msg.sender_name}</div>
                 ${mediaHtml}
                 ${textHtml}
@@ -126,7 +138,7 @@ function appendMessageToUI(msg, isNewMessage) {
 }
 
 // ==========================================
-// 🔥 圖片發送相關邏輯 (已修復 Bug)
+// 🔥 圖片發送相關邏輯 (防護升級版)
 // ==========================================
 
 // 1. 處理圖片選擇
@@ -148,7 +160,7 @@ function handleImageSelection(input) {
     reader.onload = function(e) {
         preview.src = e.target.result;
         container.classList.remove('hidden');
-        container.classList.add('flex'); // 確保使用 flex 佈局顯示
+        container.classList.add('flex'); 
     }
     reader.readAsDataURL(file);
 }
@@ -176,7 +188,7 @@ function cancelImageSelection() {
 async function handleSendAction() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
-    const fileToUpload = selectedImageFile; // 🔥 修復：第一步就先把檔案備份下來
+    const fileToUpload = selectedImageFile; 
     
     // 防呆：如果沒有文字也沒有圖片
     if (!text && !fileToUpload) return;
@@ -188,10 +200,10 @@ async function handleSendAction() {
 
     const progress = document.getElementById('chat-upload-progress');
 
-    // 如果有圖片，先顯示轉圈圈，並且鎖定發送防止重複點擊
+    // 如果有圖片，先顯示轉圈圈
     if (fileToUpload && progress) {
         progress.classList.remove('hidden');
-        progress.classList.add('flex'); // 🔥 修復：分開呼叫，避免 TypeError 當機
+        progress.classList.add('flex'); 
     }
 
     try {
@@ -199,8 +211,10 @@ async function handleSendAction() {
 
         // A. 處理圖片上傳
         if (fileToUpload) {
-            const cleanFileName = fileToUpload.name.replace(/[^\w.]/g, '');
-            const storagePath = `public/${Date.now()}_${cleanFileName}`;
+            // 🔥 修復：安全生成檔名，避免中文檔名或特殊字元變成空字串導致亂碼
+            const ext = fileToUpload.name.split('.').pop() || 'png';
+            const randomCode = Math.floor(Math.random() * 10000);
+            const storagePath = `public/${Date.now()}_${randomCode}.${ext}`;
 
             const { data: uploadData, error: uploadError } = await window.supabaseClient
                 .storage
@@ -209,9 +223,9 @@ async function handleSendAction() {
 
             if (uploadError) {
                 console.error("圖片上傳失敗:", uploadError.message);
-                alert(`圖片上傳失敗: ${uploadError.message}\n(請確認 Storage 是否有建立 'message-images' 並且設為 Public)`);
+                alert(`圖片上傳失敗: ${uploadError.message}`);
                 cancelImageSelection();
-                return; // 中斷後續的文字發送
+                return; // 失敗就中斷
             }
 
             const { data: publicUrlData } = window.supabaseClient
@@ -223,19 +237,22 @@ async function handleSendAction() {
         }
 
         // B. 寫入資料庫
+        // 🔥 修復：明確定義 payload，如果沒有圖片或文字，強迫給 null，避免存入奇怪的字串
+        const payload = { 
+            content: text || null, 
+            sender_name: myChatName,
+            image_url: imageUrl || null
+        };
+
         const { error: dbError } = await window.supabaseClient
             .from('messages')
-            .insert([{ 
-                content: text, 
-                sender_name: myChatName,
-                image_url: imageUrl
-            }]);
+            .insert([payload]);
 
         if (dbError) {
             console.error("發送失敗:", dbError.message);
             alert("發送失敗！請檢查資料表權限。");
         } else {
-            // 🔥 修復：全部上傳與寫入成功後，才清空文字框和圖片預覽
+            // 成功後清空狀態
             input.value = '';
             cancelImageSelection();
         }
