@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 終極穩定強化版 (解決手機連線失敗與崩潰問題)
+// js/messages.js - 終極穩定強化版 (專門修正手機連線問題)
 // ==========================================
 
 window.activeRoomId = null;
@@ -8,34 +8,37 @@ window.roomChannel = null;
 window.globalChannel = null;   
 let selectedImageFile = null;
 
-// 1. 初始化使用者資訊
+// 1. 初始化使用者與樣式 (新增紅點 CSS)
 let myChatName = localStorage.getItem('myChatName');
 if (!myChatName) {
-    let name = prompt("請輸入你的帳號名稱：", "User_" + Math.floor(Math.random() * 1000));
-    localStorage.setItem('myChatName', name || "Guest");
+    let name = prompt("請輸入帳號：", "User_" + Math.floor(Math.random() * 1000));
+    localStorage.setItem('myChatName', name || "新用戶");
     myChatName = localStorage.getItem('myChatName');
 }
 
-// 2. 注入必要的 CSS (紅點與動畫)
-if (!document.getElementById('sexify-chat-css')) {
-    const style = document.createElement('style');
-    style.id = 'sexify-chat-css';
-    style.innerHTML = `
-        .unread-badge { background: #ff2442; color: white; border-radius: 99px; min-width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid white; font-weight: bold; position: absolute; -top: 2px; -right: 2px; }
-        .msg-container { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
-    `;
-    document.head.appendChild(style);
+// 注入 UI 修正
+const styleId = 'sexify-fix-style';
+if (!document.getElementById(styleId)) {
+    document.head.insertAdjacentHTML('beforeend', `
+    <style id="${styleId}">
+        .unread-badge { background: #ff2442; color: white; border-radius: 50%; min-width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid white; font-weight: bold; }
+        .msg-list-item:active { background-color: #f9f9f9; }
+        #chat-messages { display: flex; flex-direction: column; }
+    </style>
+    `);
 }
 
-// 工具：本地儲存與 ID 生成
+// 功能函式
 const getFriends = () => JSON.parse(localStorage.getItem('myFriends')) || [];
 const getGroups = () => JSON.parse(localStorage.getItem('myGroups')) || [];
 const getLastRead = (rid) => parseInt(localStorage.getItem(`lastRead_${rid}`) || '0');
 const setLastRead = (rid) => localStorage.setItem(`lastRead_${rid}`, Date.now().toString());
 
-// 3. 好友與群組管理
+// ==========================================
+// 核心管理：添加好友與群組
+// ==========================================
 window.addFriend = function() {
-    const f = prompt("請輸入好友帳號：");
+    const f = prompt("輸入好友 ID：");
     if (!f || f.trim() === "" || f.trim() === myChatName) return;
     let friends = getFriends();
     if (!friends.includes(f.trim())) {
@@ -46,7 +49,7 @@ window.addFriend = function() {
 };
 
 window.joinGroup = function() {
-    const gName = prompt("輸入群組名稱 (相同名稱即為同一群組)：");
+    const gName = prompt("輸入群組名稱 (相同名稱即為同一群)：");
     if (!gName || gName.trim() === "") return;
     const gId = "GROUP_" + gName.trim();
     let groups = getGroups();
@@ -57,47 +60,47 @@ window.joinGroup = function() {
     openChat(gName.trim(), gId);
 };
 
-// 4. 渲染訊息列表 (包含未讀數與最新預覽)
+// ==========================================
+// 渲染訊息列表 (修正：增加未讀數、最新預覽)
+// ==========================================
 window.renderMessages = async function() {
     const container = document.getElementById('messages-list');
     if (!container) return;
 
-    container.innerHTML = `<div class="text-center py-10 opacity-50"><i class="fa-solid fa-circle-notch fa-spin"></i></div>`;
+    container.innerHTML = `<div class="text-center py-10 opacity-30"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
 
     try {
-        // 使用最穩定的查詢方式
-        const { data: rawMsgs, error } = await window.supabaseClient.from('messages')
-            .select('*').or(`sender_name.eq.${myChatName},receiver.eq.${myChatName},receiver.eq.GROUP`)
-            .order('created_at', { ascending: false });
+        // 使用最基礎的查詢以確保手機不崩潰
+        const { data: messages, error } = await window.supabaseClient.from('messages')
+            .select('*')
+            .or(`sender_name.eq.${myChatName},receiver.eq.${myChatName},receiver.eq.GROUP`)
+            .order('created_at', { ascending: false })
+            .limit(100);
 
         if (error) throw error;
 
         let rooms = {};
-        
-        // 初始化已知的好友與群組 (確保沒說過話的也能顯示)
+        // 先載入好友清單
         getFriends().forEach(f => {
             const rid = [myChatName, f].sort().join('_');
             rooms[rid] = { target: f, last: '點擊開始對話', ts: 0, count: 0, isG: false };
         });
+        // 先載入群組清單
         getGroups().forEach(g => {
             rooms[g.id] = { target: g.name, last: '群組大廳', ts: 0, count: 0, isG: true };
         });
 
-        // 整理訊息數據
-        (rawMsgs || []).forEach(m => {
+        // 整理最新訊息與未讀
+        (messages || []).forEach(m => {
             if (!rooms[m.room_id]) {
-                const isGroup = m.room_id.startsWith('GROUP_');
-                const target = isGroup ? m.room_id.replace('GROUP_', '') : (m.sender_name === myChatName ? m.receiver : m.sender_name);
-                rooms[m.room_id] = { target, last: '', ts: 0, count: 0, isG: isGroup };
+                const isG = m.room_id.startsWith('GROUP_');
+                const target = isG ? m.room_id.replace('GROUP_', '') : (m.sender_name === myChatName ? m.receiver : m.sender_name);
+                rooms[m.room_id] = { target, last: '', ts: 0, count: 0, isG: isG };
             }
             const r = rooms[m.room_id];
             const msgTs = new Date(m.created_at).getTime();
 
-            // 計算未讀：非本人發送且晚於上次讀取時間
-            if (m.sender_name !== myChatName && msgTs > getLastRead(m.room_id)) {
-                r.count++;
-            }
-            // 更新最新訊息預覽
+            if (m.sender_name !== myChatName && msgTs > getLastRead(m.room_id)) r.count++;
             if (msgTs > r.ts) {
                 r.ts = msgTs;
                 r.last = m.image_url ? '🖼️ 傳送了圖片' : (m.content || '');
@@ -107,7 +110,7 @@ window.renderMessages = async function() {
         const sortedRooms = Object.keys(rooms).map(id => ({ id, ...rooms[id] })).sort((a, b) => b.ts - a.ts);
 
         let html = `
-            <div class="p-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center">
+            <div class="p-4 bg-white border-b flex justify-between items-center sticky top-0 z-10">
                 <span class="font-black text-xl">${myChatName}</span>
                 <div class="flex gap-2">
                     <button onclick="joinGroup()" class="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center"><i class="fa-solid fa-users text-sm"></i></button>
@@ -117,28 +120,29 @@ window.renderMessages = async function() {
         `;
 
         html += sortedRooms.map(room => `
-            <div class="flex items-center gap-4 p-4 border-b border-gray-50 active:bg-gray-50 cursor-pointer" onclick="openChat('${room.target}', '${room.id}')">
+            <div class="flex items-center gap-4 p-4 border-b border-gray-50 msg-list-item cursor-pointer" onclick="openChat('${room.target}', '${room.id}')">
                 <div class="relative flex-shrink-0">
                     <img src="https://i.pravatar.cc/100?u=${room.target}" class="w-14 h-14 rounded-full border">
-                    ${room.count > 0 ? `<div class="unread-badge">${room.count}</div>` : ''}
+                    ${room.count > 0 ? `<div class="absolute -top-1 -right-1 unread-badge">${room.count}</div>` : ''}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex justify-between items-center">
                         <span class="font-bold text-gray-900 truncate">${room.isG ? '👥 ' : ''}${room.target}</span>
                     </div>
-                    <p class="text-sm ${room.count > 0 ? 'text-gray-900 font-bold' : 'text-gray-400'} truncate">${room.last}</p>
+                    <p class="text-sm truncate ${room.count > 0 ? 'text-gray-900 font-bold' : 'text-gray-400'}">${room.last}</p>
                 </div>
             </div>
         `).join('');
 
         container.innerHTML = html;
     } catch (err) {
-        console.error("List Error:", err);
-        container.innerHTML = `<div class="p-10 text-center text-gray-400">連線暫時不穩定，請重新整理</div>`;
+        container.innerHTML = `<div class="p-10 text-center text-gray-400">連線失敗，請檢查網路或重新整理</div>`;
     }
 };
 
-// 5. 進入聊天室 (修正：新訊息從底部向上排列)
+// ==========================================
+// 進入聊天室 (修正：新訊息在最下方)
+// ==========================================
 window.openChat = async function(name, roomId) {
     window.activeChatTarget = name;
     window.activeRoomId = roomId || [myChatName, name].sort().join('_');
@@ -157,7 +161,7 @@ window.openChat = async function(name, roomId) {
     msgBox.innerHTML = `<div class="py-20 text-center opacity-30"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
 
     try {
-        // 正確排序：ascending: true 代表舊的在上面，新的在下面
+        // 🔥 重要修正：ascending: true 讓新訊息在下面
         const { data, error } = await window.supabaseClient.from('messages')
             .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
 
@@ -165,57 +169,58 @@ window.openChat = async function(name, roomId) {
 
         msgBox.innerHTML = '';
         if (data && data.length > 0) {
-            data.forEach(m => appendMessageUI(m));
+            data.forEach(m => appendMessageToUI(m));
         } else {
-            msgBox.innerHTML = `<div class="py-20 text-center text-gray-300 text-sm">沒有對話紀錄</div>`;
+            msgBox.innerHTML = `<div class="py-20 text-center text-gray-300 text-sm">開始對話吧！</div>`;
         }
 
         scrollToBottom();
-        setLastRead(window.activeRoomId); // 設為已讀
-        listenThisRoom(); // 開啟即時監聽
+        setLastRead(window.activeRoomId); // 標記為已讀
+        startRealtime(); // 開啟監聽
     } catch (err) {
-        msgBox.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗</div>`;
+        msgBox.innerHTML = `<div class="p-10 text-center text-red-400">無法開啟對話</div>`;
     }
 };
 
-function appendMessageUI(m) {
+function appendMessageToUI(m) {
     const box = document.getElementById('chat-messages');
     if (!box) return;
     const isMe = m.sender_name === myChatName;
-    const align = isMe ? 'justify-end' : 'justify-start';
-    const bg = isMe ? 'bg-[#ff2442] text-white' : 'bg-gray-100 text-gray-800';
+    const isG = window.activeRoomId.startsWith('GROUP_');
     
     const div = document.createElement('div');
-    div.className = `flex ${align} mb-4 px-4`;
+    div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 px-4`;
     div.innerHTML = `
-        <div class="${bg} px-4 py-2 rounded-2xl shadow-sm max-w-[80%]">
-            ${!isMe && window.activeRoomId.startsWith('GROUP_') ? `<p class="text-[10px] font-bold opacity-50 mb-1">${m.sender_name}</p>` : ''}
+        <div class="${isMe ? 'bg-[#ff2442] text-white' : 'bg-gray-100 text-gray-800'} px-4 py-2 rounded-2xl shadow-sm max-w-[80%]">
+            ${!isMe && isG ? `<p class="text-[9px] font-bold opacity-50 mb-1">${m.sender_name}</p>` : ''}
             ${m.image_url ? `<img src="${m.image_url}" class="rounded-lg mb-1 max-w-full" onclick="window.open('${m.image_url}')">` : ''}
-            ${m.content ? `<p class="text-sm">${m.content}</p>` : ''}
+            <p class="text-sm">${m.content || ''}</p>
         </div>
     `;
     box.appendChild(div);
 }
 
-function listenThisRoom() {
+function startRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
     window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
             const msgBox = document.getElementById('chat-messages');
-            if (msgBox.innerHTML.includes('沒有對話紀錄')) msgBox.innerHTML = '';
-            appendMessageUI(payload.new);
+            if (msgBox.innerHTML.includes('開始對話')) msgBox.innerHTML = '';
+            appendMessageToUI(payload.new);
             scrollToBottom();
             setLastRead(window.activeRoomId);
         }).subscribe();
 }
 
-// 6. 發送訊息 (支援圖片與文字)
+// ==========================================
+// 發送功能 (維持 sender_name 與 message-images)
+// ==========================================
 window.handleSendAction = async function() {
     const input = document.getElementById('chat-input');
     const content = input.value.trim();
     if (!content && !selectedImageFile) return;
 
-    input.value = ''; // 立即清空輸入框提升體驗
+    input.value = ''; // 先清空，提升速度感
     let imgUrl = null;
 
     if (selectedImageFile) {
@@ -271,28 +276,18 @@ window.closeChat = function() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
     setTimeout(() => {
         if (modal) modal.classList.add('hidden');
-        renderMessages(); // 返回列表時重新整理，清除紅點
+        renderMessages(); // 關閉後刷列表，清除紅點數字
     }, 300);
 };
 
-// 全局監聽 (為了列表紅點即時更新)
-function setupGlobalListen() {
-    if (window.globalChannel) return;
-    window.globalChannel = window.supabaseClient.channel('global_notif')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-            const m = payload.new;
-            // 如果我不是發送者，且我不在該房間內，就刷列表顯示紅點
-            if (m.sender_name !== myChatName && window.activeRoomId !== m.room_id) {
-                renderMessages();
-            }
-        }).subscribe();
-}
-
-// 7. 啟動
+// 初始化啟動 (增加延遲以應對手機端加載)
 document.addEventListener('DOMContentLoaded', () => {
-    // 稍微延遲確保 Supabase 已載入
     setTimeout(() => {
         renderMessages();
-        setupGlobalListen();
-    }, 500);
+        // 全局通知監聽 (為了列表即時紅點)
+        window.supabaseClient.channel('global_updates')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+                if (payload.new.room_id !== window.activeRoomId) renderMessages();
+            }).subscribe();
+    }, 800);
 });
