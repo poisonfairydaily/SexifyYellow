@@ -1,11 +1,11 @@
-﻿// ==========================================
-// js/messages.js - 完整全替換式 (終極穩定版)
+// ==========================================
+// js/messages.js - 修正 HTML 原始碼彈出問題版
 // ==========================================
 
 // 1. 全域變數與防衝突宣告
 window.activeChatId = window.activeChatId || null;
 window.realtimeChannel = window.realtimeChannel || null;
-let selectedImageFile = null; // 儲存待發送的圖片檔案
+let selectedImageFile = null; 
 
 // 模擬的對話對象列表
 window.chatList = [
@@ -69,7 +69,8 @@ async function openChat(username, avatarUrl, id) {
     if(statusEl) statusEl.remove();
 
     if (!error && data) {
-        data.reverse().forEach(msg => { appendMessageToUI(msg, false); }); 
+        // 歷史訊息由舊到新插入底部
+        data.forEach(msg => { appendMessageToUI(msg, false); }); 
     }
 
     // B. 啟動即時監聽器
@@ -85,17 +86,18 @@ async function openChat(username, avatarUrl, id) {
         .subscribe();
 }
 
-// 4. 訊息氣泡生成邏輯 (🔥 嚴格防護亂碼版)
+// 4. 訊息氣泡生成邏輯 (🔥 修復 HTML 顯示問題版)
 function appendMessageToUI(msg, isNewMessage) {
     const chatContainer = document.getElementById('chat-messages');
+    if (!chatContainer) return;
+
     const isMe = msg.sender_name === myChatName;
-    
-    const alignClass = isMe ? "justify-end flex-row-reverse" : "justify-start";
+    const alignClass = isMe ? "justify-end flex-row-reverse ml-auto" : "justify-start mr-auto";
     const bgClass = isMe ? "bg-sexify text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-100";
     const avatar = isMe ? `https://i.pravatar.cc/100?u=me-${myChatName}` : `https://i.pravatar.cc/100?u=${msg.sender_name}`;
     const nameColor = isMe ? "text-pink-100" : "text-gray-400";
 
-    // 處理圖片內容：確保網址存在且不是 "null" 字串
+    // 處理圖片內容
     let mediaHtml = '';
     if (msg.image_url && typeof msg.image_url === 'string' && msg.image_url.trim() !== '' && msg.image_url !== 'null') {
         mediaHtml = `
@@ -107,20 +109,19 @@ function appendMessageToUI(msg, isNewMessage) {
         `;
     }
 
-    // 處理文字內容：嚴格轉型，防止印出奇怪的數字或物件
+    // 處理文字內容
     let safeText = '';
     if (msg.content && msg.content !== 'null') {
         safeText = String(msg.content).trim();
     }
     
-    // 增加 break-words 避免如果真有長字串時把版面撐破
     const textHtml = safeText ? `<div class="break-words whitespace-pre-wrap">${safeText}</div>` : '';
 
     // 防呆：如果沒有圖片也沒有文字，就不要畫出空泡泡
     if (!mediaHtml && !textHtml) return;
 
     const msgHtml = `
-        <div class="flex ${alignClass} gap-3 mb-2 animate-fade-in ${isMe ? 'ml-auto' : 'mr-auto'} max-w-[85%]">
+        <div class="flex ${alignClass} gap-3 mb-2 animate-fade-in max-w-[85%]">
             <img src="${avatar}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover shadow-sm">
             <div class="${bgClass} p-3 rounded-2xl text-sm shadow-sm leading-relaxed min-w-[60px]">
                 <div class="text-[9px] ${nameColor} mb-1 font-bold">${isMe ? '我' : msg.sender_name}</div>
@@ -130,20 +131,17 @@ function appendMessageToUI(msg, isNewMessage) {
         </div>
     `;
 
-if (isNewMessage) {
-    // 修正：使用 insertAdjacentHTML 而不是 prepend
-    // 'afterbegin' 會將 HTML 字串插入到容器的最前方（內部頂部）
-    chatContainer.insertAdjacentHTML('afterbegin', msgHtml);
-} else {
-    // 歷史訊息插入到底部
-    chatContainer.insertAdjacentHTML('beforeend', msgHtml);
+    // 🔥 核心修復：使用 insertAdjacentHTML 而不是 prepend
+    if (isNewMessage) {
+        // 即時訊息插入到最前方（如果是 flex-col-reverse，視覺上會在最底部）
+        chatContainer.insertAdjacentHTML('afterbegin', msgHtml);
+    } else {
+        // 歷史訊息插入到最後方
+        chatContainer.insertAdjacentHTML('beforeend', msgHtml);
+    }
 }
 
-// ==========================================
-// 🔥 圖片發送相關邏輯 (防護升級版)
-// ==========================================
-
-// 1. 處理圖片選擇
+// 5. 圖片發送相關邏輯
 function handleImageSelection(input) {
     const file = input.files[0];
     if (!file) return;
@@ -167,7 +165,6 @@ function handleImageSelection(input) {
     reader.readAsDataURL(file);
 }
 
-// 2. 取消圖片選擇
 function cancelImageSelection() {
     selectedImageFile = null;
     const fileInput = document.getElementById('chat-image-input');
@@ -186,13 +183,11 @@ function cancelImageSelection() {
     }
 }
 
-// 3. 處理「發送」按鈕的主邏輯
 async function handleSendAction() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     const fileToUpload = selectedImageFile; 
     
-    // 防呆：如果沒有文字也沒有圖片
     if (!text && !fileToUpload) return;
 
     if (!window.supabaseClient) {
@@ -201,8 +196,6 @@ async function handleSendAction() {
     }
 
     const progress = document.getElementById('chat-upload-progress');
-
-    // 如果有圖片，先顯示轉圈圈
     if (fileToUpload && progress) {
         progress.classList.remove('hidden');
         progress.classList.add('flex'); 
@@ -211,9 +204,7 @@ async function handleSendAction() {
     try {
         let imageUrl = null;
 
-        // A. 處理圖片上傳
         if (fileToUpload) {
-            // 🔥 修復：安全生成檔名，避免中文檔名或特殊字元變成空字串導致亂碼
             const ext = fileToUpload.name.split('.').pop() || 'png';
             const randomCode = Math.floor(Math.random() * 10000);
             const storagePath = `public/${Date.now()}_${randomCode}.${ext}`;
@@ -227,7 +218,7 @@ async function handleSendAction() {
                 console.error("圖片上傳失敗:", uploadError.message);
                 alert(`圖片上傳失敗: ${uploadError.message}`);
                 cancelImageSelection();
-                return; // 失敗就中斷
+                return;
             }
 
             const { data: publicUrlData } = window.supabaseClient
@@ -238,8 +229,6 @@ async function handleSendAction() {
             imageUrl = publicUrlData.publicUrl;
         }
 
-        // B. 寫入資料庫
-        // 🔥 修復：明確定義 payload，如果沒有圖片或文字，強迫給 null，避免存入奇怪的字串
         const payload = { 
             content: text || null, 
             sender_name: myChatName,
@@ -252,23 +241,18 @@ async function handleSendAction() {
 
         if (dbError) {
             console.error("發送失敗:", dbError.message);
-            alert("發送失敗！請檢查資料表權限。");
+            alert("發送失敗！");
         } else {
-            // 成功後清空狀態
             input.value = '';
             cancelImageSelection();
         }
 
     } catch (err) {
-        console.error("未預期的錯誤:", err);
-        alert("發生錯誤，請檢查網路連線。");
+        console.error("錯誤:", err);
         cancelImageSelection();
     }
 }
 
-// ==========================================
-
-// 關閉對話
 function closeChat() {
     const modal = document.getElementById('chat-modal');
     modal.classList.add('translate-x-full');
@@ -280,7 +264,6 @@ function closeChat() {
     }
 }
 
-// 支援鍵盤按 Enter 發送文字
 document.addEventListener('DOMContentLoaded', () => {
     renderMessages();
     setTimeout(() => {
