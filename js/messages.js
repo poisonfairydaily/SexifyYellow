@@ -130,11 +130,13 @@ function appendMessageToUI(msg, isNewMessage) {
         </div>
     `;
 
-    if (isNewMessage) {
-        chatContainer.prepend(msgHtml);
-    } else {
-        chatContainer.insertAdjacentHTML('beforeend', msgHtml);
-    }
+if (isNewMessage) {
+    // 修正：使用 insertAdjacentHTML 而不是 prepend
+    // 'afterbegin' 會將 HTML 字串插入到容器的最前方（內部頂部）
+    chatContainer.insertAdjacentHTML('afterbegin', msgHtml);
+} else {
+    // 歷史訊息插入到底部
+    chatContainer.insertAdjacentHTML('beforeend', msgHtml);
 }
 
 // ==========================================
