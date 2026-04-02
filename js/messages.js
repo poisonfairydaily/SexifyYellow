@@ -76,7 +76,6 @@ window.createGroup = function() {
     renderMessages();
 }
 
-// 3. 渲染收件匣 (加入搜尋、群組與精準未讀計數)
 window.renderMessages = async function(searchKeyword = "") {
     const container = document.getElementById('messages-list');
     if (!container) return;
@@ -97,9 +96,14 @@ window.renderMessages = async function(searchKeyword = "") {
         const myGroups = getGroups();
 
         (inboxData || []).forEach(msg => {
+            // --- 【安全檢查修復】 ---
+            // 如果 room_id 是空的，嘗試用 sender/receiver 組合成一個臨時 ID，避免程式崩潰
+            if (!msg.room_id) {
+                msg.room_id = generateRoomId(msg.sender_name, msg.receiver || 'Unknown');
+            }
+            
             const isGroup = msg.room_id.startsWith('GROUP_');
             
-            // 如果是群組，檢查自己是否在成員名單內
             let groupInfo = null;
             if (isGroup) {
                 groupInfo = myGroups.find(g => g.id === msg.room_id);
@@ -107,13 +111,15 @@ window.renderMessages = async function(searchKeyword = "") {
             }
 
             const targetId = isGroup ? msg.room_id : (msg.sender_name === myChatName ? msg.receiver : msg.sender_name);
+            if (!targetId) return; // 再次確保 targetId 存在
+
             const msgTime = new Date(msg.created_at).getTime();
 
             if (!roomsMap[targetId]) {
                 roomsMap[targetId] = {
                     id: targetId,
                     isGroup: isGroup,
-                    displayName: isGroup ? `👥 ${groupInfo.name}` : targetId,
+                    displayName: isGroup ? `👥 ${groupInfo?.name || '未知群組'}` : targetId,
                     lastMsg: msg.content || (msg.image_url ? '傳送了一張圖片 🖼️' : ''),
                     time: new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}),
                     timestamp: msgTime,
@@ -121,7 +127,6 @@ window.renderMessages = async function(searchKeyword = "") {
                 };
             }
 
-            // 未讀計數：別人傳的私訊 OR 群組內非自己傳的訊息
             if ((!isGroup && msg.receiver === myChatName) || (isGroup && msg.sender_name !== myChatName)) {
                 if (msgTime > (lastReadTimes[targetId] || 0)) {
                     roomsMap[targetId].unreadCount++;
@@ -129,7 +134,7 @@ window.renderMessages = async function(searchKeyword = "") {
             }
         });
 
-        // 補齊沒對話過的好友與群組
+        // 剩餘渲染邏輯保持不變...
         let inboxArray = Object.values(roomsMap);
         getFriends().forEach(f => {
             if (!inboxArray.find(r => r.id === f)) inboxArray.push({ id: f, isGroup: false, displayName: f, lastMsg: '點擊開始對話', time: '', timestamp: 0, unreadCount: 0 });
@@ -140,7 +145,6 @@ window.renderMessages = async function(searchKeyword = "") {
         
         inboxArray.sort((a, b) => b.timestamp - a.timestamp);
 
-        // 搜尋過濾
         if (searchKeyword) {
             const kw = searchKeyword.toLowerCase();
             inboxArray = inboxArray.filter(chat => chat.displayName.toLowerCase().includes(kw) || chat.lastMsg.toLowerCase().includes(kw));
@@ -155,36 +159,30 @@ window.renderMessages = async function(searchKeyword = "") {
                         <button onclick="addFriend()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-800 active:scale-90 transition"><i class="fa-solid fa-user-plus"></i></button>
                     </div>
                 </div>
-                <input type="text" placeholder="搜尋聊天紀錄..." oninput="renderMessages(this.value)" class="w-full bg-gray-50 border border-gray-200 rounded-full py-1.5 px-4 text-sm outline-none focus:ring-1 focus:ring-sexify">
+                <input type="text" placeholder="搜尋聊天紀錄..." oninput="window.renderMessages(this.value)" class="w-full bg-gray-50 border border-gray-200 rounded-full py-1.5 px-4 text-sm outline-none focus:ring-1 focus:ring-sexify">
             </div>
         `;
 
-        if (inboxArray.length === 0) {
-            html += `<div class="text-center text-gray-400 py-20"><p>${searchKeyword ? '找不到符合的結果' : '目前沒有訊息，快去添加好友！'}</p></div>`;
-        } else {
-            html += `<div class="pb-20 divide-y divide-gray-50">` + inboxArray.map(chat => `
-                <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${chat.id}', ${chat.isGroup}, '${chat.displayName}')">
-                    <div class="relative flex-shrink-0">
-                        <img src="https://i.pravatar.cc/150?u=${chat.id}" class="w-14 h-14 rounded-full border border-gray-100 object-cover">
-                        ${chat.unreadCount > 0 ? `
-                            <span class="absolute -top-1 -right-1 bg-sexify text-white text-[10px] min-w-[20px] h-[20px] flex items-center justify-center rounded-full border-2 border-white font-bold px-1 shadow-sm">
-                                ${chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                            </span>` : ''}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-center mb-1">
-                            <h3 class="font-bold text-gray-900 truncate pr-2">${chat.displayName}</h3>
-                            <span class="text-[10px] text-gray-400 font-medium whitespace-nowrap">${chat.time}</span>
-                        </div>
-                        <p class="text-sm truncate ${chat.unreadCount > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}">${chat.lastMsg}</p>
-                    </div>
+        html += `<div class="pb-20 divide-y divide-gray-50">` + inboxArray.map(chat => `
+            <div class="flex items-center gap-4 p-4 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${chat.id}', ${chat.isGroup}, '${chat.displayName}')">
+                <div class="relative flex-shrink-0">
+                    <img src="https://i.pravatar.cc/150?u=${chat.id}" class="w-14 h-14 rounded-full border border-gray-100 object-cover">
+                    ${chat.unreadCount > 0 ? `<span class="absolute -top-1 -right-1 bg-sexify text-white text-[10px] min-w-[20px] h-[20px] flex items-center justify-center rounded-full border-2 border-white font-bold px-1 shadow-sm">${chat.unreadCount}</span>` : ''}
                 </div>
-            `).join('') + `</div>`;
-        }
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-center mb-1">
+                        <h3 class="font-bold text-gray-900 truncate pr-2">${chat.displayName}</h3>
+                        <span class="text-[10px] text-gray-400 font-medium whitespace-nowrap">${chat.time}</span>
+                    </div>
+                    <p class="text-sm truncate ${chat.unreadCount > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}">${chat.lastMsg}</p>
+                </div>
+            </div>
+        `).join('') + `</div>`;
+
         container.innerHTML = html;
     } catch (err) {
         console.error("連線錯誤:", err);
-        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫連線失敗</div>`;
+        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫資料格式異常</div>`;
     }
 };
 
