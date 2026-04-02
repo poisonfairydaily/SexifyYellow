@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* 為了對話框內部的流暢性，增加一點關鍵 CSS */
         #chat-messages::-webkit-scrollbar { display: none; }
         .image-loading {
             background-image: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
@@ -86,12 +85,26 @@
             <div id="shop-grid" class="p-4 grid grid-cols-2 gap-4"></div>
         </div>
 
+        <!-- 修正的訊息分頁 (搜尋框靜態化) -->
         <div id="messages-tab" class="tab-content">
-            <div class="p-4 pt-6 bg-white/80 backdrop-blur-md sticky top-0 z-[100] flex items-center gap-3">
-                <button onclick="toggleSettings()" class="text-gray-800 text-xl active:scale-90 transition"><i class="fa-solid fa-bars"></i></button>
-                <h1 class="text-2xl font-black text-gray-800" data-i18n="msg_title">訊息</h1>
+            <div class="p-4 pt-6 bg-white/80 backdrop-blur-md sticky top-0 z-[100] flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <button onclick="toggleSettings()" class="text-gray-800 text-xl active:scale-90 transition"><i class="fa-solid fa-bars"></i></button>
+                        <h1 id="my-chat-title-name" class="text-2xl font-black text-gray-800" data-i18n="msg_title">訊息</h1>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="createGroup()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-800 active:scale-90 transition"><i class="fa-solid fa-users"></i></button>
+                        <button onclick="addFriend()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-800 active:scale-90 transition"><i class="fa-solid fa-user-plus"></i></button>
+                    </div>
+                </div>
+                <!-- 靜態搜尋框，確保中文鍵盤不會斷掉 -->
+                <div class="relative flex items-center">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="inbox-search-input" oninput="window.renderMessages(this.value)" placeholder="搜尋聊天紀錄..." class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-sexify/20 transition">
+                </div>
             </div>
-            <div id="messages-list" class="divide-y divide-gray-50"></div>
+            <div id="messages-list" class="divide-y divide-gray-50 pb-20"></div>
         </div>
 
         <div id="profile-tab" class="tab-content">
@@ -123,18 +136,27 @@
         <button class="nav-btn text-gray-400 flex flex-col items-center gap-1" onclick="switchTab('profile-tab', this)"><i class="fa-solid fa-user"></i><span class="text-[10px]" data-i18n="nav_me">我</span></button>
     </div>
 
+    <!-- 聊天室 Modal -->
     <div id="chat-modal" class="fixed inset-0 z-[2100] bg-white translate-x-full transition-transform duration-300 hidden flex flex-col">
-        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm">
-            <button onclick="closeChat()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-chevron-left"></i></button>
-            <img id="chat-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-gray-100">
+        <div class="p-4 border-b flex items-center gap-3 bg-white sticky top-0 z-10 shadow-sm flex-shrink-0">
+            <button onclick="closeChat()" class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full active:scale-90 transition flex-shrink-0"><i class="fa-solid fa-chevron-left"></i></button>
+            <img id="chat-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-gray-100 flex-shrink-0">
             <h3 id="chat-name" class="font-black text-sm text-gray-800 flex-1 truncate"></h3>
+            <!-- 群組加人與搜尋按鈕動態生成區 -->
+            <div id="chat-header-actions" class="flex items-center gap-1 flex-shrink-0"></div>
+        </div>
+
+        <!-- 聊天室內搜尋框 -->
+        <div id="room-search-wrapper" class="bg-gray-50 border-b px-4 py-2 hidden transition-all flex-shrink-0">
+            <input type="text" id="room-search-input" placeholder="在對話中搜尋..." oninput="filterRoomMessages(this.value)" class="w-full bg-white border border-gray-200 rounded-full px-4 py-1.5 text-xs outline-none focus:border-sexify">
         </div>
         
+        <!-- 訊息由下而上的列表容器 -->
         <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col-reverse relative">
             <div class="absolute inset-0 flex items-center justify-center text-xs text-gray-400" id="chat-loading-status">連線中...</div>
         </div>
 
-        <div id="chat-image-preview-container" class="border-t bg-gray-50 p-3 hidden flex-col relative">
+        <div id="chat-image-preview-container" class="border-t bg-gray-50 p-3 hidden flex-col relative flex-shrink-0">
             <button onclick="cancelImageSelection()" class="absolute -top-3 -right-3 bg-black text-white rounded-full w-7 h-7 flex items-center justify-center text-xs active:scale-90 z-10 shadow-lg">✕</button>
             <div class="relative w-20 h-20 bg-gray-200 rounded-xl overflow-hidden shadow-md">
                 <img id="chat-image-preview" src="" class="w-full h-full object-cover">
@@ -144,7 +166,7 @@
             </div>
         </div>
 
-        <div class="p-4 border-t bg-white flex items-center gap-3 pb-8">
+        <div class="p-4 border-t bg-white flex items-center gap-3 pb-8 flex-shrink-0">
             <button onclick="document.getElementById('chat-image-input').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-sexify active:scale-90 transition text-lg flex-shrink-0">
                 <i class="fa-solid fa-image"></i>
             </button>
