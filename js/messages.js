@@ -314,18 +314,33 @@ function drawMessages(messages, isSearching = false) {
 
 // 刪除/回收訊息邏輯
 window.deleteMessage = async function(msgId) {
-    if (!msgId || !confirm("確定要回收這條訊息嗎？")) return;
+    if (!msgId) {
+        console.error("找不到訊息 ID，無法回收");
+        return;
+    }
+    
+    if (!confirm("確定要回收這條訊息嗎？")) return;
+
     try {
-        const { error } = await window.supabaseClient.from('messages').delete().match({ id: msgId, sender_name: myChatName });
-        if(error) throw error;
-        // 刪除成功後，更新本地快取並重繪
+        // 向 Supabase 發出刪除請求
+        const { error } = await window.supabaseClient
+            .from('messages')
+            .delete()
+            .eq('id', msgId)
+            .eq('sender_name', myChatName); // 確保只能刪除自己的
+
+        if (error) throw error;
+
+        // 【關鍵】手動從本地快取移除，讓畫面秒更新
         window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== msgId);
         drawMessages(window.currentRoomMessages);
-    } catch(err) {
-        console.error("回收失敗", err);
-        alert("回收失敗，請確保有配置 id 欄位與對應權限");
+        
+        console.log("回收成功");
+    } catch (err) {
+        console.error("回收失敗:", err.message);
+        alert("回收失敗，可能是網路問題或權限不足");
     }
-}
+};
 
 function setupRoomRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
