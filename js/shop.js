@@ -1,132 +1,171 @@
-let globalProducts = [
-    { id: 1, name: "福利私密圖", price: 49.0, oldPrice: 99.0, img: "https://picsum.photos/300/300?random=20", desc: "內含 15 張未公開高畫質精美福利圖，解鎖專屬誘惑。" },
-    { id: 2, name: "1對1 私密聊天", price: 149.0, oldPrice: 299.0, img: "https://picsum.photos/300/300?random=21", desc: "專屬 30 分鐘線上私密語音/文字聊天，享受獨處時光。" },
-    { id: 3, name: "數位寫真集", price: 129.0, oldPrice: 199.0, img: "https://picsum.photos/300/300?random=22", desc: "超過 50 頁的精美數位寫真，包含多套造型完整收藏。" },
-    { id: 4, name: "VIP 專屬 1個月", price: 99.0, oldPrice: 150.0, img: "https://picsum.photos/300/300?random=23", desc: "開通一個月 VIP 特權，全站部分圖集免費看、享有專屬徽章。" },
-    { id: 5, name: "限量拍立得", price: 399.0, oldPrice: 499.0, img: "https://picsum.photos/300/300?random=24", desc: "實體限量親筆簽名拍立得一張，全球免運費寄送。" },
-    { id: 6, name: "聲音個性包", price: 29.0, oldPrice: 59.0, img: "https://picsum.photos/300/300?random=25", desc: "包含 5 段專屬早安、晚安及撒嬌語音留言。" }
-];
+// js/shop.js
+let cart = JSON.parse(localStorage.getItem('sexify_cart')) || [];
 
-function renderShop(filterKeyword = '') {
-    const grid = document.getElementById('shop-grid');
-    if (!grid) {
-        console.error("找不到 shop-grid，請確認 HTML 結構");
-        return;
-    }
+// 初始化商店頁面 UI
+async function initShop() {
+    renderShopProducts();
+    updateCartBadge();
+}
 
-    let displayProducts = globalProducts;
-    if (filterKeyword.trim() !== '') {
-        const kw = filterKeyword.toLowerCase();
-        displayProducts = globalProducts.filter(p => p.name.toLowerCase().includes(kw));
-    }
+// 渲染商品列表 (擴充功能 3)
+async function renderShopProducts() {
+    const { data: products, error } = await supabase.from('products').select('*');
+    const container = document.getElementById('main-content');
+    if (error) return;
 
-    if (displayProducts.length === 0) {
-        grid.innerHTML = `<div class="col-span-2 text-center py-10 text-gray-400 text-sm">找不到相關商品...</div>`;
-        return;
-    }
-
-    grid.innerHTML = displayProducts.map(p => `
-        <div onclick="openProductModal(${p.id})" class="cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100/50 relative transform transition-transform active:scale-95">
-            <div class="absolute top-2 left-2 bg-sexify text-white text-[9px] font-black px-2 py-0.5 rounded-full z-10 shadow">HOT</div>
-            <div class="aspect-square w-full overflow-hidden">
-                <img src="${p.img}" class="w-full h-full object-cover transition-transform duration-500 hover:scale-110">
-            </div>
-            <div class="p-3">
-                <h3 class="font-bold text-xs text-gray-800 mb-1 line-clamp-1">${p.name}</h3>
-                <div class="flex items-end gap-1.5 mt-2">
-                    <span class="text-sexify font-black text-sm">🪙 ${p.price}</span>
-                    <span class="text-gray-300 text-[10px] line-through mb-0.5">${p.oldPrice}</span>
+    let html = `<div class="grid grid-cols-2 gap-4 p-4">`;
+    products.forEach(product => {
+        html += `
+            <div class="bg-gray-900 rounded-xl overflow-hidden shadow-lg border border-gray-800">
+                <img src="${product.image_url}" class="w-full h-40 object-cover" onclick="viewProductDetail('${product.id}')">
+                <div class="p-3">
+                    <h3 class="font-bold truncate">${product.name}</h3>
+                    <p class="text-pink-500 font-bold">${product.price} 金幣</p>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="addToCart('${product.id}', '${product.name}', ${product.price}, '${product.image_url}')" 
+                                class="flex-1 bg-pink-500 text-[12px] py-2 rounded-lg font-bold">加入購物車</button>
+                        <button onclick="goToVendorStore('${product.vendor_id}')" 
+                                class="flex-1 bg-gray-800 text-[12px] py-2 rounded-lg border border-gray-700">進店</button>
+                    </div>
                 </div>
+            </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+    document.getElementById('shop-actions').classList.remove('hidden');
+}
+
+// 購物車管理 (功能 1)
+function addToCart(id, name, price, img) {
+    const existing = cart.find(item => item.id === id);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        cart.push({ id, name, price, img, quantity: 1, selected: true });
+    }
+    saveCart();
+    alert('已加入購物車！');
+}
+
+function saveCart() {
+    localStorage.setItem('sexify_cart', JSON.stringify(cart));
+    updateCartBadge();
+    if (!document.getElementById('cart-modal').classList.contains('hidden')) renderCart();
+}
+
+function updateCartBadge() {
+    const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+    document.getElementById('cart-count').innerText = count;
+}
+
+function toggleCartModal() {
+    const modal = document.getElementById('cart-modal');
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden')) renderCart();
+}
+
+function renderCart() {
+    const list = document.getElementById('cart-items-list');
+    let total = 0;
+    if (cart.length === 0) {
+        list.innerHTML = `<div class="text-center text-gray-500 mt-20">購物車是空的</div>`;
+        document.getElementById('cart-total').innerText = '0 金幣';
+        return;
+    }
+
+    list.innerHTML = cart.map((item, index) => {
+        if (item.selected) total += (item.price * item.quantity);
+        return `
+            <div class="flex items-center gap-4 bg-gray-900 p-3 rounded-xl border border-gray-800">
+                <input type="checkbox" ${item.selected ? 'checked' : ''} onchange="toggleCartItemSelection(${index})" class="w-5 h-5 accent-pink-500">
+                <img src="${item.img}" class="w-16 h-16 object-cover rounded-lg">
+                <div class="flex-1">
+                    <h4 class="font-bold text-sm">${item.name}</h4>
+                    <p class="text-pink-500 text-xs">${item.price} 金幣</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="updateCartQty(${index}, -1)" class="w-6 h-6 bg-gray-800 rounded">-</button>
+                    <span>${item.quantity}</span>
+                    <button onclick="updateCartQty(${index}, 1)" class="w-6 h-6 bg-gray-800 rounded">+</button>
+                </div>
+                <button onclick="removeFromCart(${index})" class="text-red-500 ml-2">🗑️</button>
+            </div>
+        `;
+    }).join('');
+    document.getElementById('cart-total').innerText = `${total} 金幣`;
+}
+
+function toggleCartItemSelection(index) {
+    cart[index].selected = !cart[index].selected;
+    saveCart();
+}
+
+function updateCartQty(index, delta) {
+    cart[index].quantity += delta;
+    if (cart[index].quantity <= 0) return removeFromCart(index);
+    saveCart();
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    saveCart();
+}
+
+// 結算與訂單 (功能 1 & 2)
+async function proceedToCheckout() {
+    const selectedItems = cart.filter(item => item.selected);
+    if (selectedItems.length === 0) return alert('請選擇要購買的商品');
+
+    const { data: user } = await supabase.auth.getUser();
+    const orderData = {
+        user_id: user.user.id,
+        items: selectedItems,
+        total_price: selectedItems.reduce((s, i) => s + (i.price * i.quantity), 0),
+        status: 'ongoing',
+        created_at: new Date()
+    };
+
+    const { error } = await supabase.from('orders').insert(orderData);
+    if (!error) {
+        cart = cart.filter(item => !item.selected);
+        saveCart();
+        alert('購買成功！訂單已建立。');
+        toggleCartModal();
+        toggleOrdersModal();
+    }
+}
+
+function toggleOrdersModal() {
+    const modal = document.getElementById('orders-modal');
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden')) filterOrders('ongoing');
+}
+
+async function filterOrders(status) {
+    // UI Tab 切換切換
+    document.getElementById('order-tab-ongoing').className = status === 'ongoing' ? 'flex-1 py-3 border-b-2 border-pink-500' : 'flex-1 py-3 text-gray-400';
+    document.getElementById('order-tab-completed').className = status === 'completed' ? 'flex-1 py-3 border-b-2 border-pink-500' : 'flex-1 py-3 text-gray-400';
+
+    const { data: orders } = await supabase.from('orders').select('*').eq('status', status).order('created_at', { ascending: false });
+    const list = document.getElementById('orders-list');
+    
+    if (!orders || orders.length === 0) {
+        list.innerHTML = `<p class="text-center text-gray-500">暫無訂單</p>`;
+        return;
+    }
+
+    list.innerHTML = orders.map(order => `
+        <div class="bg-gray-900 p-4 rounded-xl border border-gray-800">
+            <div class="flex justify-between mb-2">
+                <span class="text-xs text-gray-500">訂單 ID: ${order.id.slice(0,8)}</span>
+                <span class="text-xs ${order.status === 'ongoing' ? 'text-blue-400' : 'text-green-400'}">${order.status === 'ongoing' ? '進行中' : '已完成'}</span>
+            </div>
+            <div class="space-y-2">
+                ${order.items.map(i => `<div class="text-sm flex justify-between"><span>${i.name} x${i.quantity}</span><span>${i.price * i.quantity}💰</span></div>`).join('')}
+            </div>
+            <div class="mt-3 pt-2 border-t border-gray-800 text-right font-bold text-pink-500">
+                總金額: ${order.total_price} 金幣
             </div>
         </div>
     `).join('');
 }
-
-function searchShop() {
-    const keyword = document.getElementById('shop-search').value;
-    const clearBtn = document.getElementById('shop-search-clear-btn');
-    
-    // 控制一鍵刪除按鈕顯示/隱藏
-    if(clearBtn) {
-        if(keyword.length > 0) clearBtn.classList.remove('hidden');
-        else clearBtn.classList.add('hidden');
-    }
-    
-    renderShop(keyword);
-}
-
-// 商店搜尋一鍵刪除功能
-function clearShopSearch() {
-    document.getElementById('shop-search').value = '';
-    const clearBtn = document.getElementById('shop-search-clear-btn');
-    if(clearBtn) clearBtn.classList.add('hidden');
-    renderShop('');
-}
-
-function openProductModal(productId) {
-    const product = globalProducts.find(p => p.id === productId);
-    if (!product) return;
-
-    let modalContainer = document.getElementById('product-modal-container');
-    if (!modalContainer) {
-        modalContainer = document.createElement('div');
-        modalContainer.id = 'product-modal-container';
-        document.body.appendChild(modalContainer);
-    }
-
-    modalContainer.innerHTML = `
-        <div class="fixed inset-0 bg-black/60 z-[3500] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeProductModal()">
-            <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden flex flex-col relative shadow-2xl" onclick="event.stopPropagation()">
-                
-                <button onclick="closeProductModal()" class="absolute top-4 right-4 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center z-10 backdrop-blur-md transition">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-
-                <div class="w-full aspect-square bg-gray-50">
-                    <img src="${product.img}" class="w-full h-full object-cover">
-                </div>
-
-                <div class="p-5 flex flex-col gap-2">
-                    <h2 class="text-xl font-bold text-gray-900">${product.name}</h2>
-                    <p class="text-gray-500 text-sm leading-relaxed min-h-[3rem]">${product.desc}</p>
-                    
-                    <div class="flex justify-between items-end mt-4 pt-4 border-t border-gray-100">
-                        <div class="flex flex-col">
-                            <span class="text-gray-400 text-xs line-through mb-1">原價 🪙 ${product.oldPrice}</span>
-                            <span class="text-sexify font-black text-2xl">🪙 ${product.price}</span>
-                        </div>
-                        
-                        <button onclick="confirmPurchase(${product.id})" class="bg-sexify text-white font-bold py-2.5 px-6 rounded-full shadow-lg hover:opacity-90 active:scale-95 transition-all">
-                            確認購買
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function closeProductModal() {
-    const modalContainer = document.getElementById('product-modal-container');
-    if (modalContainer) {
-        modalContainer.innerHTML = ''; 
-    }
-}
-
-function confirmPurchase(productId) {
-    const product = globalProducts.find(p => p.id === productId);
-    if (!product) return;
-    
-    alert(`購買成功！\n已解鎖「${product.name}」\n扣除金幣：${product.price}`);
-    closeProductModal();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    renderShop();
-});
-
-setTimeout(() => {
-    if (document.getElementById('shop-grid') && document.getElementById('shop-grid').innerHTML === '') {
-        renderShop();
-    }
-}, 100);
