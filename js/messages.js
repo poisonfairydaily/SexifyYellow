@@ -1,6 +1,6 @@
 // ==========================================
-// js/messages.js - 完美升級版 
-// (修正搜尋中文鍵盤失效、加入群組加人功能、修復即時訊息收回 DOM 移除邏輯)
+// js/messages.js - 商業級進化版 
+// (加入圖片壓縮、懶加載、打字狀態、樂觀更新秒發送體驗)
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,6 +11,10 @@ window.globalChannel = null;
 let selectedImageFile = null;
 window.currentRoomMessages = []; 
 
+// ★ 新增：打字狀態全域變數
+window.typingUsers = new Set();
+let typingClearTimer = null;
+
 // 1. 初始化使用者與全局 UI
 let myChatName = localStorage.getItem('myChatName');
 if (!myChatName) {
@@ -19,13 +23,11 @@ if (!myChatName) {
     myChatName = localStorage.getItem('myChatName');
 }
 
-// 動態更新 Header 標題為我的帳號名稱
 document.addEventListener('DOMContentLoaded', () => {
     const titleEl = document.getElementById('my-chat-title-name');
     if (titleEl) titleEl.innerText = myChatName;
 });
 
-// 注入通知與進階 UI CSS
 if(!document.getElementById('enhanced-chat-style')){
     document.head.insertAdjacentHTML('beforeend', `
     <style id="enhanced-chat-style">
@@ -33,6 +35,7 @@ if(!document.getElementById('enhanced-chat-style')){
         .toast-leave { animation: slideUpFade 0.3s ease-in forwards; }
         .unsend-btn { opacity: 0; transition: opacity 0.2s; }
         .msg-container:hover .unsend-btn { opacity: 1; }
+        .temp-msg { opacity: 0.6; pointer-events: none; } /* 發送中訊息變半透明 */
         @keyframes slideDownFade { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes slideUpFade { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
     </style>
@@ -50,7 +53,7 @@ function updateLastRead(targetId) {
     localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(times));
 }
 
-// 2. 好友與群組系統 (LocalStorage 儲存)
+// 2. 好友與群組系統
 function getFriends() { return JSON.parse(localStorage.getItem('myFriends')) || []; }
 function getGroups() { return JSON.parse(localStorage.getItem('myGroups')) || []; }
 
@@ -83,7 +86,6 @@ window.createGroup = function() {
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
 }
 
-// ★ 新增功能：群組內加人
 window.addGroupMember = function(groupId) {
     const newMember = prompt("請輸入要加入的新成員帳號：");
     if (!newMember || newMember.trim() === "") return;
@@ -108,7 +110,6 @@ window.renderMessages = async function(searchKeyword = "") {
     const container = document.getElementById('messages-list');
     if (!container) return;
 
-    // 如果沒有在搜尋，顯示一次 loading 狀態
     if(!searchKeyword && !window.initialInboxLoaded) {
         container.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-sexify text-2xl"></i><p class="mt-2 text-gray-400 text-sm">載入收件匣中...</p></div>`;
     }
@@ -128,12 +129,9 @@ window.renderMessages = async function(searchKeyword = "") {
         const myGroups = getGroups();
 
         (inboxData || []).forEach(msg => {
-            if (!msg.room_id) {
-                msg.room_id = generateRoomId(msg.sender_name, msg.receiver || 'Unknown');
-            }
+            if (!msg.room_id) msg.room_id = generateRoomId(msg.sender_name, msg.receiver || 'Unknown');
             
             const isGroup = msg.room_id.startsWith('GROUP_');
-            
             let groupInfo = null;
             if (isGroup) {
                 groupInfo = myGroups.find(g => g.id === msg.room_id);
@@ -174,7 +172,6 @@ window.renderMessages = async function(searchKeyword = "") {
         
         inboxArray.sort((a, b) => b.timestamp - a.timestamp);
 
-        // ★ 搜尋邏輯修復：若搜尋字串為空，會正常顯示所有列表
         if (searchKeyword && searchKeyword.trim() !== "") {
             const kw = searchKeyword.toLowerCase();
             inboxArray = inboxArray.filter(chat => chat.displayName.toLowerCase().includes(kw) || chat.lastMsg.toLowerCase().includes(kw));
@@ -247,6 +244,7 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     window.activeChatTarget = targetId;
     window.isGroupChat = isGroup;
     window.activeRoomId = isGroup ? targetId : generateRoomId(myChatName, targetId);
+    window.typingUsers.clear(); // 清空舊的打字狀態
 
     updateLastRead(targetId);
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
@@ -257,7 +255,6 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     document.getElementById('chat-name').innerText = displayName;
     document.getElementById('chat-avatar').src = `https://i.pravatar.cc/150?u=${targetId}`;
 
-    // ★ 注入聊天室頂部操作按鈕 (加入成員 & 搜尋)
     const actionsContainer = document.getElementById('chat-header-actions');
     let actionsHtml = '';
     if (isGroup) {
@@ -266,9 +263,16 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     actionsHtml += `<button onclick="document.getElementById('room-search-wrapper').classList.toggle('hidden')" class="w-8 h-8 flex items-center justify-center text-gray-500 rounded-full active:bg-gray-100 transition"><i class="fa-solid fa-magnifying-glass text-sm"></i></button>`;
     actionsContainer.innerHTML = actionsHtml;
 
-    // 清空並隱藏室內搜尋
     document.getElementById('room-search-input').value = "";
     document.getElementById('room-search-wrapper').classList.add('hidden');
+
+    // ★ 綁定打字事件監聽 (節流廣播)
+    const chatInput = document.getElementById('chat-input');
+    chatInput.oninput = () => {
+        if (window.roomChannel) {
+            window.roomChannel.send({ type: 'broadcast', event: 'typing', payload: { sender: myChatName } });
+        }
+    };
 
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
@@ -291,34 +295,51 @@ window.filterRoomMessages = function(keyword) {
     drawMessages(filtered, true); 
 }
 
-// 渲染訊息 
+// ★ 渲染訊息 (加入打字狀態與發送中狀態、圖片懶加載)
 function drawMessages(messages, isSearching = false) {
     const container = document.getElementById('chat-messages');
     
-    if (messages.length === 0) {
+    // 渲染打字指示器 (放在最前面，因為是 flex-col-reverse)
+    let typingHtml = '';
+    if (window.typingUsers.size > 0 && !isSearching) {
+        const usersArr = Array.from(window.typingUsers);
+        const typingNames = window.isGroupChat ? usersArr.join(', ') : '';
+        typingHtml = `
+            <div class="flex items-end gap-1.5 mb-2 w-full justify-start msg-container">
+                ${window.isGroupChat ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${typingNames}</span>` : ''}
+                <div class="bg-white border border-gray-100 text-gray-500 px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm shadow-sm flex items-center gap-1 animate-pulse">
+                    正在輸入<span class="flex gap-0.5 ml-1"><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div></span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (messages.length === 0 && !typingHtml) {
         container.innerHTML = `<div class="text-center text-gray-300 py-10 w-full text-xs">${isSearching ? '找不到相關訊息' : '開始你們的第一句話吧！'}</div>`;
         return;
     }
 
-    container.innerHTML = messages.map(msg => {
+    const messagesHtml = messages.map(msg => {
         const isMe = msg.sender_name === myChatName;
         const align = isMe ? 'justify-end' : 'justify-start';
         const bg = isMe ? 'bg-sexify text-white' : 'bg-white border border-gray-100 text-gray-900';
         const borderRadius = isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm';
         const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
+        // 判斷是否為「發送中」的臨時訊息
+        const tempClass = msg.isTemp ? 'temp-msg' : ''; 
         
         return `
-            <div id="msg-${msg.id}" class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-1 msg-container">
+            <div id="msg-${msg.id}" class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-1 msg-container ${tempClass}">
                 ${window.isGroupChat && !isMe ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${msg.sender_name}</span>` : ''}
                 <div class="flex items-end gap-1.5 w-full ${align}">
                     
                     ${isMe ? `<div class="flex flex-col items-end gap-1">
-                                <button onclick="deleteMessage('${msg.id}')" class="unsend-btn text-[10px] text-red-400 hover:text-red-600 bg-white shadow-sm px-1.5 rounded-md border border-red-100 whitespace-nowrap">回收</button>
-                                <span class="text-[9px] text-gray-400 whitespace-nowrap">${timeStr}</span>
+                                ${!msg.isTemp ? `<button onclick="deleteMessage('${msg.id}')" class="unsend-btn text-[10px] text-red-400 hover:text-red-600 bg-white shadow-sm px-1.5 rounded-md border border-red-100 whitespace-nowrap">回收</button>` : ''}
+                                <span class="text-[9px] text-gray-400 whitespace-nowrap">${msg.isTemp ? '發送中...' : timeStr}</span>
                               </div>` : ''}
 
                     <div class="${bg} px-4 py-2.5 ${borderRadius} shadow-sm max-w-[75%] break-words leading-relaxed text-sm relative group">
-                        ${msg.image_url ? `<img src="${msg.image_url}" class="max-w-full rounded-lg mb-1 object-cover min-w-[120px]">` : ''}
+                        ${msg.image_url ? `<img src="${msg.image_url}" loading="lazy" class="max-w-full rounded-lg mb-1 object-cover min-w-[120px] bg-gray-100">` : ''}
                         ${msg.content ? `<span>${msg.content}</span>` : ''}
                     </div>
 
@@ -327,120 +348,166 @@ function drawMessages(messages, isSearching = false) {
             </div>
         `;
     }).join('');
+
+    container.innerHTML = typingHtml + messagesHtml;
 }
 
-// ★ 修復：即時刪除 DOM 節點，不用重啟聊天室
 window.deleteMessage = async function(msgId) {
-    if (!msgId) return;
+    if (!msgId || msgId.startsWith('temp_')) return;
     if (!confirm("確定要回收這條訊息嗎？")) return;
 
-    // 先在畫面上隱藏，達成瞬間消失的體驗
     const msgEl = document.getElementById('msg-' + msgId);
     if (msgEl) msgEl.style.display = 'none';
 
     try {
-        const { error } = await window.supabaseClient
-            .from('messages')
-            .delete()
-            .eq('id', msgId)
-            .eq('sender_name', myChatName); 
-
+        const { error } = await window.supabaseClient.from('messages').delete().eq('id', msgId).eq('sender_name', myChatName); 
         if (error) throw error;
-
-        // 從快取移除
         window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== msgId);
-        
-        // 確保 DOM 節點徹底清除
         if (msgEl) msgEl.remove();
-
-        // 若全部刪光，重新渲染空狀態
-        if(window.currentRoomMessages.length === 0) {
-            drawMessages([]);
-        }
+        if(window.currentRoomMessages.length === 0) drawMessages([]);
     } catch (err) {
-        console.error("回收失敗:", err.message);
-        if (msgEl) msgEl.style.display = ''; // 失敗的話再把訊息顯示回來
-        alert("回收失敗，可能是網路問題或權限不足");
+        if (msgEl) msgEl.style.display = ''; 
+        alert("回收失敗，請檢查權限");
     }
 };
 
 function setupRoomRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
-            const newMsg = payload.new;
-            window.currentRoomMessages.unshift(newMsg); 
-            
-            const searchVal = document.getElementById('room-search-input')?.value;
-            if(!searchVal) drawMessages(window.currentRoomMessages);
-            
-            if (newMsg.sender_name !== myChatName) updateLastRead(window.activeChatTarget); 
-        })
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
-            // ★ 修復：對方的畫面也會瞬間抓取到 DOM 節點並直接移除
-            window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== payload.old.id);
-            const msgEl = document.getElementById('msg-' + payload.old.id);
-            if(msgEl) msgEl.remove();
+    
+    // ★ 加入 Broadcast 監聽打字狀態
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, {
+        config: { broadcast: { ack: false } }
+    })
+    .on('broadcast', { event: 'typing' }, payload => {
+        if (payload.payload.sender !== myChatName) {
+            window.typingUsers.add(payload.payload.sender);
+            drawMessages(window.currentRoomMessages);
+            clearTimeout(typingClearTimer);
+            typingClearTimer = setTimeout(() => {
+                window.typingUsers.delete(payload.payload.sender);
+                drawMessages(window.currentRoomMessages);
+            }, 3000); // 3秒沒打字自動消失
+        }
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
+        const newMsg = payload.new;
+        
+        // 如果是我自己發的，因為已經有樂觀更新 (temp message)，這時把舊的 temp 拔掉
+        if (newMsg.sender_name === myChatName) {
+            window.currentRoomMessages = window.currentRoomMessages.filter(m => !m.isTemp);
+        }
 
-            if(window.currentRoomMessages.length === 0) {
-                drawMessages([]);
-            }
-        }).subscribe();
+        window.currentRoomMessages.unshift(newMsg); 
+        const searchVal = document.getElementById('room-search-input')?.value;
+        if(!searchVal) drawMessages(window.currentRoomMessages);
+        
+        if (newMsg.sender_name !== myChatName) {
+            window.typingUsers.delete(newMsg.sender_name); // 對方發送完畢，取消打字狀態
+            updateLastRead(window.activeChatTarget); 
+        }
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
+        window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== payload.old.id);
+        const msgEl = document.getElementById('msg-' + payload.old.id);
+        if(msgEl) msgEl.remove();
+        if(window.currentRoomMessages.length === 0) drawMessages([]);
+    }).subscribe();
 }
 
-// 6. 發送動作
+// ★ 新增：前端 Canvas 圖片壓縮器 (降低 Storage 負擔)
+window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                }, 'image/jpeg', quality);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+};
+
+// 6. 發送動作 (★ 實作樂觀更新與壓縮機制)
 window.handleSendAction = async function() {
     const input = document.getElementById('chat-input');
     const text = input.value;
     if (!text.trim() && !selectedImageFile) return;
 
+    const tempImageUrl = selectedImageFile ? document.getElementById('chat-image-preview').src : null;
+    const originalFile = selectedImageFile;
+
+    // 清空 UI，讓用戶覺得「已經發出去了」
     input.value = '';
-    let uploadedImageUrl = null;
-    const sendBtn = event.currentTarget;
-    const originalBtnText = sendBtn.innerText;
+    cancelImageSelection();
+
+    // 建立臨時的虛擬訊息 (樂觀更新)
+    const tempMsg = {
+        id: 'temp_' + Date.now(),
+        sender_name: myChatName,
+        content: text.trim() || null,
+        image_url: tempImageUrl,
+        created_at: new Date().toISOString(),
+        isTemp: true // 標記為臨時
+    };
     
-    sendBtn.innerText = '傳送中...';
-    sendBtn.disabled = true;
+    window.currentRoomMessages.unshift(tempMsg);
+    drawMessages(window.currentRoomMessages);
 
-    if (selectedImageFile) {
-        const fileName = `${Date.now()}_${selectedImageFile.name}`;
+    let uploadedImageUrl = null;
+
+    if (originalFile) {
         try {
-            const progress = document.getElementById('chat-upload-progress');
-            if(progress) { progress.classList.remove('hidden'); progress.classList.add('flex'); }
-
-            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, selectedImageFile);
+            // 進行壓縮再上傳
+            const compressedFile = await window.compressImage(originalFile);
+            const fileName = `${Date.now()}_${compressedFile.name}`;
+            
+            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, compressedFile);
             if (uploadError) throw uploadError;
 
             const { data: publicUrlData } = window.supabaseClient.storage.from('message-images').getPublicUrl(fileName);
             uploadedImageUrl = publicUrlData.publicUrl;
-            
-            if(progress) { progress.classList.remove('flex'); progress.classList.add('hidden'); }
         } catch (err) {
-            alert("圖片上傳失敗！");
-            sendBtn.innerText = originalBtnText;
-            sendBtn.disabled = false;
+            alert("圖片壓縮或上傳失敗，請重試！");
+            // 失敗的話移除虛擬訊息
+            window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
+            drawMessages(window.currentRoomMessages);
             return;
         }
-        cancelImageSelection();
     }
 
     try {
+        // 真實推送到資料庫
         await window.supabaseClient.from('messages').insert([{
             room_id: window.activeRoomId, 
             sender_name: myChatName, 
             receiver: window.isGroupChat ? null : window.activeChatTarget,
-            content: text.trim() || null,
+            content: tempMsg.content,
             image_url: uploadedImageUrl
         }]);
+        // 插入成功後，Supabase Realtime (INSERT) 會抓到真資料，並自動替換掉 tempMsg
     } catch (err) {
         console.error("發送失敗", err);
-    } finally {
-        sendBtn.innerText = originalBtnText;
-        sendBtn.disabled = false;
+        window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
+        drawMessages(window.currentRoomMessages);
     }
 };
 
-// 7. 輔助功能 (預覽圖片與關閉)
+// 7. 輔助功能
 window.handleImageSelection = function(input) {
     const file = input.files[0];
     if (!file) return;
@@ -465,6 +532,7 @@ window.closeChat = function() {
     window.activeChatTarget = null;
     window.activeRoomId = null;
     window.isGroupChat = false;
+    window.typingUsers.clear();
     
     const searchWrap = document.getElementById('room-search-wrapper');
     if(searchWrap) {
