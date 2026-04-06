@@ -10,19 +10,19 @@ function toggleAuthMode() {
     const switchBtn = document.getElementById('auth-switch-btn');
 
     if (isLoginMode) {
-        nameField.classList.add('hidden');
-        title.innerText = "SEXIFY";
-        subtitle.innerText = "登入以繼續探索";
-        btn.innerText = "登入";
-        switchText.innerText = "還沒有帳號嗎？";
-        switchBtn.innerText = "立即註冊";
+        if(nameField) nameField.classList.add('hidden');
+        if(title) title.innerText = "SEXIFY";
+        if(subtitle) subtitle.innerText = "登入以繼續探索";
+        if(btn) btn.innerText = "登入";
+        if(switchText) switchText.innerText = "還沒有帳號嗎？";
+        if(switchBtn) switchBtn.innerText = "立即註冊";
     } else {
-        nameField.classList.remove('hidden');
-        title.innerText = "加入 SEXIFY";
-        subtitle.innerText = "建立您的專屬帳號";
-        btn.innerText = "註冊";
-        switchText.innerText = "已經有帳號了？";
-        switchBtn.innerText = "登入";
+        if(nameField) nameField.classList.remove('hidden');
+        if(title) title.innerText = "加入 SEXIFY";
+        if(subtitle) subtitle.innerText = "建立您的專屬帳號";
+        if(btn) btn.innerText = "註冊";
+        if(switchText) switchText.innerText = "已經有帳號了？";
+        if(switchBtn) switchBtn.innerText = "登入";
     }
 }
 
@@ -43,15 +43,15 @@ async function handleAuthAction() {
             if (error) throw error;
             window.location.reload(); 
         } else {
-            const name = document.getElementById('auth-name').value;
-            if (!name) throw new Error("請輸入顯示名稱！");
+            const nameEl = document.getElementById('auth-name');
+            const name = nameEl && nameEl.value ? nameEl.value : "使用者";
             const { error } = await window.supabaseClient.auth.signUp({
                 email, 
                 password,
                 options: { data: { display_name: name } }
             });
             if (error) throw error;
-            alert("註冊成功！我們已經為您建立好帳號，即將自動登入。");
+            alert("註冊成功！系統已為您建立帳號，即將自動登入。");
             window.location.reload();
         }
     } catch (err) {
@@ -62,28 +62,31 @@ async function handleAuthAction() {
     }
 }
 
-// 【登出邏輯】
+// 實作真正的登出邏輯
 async function logoutUser() {
     try {
         const { error } = await window.supabaseClient.auth.signOut();
         if (error) throw error;
         localStorage.clear();
-        window.location.reload();
+        window.location.reload(); // 重整後會自動觸發下方監聽器，顯示登入框
     } catch (err) {
         console.error("Logout Error:", err.message);
         alert("登出過程發生錯誤");
     }
 }
 
+// 監聽登入狀態並控制 Modal 顯示
 document.addEventListener('DOMContentLoaded', async () => {
+    if (!window.supabaseClient) return;
+    
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     const authModal = document.getElementById('auth-modal');
 
     if (session) {
-        authModal.classList.add('hidden');
-        const realName = session.user.user_metadata.display_name;
+        if(authModal) authModal.classList.add('hidden');
+        const realName = session.user.user_metadata?.display_name;
         localStorage.setItem('myChatName', realName || "使用者");
     } else {
-        authModal.classList.remove('hidden');
+        if(authModal) authModal.classList.remove('hidden');
     }
 });
