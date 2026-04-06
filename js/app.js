@@ -1,14 +1,20 @@
+// 1. 基本畫面狀態控制
 function verifyAge() {
-    document.getElementById('age-gate').classList.add('opacity-0');
-    setTimeout(() => { 
-        document.getElementById('age-gate').style.display = 'none'; 
-        document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none'); 
-    }, 500);
+    const ageGate = document.getElementById('age-gate');
+    if(ageGate) {
+        ageGate.classList.add('opacity-0');
+        setTimeout(() => { 
+            ageGate.style.display = 'none'; 
+            document.getElementById('app-content').classList.remove('blur-2xl', 'pointer-events-none'); 
+        }, 500);
+    }
 }
 
+// 2. 底部導航欄分頁切換
 function switchTab(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
+    const targetTab = document.getElementById(tabId);
+    if(targetTab) targetTab.classList.add('active');
     
     document.querySelectorAll('.nav-btn').forEach(b => { 
         b.classList.remove('nav-active'); 
@@ -20,15 +26,19 @@ function switchTab(tabId, btn) {
         btn.classList.remove('text-gray-400'); 
     }
     
-    if(tabId === 'shop-tab' && typeof renderShop === 'function') renderShop();
-    if(tabId === 'profile-tab' && typeof renderProfile === 'function') renderProfile();
-    if(tabId === 'messages-tab' && typeof renderMessages === 'function') renderMessages();
+    // 觸發其他腳本中的渲染函數 (避免切換分頁時內容空白)
+    if(tabId === 'home-tab' && typeof window.renderDiscovery === 'function') window.renderDiscovery();
+    if(tabId === 'shop-tab' && typeof window.renderShop === 'function') window.renderShop();
+    if(tabId === 'messages-tab' && typeof window.renderMessages === 'function') window.renderMessages();
+    if(tabId === 'profile-tab' && typeof window.renderProfile === 'function') window.renderProfile();
 }
 
+// 3. 設定抽屜 (Drawer)
 function toggleSettings() {
     const drawer = document.getElementById('settings-drawer');
     const panel = document.getElementById('settings-panel');
-    
+    if(!drawer || !panel) return;
+
     if (drawer.classList.contains('hidden')) {
         drawer.classList.remove('hidden');
         setTimeout(() => panel.classList.remove('-translate-x-full'), 10);
@@ -38,30 +48,95 @@ function toggleSettings() {
     }
 }
 
-// 初始化所有 UI 交互事件
-function initUIEvents() {
-    // 綁定登出按鈕事件
+// 4. Modal 輔助開關邏輯
+function toggleModal(modalId, action) {
+    const modal = document.getElementById(modalId);
+    if(!modal) return;
+    
+    const panel = modal.firstElementChild; // 取得內層容器以進行平移
+
+    if (action === 'open') {
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            if(modal.classList.contains('translate-x-full')) modal.classList.remove('translate-x-full');
+            if(modal.classList.contains('translate-y-full')) modal.classList.remove('translate-y-full');
+            if(panel && panel.classList.contains('translate-y-full')) panel.classList.remove('translate-y-full');
+        }, 10);
+    } else {
+        // 加入預設的關閉動畫效果
+        if(modal.classList.contains('flex-col') || modal.id === 'fans-subs-modal' || modal.id.includes('center')) {
+             modal.classList.add('translate-x-full');
+        } else if (panel) {
+             panel.classList.add('translate-y-full');
+        }
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+}
+
+// === 各類 Modal 對應開關 ===
+function openPersonalCenter() { toggleSettings(); toggleModal('personal-center-modal', 'open'); }
+function closePersonalCenter() { toggleModal('personal-center-modal', 'close'); }
+
+function openFansSubsModal() { toggleSettings(); toggleModal('fans-subs-modal', 'open'); }
+function closeFansSubsModal() { toggleModal('fans-subs-modal', 'close'); }
+
+function openNotifications() { toggleModal('notifications-modal', 'open'); }
+function closeNotifications() { toggleModal('notifications-modal', 'close'); }
+
+function openEditProfile() { document.getElementById('edit-profile-modal').classList.remove('hidden'); }
+function closeEditProfile() { document.getElementById('edit-profile-modal').classList.add('hidden'); }
+
+function openUploadModal() { toggleModal('upload-modal', 'open'); }
+function closeUploadModal() { toggleModal('upload-modal', 'close'); }
+
+function openComments() { toggleModal('comment-sheet', 'open'); }
+function closeComments() { toggleModal('comment-sheet', 'close'); }
+
+function closeDetail() { toggleModal('post-detail', 'close'); }
+function closeChat() { toggleModal('chat-modal', 'close'); }
+
+// 5. 搜尋功能綁定
+function handleSearch() {
+    const val = document.getElementById('home-search').value;
+    const clearBtn = document.getElementById('search-clear-btn');
+    if(val.length > 0) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+    
+    if(typeof window.renderDiscovery === 'function') window.renderDiscovery(val);
+}
+function clearSearch() {
+    document.getElementById('home-search').value = '';
+    document.getElementById('search-clear-btn').classList.add('hidden');
+    if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
+}
+
+function searchShop() {
+    const val = document.getElementById('shop-search').value;
+    const clearBtn = document.getElementById('shop-search-clear-btn');
+    if(val.length > 0) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+    
+    if(typeof window.renderShop === 'function') window.renderShop(val);
+}
+function clearShopSearch() {
+    document.getElementById('shop-search').value = '';
+    document.getElementById('shop-search-clear-btn').classList.add('hidden');
+    if(typeof window.renderShop === 'function') window.renderShop();
+}
+
+// 6. 登出事件監聽器綁定
+document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             if (confirm("確定要登出帳號嗎？")) {
+                // 呼叫 auth.js 中的 logoutUser()
                 if (typeof logoutUser === 'function') {
                     logoutUser();
+                } else {
+                    alert('登出功能異常，請確保 auth.js 已正確載入。');
                 }
             }
         });
     }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    initUIEvents();
 });
-
-// 其他導航功能
-function openNotifications() { toggleSettings(); /* 邏輯... */ }
-function openPersonalCenter() { toggleSettings(); /* 邏輯... */ }
-function openFansSubsModal() {
-    toggleSettings();
-    if(typeof renderSubsList === 'function') renderSubsList();
-    if(typeof renderFansList === 'function') renderFansList();
-}
