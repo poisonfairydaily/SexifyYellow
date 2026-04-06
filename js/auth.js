@@ -39,20 +39,30 @@ async function handleAuthAction() {
         btn.disabled = true;
 
         if (isLoginMode) {
+            // 登入流程
             const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            window.location.reload(); 
+            
+            // 登入成功後，重新導向乾淨的網址來重置 JS 記憶體
+            window.location.href = window.location.pathname; 
         } else {
+            // 註冊流程
             const nameEl = document.getElementById('auth-name');
             const name = nameEl && nameEl.value ? nameEl.value : "使用者";
+            
+            // 為了確保新註冊不會被舊狀態污染，先清除一次儲存空間
+            localStorage.clear();
+            sessionStorage.clear();
+            
             const { error } = await window.supabaseClient.auth.signUp({
                 email, 
                 password,
                 options: { data: { display_name: name } }
             });
             if (error) throw error;
-            alert("註冊成功！系統已為您建立帳號，即將自動登入。");
-            window.location.reload();
+            
+            alert("註冊成功！系統已為您建立帳號，即將進入。");
+            window.location.href = window.location.pathname; 
         }
     } catch (err) {
         alert(err.message || "發生錯誤");
@@ -62,16 +72,35 @@ async function handleAuthAction() {
     }
 }
 
-// 實作真正的登出邏輯
+// 實作徹底的登出邏輯 (解決快取與幽靈 Session 問題)
 async function logoutUser() {
     try {
+        // 1. 呼叫 Supabase 登出，清除伺服器與本機的 session
         const { error } = await window.supabaseClient.auth.signOut();
         if (error) throw error;
+
+        // 2. 徹底清除瀏覽器的所有暫存資料
         localStorage.clear();
-        window.location.reload(); // 重整後會自動觸發下方監聽器，顯示登入框
+        sessionStorage.clear();
+
+        // 3. 確保 Supabase 自己在 localStorage 裡面的 token 也被強行拔除
+        for (let key in localStorage) {
+            if (key.startsWith('sb-')) {
+                localStorage.removeItem(key);
+            }
+        }
+
+        // 4. 強制重新載入頁面，清除 JavaScript 記憶體中的全域變數
+        // 使用 replace 避免使用者按上一頁又回到舊狀態
+        window.location.replace(window.location.pathname);
+        
     } catch (err) {
         console.error("Logout Error:", err.message);
-        alert("登出過程發生錯誤");
+        alert("登出過程發生異常，已強制為您清除本機登入資料。");
+        // 即使發生錯誤，也要強制清空並重整，確保安全
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.replace(window.location.pathname);
     }
 }
 
@@ -79,14 +108,32 @@ async function logoutUser() {
 document.addEventListener('DOMContentLoaded', async () => {
     if (!window.supabaseClient) return;
     
+    // 檢查初始狀態
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     const authModal = document.getElementById('auth-modal');
 
     if (session) {
         if(authModal) authModal.classList.add('hidden');
         const realName = session.user.user_metadata?.display_name;
+        // 每次重整都用最新 session 更新 localStorage，確保抓到對的人
         localStorage.setItem('myChatName', realName || "使用者");
     } else {
+        // 沒有 session，確保所有畫面呈現登出狀態，並清空殘留資料
         if(authModal) authModal.classList.remove('hidden');
+        localStorage.clear();
+        sessionStorage.clear();
     }
+
+    // 加入即時狀態監聽器：當偵測到被登出時，強制阻擋畫面
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+            localStorage.clear();
+            sessionStorage.clear();
+            const authModalEl = document.getElementById('auth-modal');
+            // 如果登出狀態下，登入框竟然是隱藏的，直接強制重整頁面
+            if (authModalEl && authModalEl.classList.contains('hidden')) {
+                window.location.replace(window.location.pathname);
+            }
+        }
+    });
 });
