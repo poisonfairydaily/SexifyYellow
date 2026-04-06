@@ -316,7 +316,12 @@
             <button onclick="handleSendAction()" class="bg-sexify text-white font-bold px-5 py-2.5 rounded-full shadow-md active:scale-95 transition flex-shrink-0">發送</button>
         </div>
     </div>
-
+<div id="profile-content" class="p-4">
+    <button id="logout-btn" class="mt-8 w-full py-3 bg-gray-800 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-red-600 transition-colors">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>登出帳戶</span>
+    </button>
+</div>
     <!-- 腳本引入區 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
