@@ -26,7 +26,7 @@ function switchTab(tabId, btn) {
         btn.classList.remove('text-gray-400'); 
     }
     
-    // 觸發其他腳本中的渲染函數 (避免切換分頁時內容空白)
+    // 觸發其他腳本中的渲染函數
     if(tabId === 'home-tab' && typeof window.renderDiscovery === 'function') window.renderDiscovery();
     if(tabId === 'shop-tab' && typeof window.renderShop === 'function') window.renderShop();
     if(tabId === 'messages-tab' && typeof window.renderMessages === 'function') window.renderMessages();
@@ -53,7 +53,7 @@ function toggleModal(modalId, action) {
     const modal = document.getElementById(modalId);
     if(!modal) return;
     
-    const panel = modal.firstElementChild; // 取得內層容器以進行平移
+    const panel = modal.firstElementChild; 
 
     if (action === 'open') {
         modal.classList.remove('hidden');
@@ -63,7 +63,6 @@ function toggleModal(modalId, action) {
             if(panel && panel.classList.contains('translate-y-full')) panel.classList.remove('translate-y-full');
         }, 10);
     } else {
-        // 加入預設的關閉動畫效果
         if(modal.classList.contains('flex-col') || modal.id === 'fans-subs-modal' || modal.id.includes('center')) {
              modal.classList.add('translate-x-full');
         } else if (panel) {
@@ -130,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             if (confirm("確定要登出帳號嗎？")) {
-                // 呼叫 auth.js 中的 logoutUser()
                 if (typeof logoutUser === 'function') {
                     logoutUser();
                 } else {
@@ -138,5 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+    }
+});
+
+// 【修復核心 3】控制邏輯順序：等待 auth.js 發出「authReady」後，才進行首次 UI 渲染
+window.addEventListener('authReady', () => {
+    // 這樣可以保證首頁渲染時，localStorage 裡絕對已經有最新的 userId 了
+    const homeBtn = document.querySelector('.nav-btn'); // 抓取第一個導航按鈕 (首頁)
+    if (homeBtn && document.getElementById('home-tab')) {
+        switchTab('home-tab', homeBtn);
     }
 });
