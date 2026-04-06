@@ -16,12 +16,8 @@ window.typingUsers = new Set();
 let typingClearTimer = null;
 
 // 1. 初始化使用者與全局 UI
-let myChatName = localStorage.getItem('myChatName');
-if (!myChatName) {
-    let name = prompt("【IG風格聊天室】請輸入你的專屬帳號：", "User_" + Math.floor(Math.random() * 10000));
-    localStorage.setItem('myChatName', name || "神秘使用者");
-    myChatName = localStorage.getItem('myChatName');
-}
+// 改由 auth.js 登入後賦值，這裡只做接收
+let myChatName = localStorage.getItem('myChatName') || "神秘使用者";
 
 document.addEventListener('DOMContentLoaded', () => {
     const titleEl = document.getElementById('my-chat-title-name');
