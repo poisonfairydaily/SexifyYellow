@@ -1,6 +1,5 @@
-let isLoginMode = true; // 預設為登入模式
+let isLoginMode = true; 
 
-// 切換登入 / 註冊介面
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
     const nameField = document.getElementById('auth-name-field');
@@ -27,7 +26,6 @@ function toggleAuthMode() {
     }
 }
 
-// 執行登入或註冊
 async function handleAuthAction() {
     const email = document.getElementById('auth-email').value;
     const password = document.getElementById('auth-password').value;
@@ -41,23 +39,18 @@ async function handleAuthAction() {
         btn.disabled = true;
 
         if (isLoginMode) {
-            // --- 登入邏輯 ---
             const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            window.location.reload(); // 登入成功，重整頁面載入資料
+            window.location.reload(); 
         } else {
-            // --- 註冊邏輯 ---\n            const name = document.getElementById('auth-name').value;
+            const name = document.getElementById('auth-name').value;
             if (!name) throw new Error("請輸入顯示名稱！");
-
-            const { data, error } = await window.supabaseClient.auth.signUp({
+            const { error } = await window.supabaseClient.auth.signUp({
                 email, 
                 password,
-                options: {
-                    data: { display_name: name } // 這裡的資料會觸發 SQL，自動寫入 profiles 表
-                }
+                options: { data: { display_name: name } }
             });
             if (error) throw error;
-            
             alert("註冊成功！我們已經為您建立好帳號，即將自動登入。");
             window.location.reload();
         }
@@ -69,12 +62,11 @@ async function handleAuthAction() {
     }
 }
 
-// 【新增功能：登出邏輯】
+// 【登出邏輯】
 async function logoutUser() {
     try {
         const { error } = await window.supabaseClient.auth.signOut();
         if (error) throw error;
-        // 登出後清空本地緩存並重新整理頁面
         localStorage.clear();
         window.location.reload();
     } catch (err) {
@@ -83,20 +75,15 @@ async function logoutUser() {
     }
 }
 
-// 檢查使用者是否已登入 (頁面載入時執行)
 document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     const authModal = document.getElementById('auth-modal');
 
     if (session) {
-        // 已登入：隱藏登入畫面，把真實的名字存起來供整個系統使用
         authModal.classList.add('hidden');
-        
-        // 從 metadata 拿回名字，覆蓋原本 localStorage 的假名字
         const realName = session.user.user_metadata.display_name;
         localStorage.setItem('myChatName', realName || "使用者");
     } else {
-        // 未登入：確保登入畫面顯示
         authModal.classList.remove('hidden');
     }
 });
