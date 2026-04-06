@@ -1,96 +1,51 @@
-let isLoginMode = true; // 預設為登入模式
+// js/auth.js
 
-// 切換登入 / 註冊介面
-function toggleAuthMode() {
-    isLoginMode = !isLoginMode;
-    const nameField = document.getElementById('auth-name-field');
-    const title = document.getElementById('auth-title');
-    const subtitle = document.getElementById('auth-subtitle');
-    const btn = document.getElementById('auth-btn');
-    const switchText = document.getElementById('auth-switch-text');
-    const switchBtn = document.getElementById('auth-switch-btn');
-
-    if (isLoginMode) {
-        nameField.classList.add('hidden');
-        title.innerText = "SEXIFY";
-        subtitle.innerText = "登入以繼續探索";
-        btn.innerText = "登入";
-        switchText.innerText = "還沒有帳號嗎？";
-        switchBtn.innerText = "立即註冊";
-    } else {
-        nameField.classList.remove('hidden');
-        title.innerText = "加入 SEXIFY";
-        subtitle.innerText = "建立您的專屬帳號";
-        btn.innerText = "註冊";
-        switchText.innerText = "已經有帳號了？";
-        switchBtn.innerText = "登入";
-    }
-}
-
-// 執行登入或註冊
-async function handleAuthAction() {
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
-    const btn = document.getElementById('auth-btn');
-    const originalText = btn.innerText;
-
-    if (!email || !password) return alert("請填寫完整資訊！");
-
-    btn.innerText = "處理中...";
-    btn.disabled = true;
-
-    try {
-// 在 auth.js 的 handleAuthAction 裡面
-if (isLoginMode) {
-    const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+// 登入功能
+async function loginUser(email, password) {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+    });
     if (error) throw error;
-    
-    // 登入前先清空，確保不會抓到舊人的資料
-    localStorage.removeItem('myChatName'); 
-    localStorage.setItem('myChatName', data.user.user_metadata.display_name);
-    
-    window.location.reload(); 
-} else {
-            // --- 註冊邏輯 ---
-            const name = document.getElementById('auth-name').value;
-            if (!name) throw new Error("請輸入顯示名稱！");
+    return data;
+}
 
-            const { data, error } = await window.supabaseClient.auth.signUp({
-                email, 
-                password,
-                options: {
-                    data: { display_name: name } // 這裡的資料會觸發 SQL，自動寫入 profiles 表
-                }
-            });
-            if (error) throw error;
-            
-            alert("註冊成功！我們已經為您建立好帳號，即將自動登入。");
-            window.location.reload();
+// 註冊功能
+async function signupUser(email, password, metadata) {
+    const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+            data: metadata // 包含 username, avatar 等
         }
-    } catch (err) {
-        alert(err.message || "發生錯誤");
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+    });
+    if (error) throw error;
+    return data;
+}
+
+// 【新增】登出功能
+async function logoutUser() {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+        console.error('Logout error:', error.message);
+        alert('登出失敗，請稍後再試');
+    } else {
+        // 登出成功後，強制重新載入頁面以清空所有記憶體中的狀態與訂閱
+        window.location.reload();
     }
 }
 
-// 檢查使用者是否已登入 (頁面載入時執行)
-document.addEventListener('DOMContentLoaded', async () => {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    const authModal = document.getElementById('auth-modal');
-
-    if (session) {
-        // 已登入：隱藏登入畫面，把真實的名字存起來供整個系統使用
-        authModal.classList.add('hidden');
-        
-        // 從 metadata 拿回名字，覆蓋原本 localStorage 的假名字
-        const realName = session.user.user_metadata.display_name;
-        localStorage.setItem('myChatName', realName);
-        window.myChatName = realName;
-        window.myUID = session.user.id; 
-    } else {
-        // 未登入：顯示登入畫面
-        authModal.classList.remove('hidden');
+// 監聽身份驗證狀態變化
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN') {
+        console.log('User signed in:', session.user);
+        document.getElementById('auth-modal').classList.add('hidden');
+        // 初始化用戶數據
+        if (typeof initApp === 'function') initApp(session.user);
+    }
+    if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
+        // 顯示登入彈窗
+        document.getElementById('auth-modal').classList.remove('hidden');
     }
 });
