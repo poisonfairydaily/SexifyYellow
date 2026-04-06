@@ -262,14 +262,19 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     document.getElementById('room-search-input').value = "";
     document.getElementById('room-search-wrapper').classList.add('hidden');
 
-    // ★ 綁定打字事件監聽 (節流廣播)
-    const chatInput = document.getElementById('chat-input');
-    chatInput.oninput = () => {
-        if (window.roomChannel) {
-            window.roomChannel.send({ type: 'broadcast', event: 'typing', payload: { sender: myChatName } });
-        }
-    };
+// 在 openChat 函式中，當頻道建立後加入這段
+const chatInput = document.getElementById('chat-input');
 
+chatInput.oninput = () => {
+    if (window.roomChannel) {
+        // 向該房間的所有人廣播：我正在打字
+        window.roomChannel.send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: { sender: myChatName }
+        });
+    }
+};
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...</div>`;
