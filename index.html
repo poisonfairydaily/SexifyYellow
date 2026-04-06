@@ -29,7 +29,28 @@
             <button onclick="verifyAge()" class="w-full bg-sexify text-white py-4 rounded-full font-bold shadow-lg active:scale-95 transition" data-i18n="age_btn">確認進入</button>
         </div>
     </div>
+<div id="auth-modal" class="fixed inset-0 z-[4000] bg-gray-50 flex flex-col justify-center items-center px-6 transition-opacity duration-300">
+        <div class="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl">
+            <h2 id="auth-title" class="text-3xl font-black text-sexify mb-2 text-center">SEXIFY</h2>
+            <p id="auth-subtitle" class="text-center text-gray-400 text-sm mb-6">登入以繼續探索</p>
 
+            <div class="space-y-4">
+                <div id="auth-name-field" class="hidden">
+                    <input type="text" id="auth-name" placeholder="顯示名稱 (例如：小明)" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-sexify text-sm">
+                </div>
+                
+                <input type="email" id="auth-email" placeholder="電子郵件" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-sexify text-sm">
+                <input type="password" id="auth-password" placeholder="密碼 (至少 6 位數)" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-sexify text-sm">
+                
+                <button id="auth-btn" onclick="handleAuthAction()" class="w-full bg-sexify text-white font-bold py-3 rounded-full shadow-md active:scale-95 transition mt-2">登入</button>
+            </div>
+
+            <div class="mt-6 text-center text-sm">
+                <span class="text-gray-400" id="auth-switch-text">還沒有帳號嗎？</span>
+                <button onclick="toggleAuthMode()" id="auth-switch-btn" class="text-sexify font-bold ml-1">立即註冊</button>
+            </div>
+        </div>
+    </div>
     <div id="settings-drawer" class="fixed inset-0 z-[1700] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleSettings()"></div>
         <div id="settings-panel" class="absolute top-0 left-0 bottom-0 w-4/5 max-w-sm bg-white -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
