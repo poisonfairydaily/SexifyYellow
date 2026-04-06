@@ -40,12 +40,17 @@ async function handleAuthAction() {
     btn.disabled = true;
 
     try {
-        if (isLoginMode) {
-            // --- 登入邏輯 ---
-            const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
-            if (error) throw error;
-            window.location.reload(); // 登入成功，重整頁面載入資料
-        } else {
+// 在 auth.js 的 handleAuthAction 裡面
+if (isLoginMode) {
+    const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    
+    // 登入前先清空，確保不會抓到舊人的資料
+    localStorage.removeItem('myChatName'); 
+    localStorage.setItem('myChatName', data.user.user_metadata.display_name);
+    
+    window.location.reload(); 
+} else {
             // --- 註冊邏輯 ---
             const name = document.getElementById('auth-name').value;
             if (!name) throw new Error("請輸入顯示名稱！");
