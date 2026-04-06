@@ -296,24 +296,26 @@ window.filterRoomMessages = function(keyword) {
     drawMessages(filtered, true); 
 }
 
-// ★ 渲染訊息 (加入打字狀態與發送中狀態、圖片懶加載)
-function drawMessages(messages, isSearching = false) {
+function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
-    
-    // 渲染打字指示器 (放在最前面，因為是 flex-col-reverse)
-    let typingHtml = '';
-    if (window.typingUsers.size > 0 && !isSearching) {
-        const usersArr = Array.from(window.typingUsers);
-        const typingNames = window.isGroupChat ? usersArr.join(', ') : '';
-        typingHtml = `
-            <div class="flex items-end gap-1.5 mb-2 w-full justify-start msg-container">
-                ${window.isGroupChat ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${typingNames}</span>` : ''}
-                <div class="bg-white border border-gray-100 text-gray-500 px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm shadow-sm flex items-center gap-1 animate-pulse">
-                    正在輸入<span class="flex gap-0.5 ml-1"><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div><div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div></span>
+    let html = "";
+
+    // 檢查有沒有人在打字
+    if (window.typingUsers.size > 0) {
+        html += `
+            <div class="flex items-center gap-2 mb-4 animate-pulse">
+                <div class="bg-gray-100 px-4 py-2 rounded-2xl rounded-tl-sm text-xs text-gray-500">
+                    有人正在輸入...
+                    <span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
                 </div>
             </div>
         `;
     }
+
+    // 接著才是原本的訊息渲染邏輯...
+    // html += messages.map(...).join('');
+    container.innerHTML = html;
+}
 
     if (messages.length === 0 && !typingHtml) {
         container.innerHTML = `<div class="text-center text-gray-300 py-10 w-full text-xs">${isSearching ? '找不到相關訊息' : '開始你們的第一句話吧！'}</div>`;
@@ -375,19 +377,22 @@ window.deleteMessage = async function(msgId) {
 function setupRoomRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
     
-    // ★ 加入 Broadcast 監聽打字狀態
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, {
-        config: { broadcast: { ack: false } }
-    })
+// 在 setupRoomRealtime 函式中加入監聽
+window.roomChannel
     .on('broadcast', { event: 'typing' }, payload => {
-        if (payload.payload.sender !== myChatName) {
-            window.typingUsers.add(payload.payload.sender);
-            drawMessages(window.currentRoomMessages);
-            clearTimeout(typingClearTimer);
-            typingClearTimer = setTimeout(() => {
-                window.typingUsers.delete(payload.payload.sender);
+        const typingUser = payload.payload.sender;
+        
+        // 不要顯示自己正在打字
+        if (typingUser !== myChatName) {
+            window.typingUsers.add(typingUser); // 將對方加入打字集合
+            drawMessages(window.currentRoomMessages); // 重新繪製畫面以顯示圓點
+
+            // 設定 3 秒後自動移除（如果對方停止打字）
+            clearTimeout(window.typingTimer);
+            window.typingTimer = setTimeout(() => {
+                window.typingUsers.delete(typingUser);
                 drawMessages(window.currentRoomMessages);
-            }, 3000); // 3秒沒打字自動消失
+            }, 3000);
         }
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
