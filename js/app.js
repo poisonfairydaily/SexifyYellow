@@ -41,27 +41,29 @@ function toggleSettings() {
     }
 }
 
-// 搜尋一鍵刪除邏輯
-function handleSearch() {
-    const val = document.getElementById('home-search').value;
-    const clearBtn = document.getElementById('search-clear-btn');
-    if(val.length > 0) clearBtn.classList.remove('hidden');
-    else clearBtn.classList.add('hidden');
-    
-    if(typeof searchPosts === 'function') searchPosts();
+// 初始化 UI 事件
+function initUIEvents() {
+    // 綁定設定面板中的登出按鈕
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            if (confirm("確定要登出帳號嗎？")) {
+                if (typeof logoutUser === 'function') {
+                    logoutUser();
+                }
+            }
+        });
+    }
 }
 
-function clearSearch() {
-    document.getElementById('home-search').value = '';
-    document.getElementById('search-clear-btn').classList.add('hidden');
-    if(typeof searchPosts === 'function') searchPosts();
-}
+// 頁面加載完成後執行初始化
+document.addEventListener('DOMContentLoaded', () => {
+    initUIEvents();
+});
 
-// 開關通知中心 - 點擊後消除未讀提示
+// 開關通知中心
 function openNotifications() {
-    const badge = document.getElementById('notification-badge');
-    if(badge) badge.style.display = 'none'; // 隱藏未讀提示
-
+    toggleSettings();
     document.getElementById('notifications-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('notifications-modal').classList.remove('translate-x-full'), 10);
 }
