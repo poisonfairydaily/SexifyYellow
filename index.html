@@ -76,11 +76,8 @@
                 <div class="h-px bg-gray-100 my-2"></div>
                 <button onclick="alert('正在為您連接客服中心...')" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-circle-question w-5"></i> <span data-i18n="menu_help">幫助中心</span></button>
                 <button onclick="toggleLanguage()" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-gray-700 font-bold"><i class="fa-solid fa-language w-5"></i> <span data-i18n="menu_lang">切換語言 (EN/ZH)</span></button>
-                <button id="logout-btn" class="flex items-center gap-4 p-4 text-red-500 active:bg-gray-100 transition cursor-pointer">
-    <div class="w-10 h-10 flex items-center justify-center rounded-full bg-red-50">
-        <i class="fa-solid fa-right-from-bracket"></i>
-    </div>
-    <span class="font-medium">登出帳號</span>
+                <button onclick="if(confirm('確定要登出帳號嗎？')) location.reload();" class="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 active:bg-gray-100 transition text-red-500 font-bold"><i class="fa-solid fa-right-from-bracket w-5"></i> <span data-i18n="menu_logout">登出帳號</span></button>
+            </div>
         </div>
     </div>
 
