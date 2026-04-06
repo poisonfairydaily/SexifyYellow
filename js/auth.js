@@ -1,4 +1,4 @@
-﻿let isLoginMode = true; // 預設為登入模式
+let isLoginMode = true; // 預設為登入模式
 
 // 切換登入 / 註冊介面
 function toggleAuthMode() {
@@ -36,18 +36,17 @@ async function handleAuthAction() {
 
     if (!email || !password) return alert("請填寫完整資訊！");
 
-    btn.innerText = "處理中...";
-    btn.disabled = true;
-
     try {
+        btn.innerText = "處理中...";
+        btn.disabled = true;
+
         if (isLoginMode) {
             // --- 登入邏輯 ---
-            const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+            const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             if (error) throw error;
             window.location.reload(); // 登入成功，重整頁面載入資料
         } else {
-            // --- 註冊邏輯 ---
-            const name = document.getElementById('auth-name').value;
+            // --- 註冊邏輯 ---\n            const name = document.getElementById('auth-name').value;
             if (!name) throw new Error("請輸入顯示名稱！");
 
             const { data, error } = await window.supabaseClient.auth.signUp({
@@ -70,6 +69,20 @@ async function handleAuthAction() {
     }
 }
 
+// 【新增功能：登出邏輯】
+async function logoutUser() {
+    try {
+        const { error } = await window.supabaseClient.auth.signOut();
+        if (error) throw error;
+        // 登出後清空本地緩存並重新整理頁面
+        localStorage.clear();
+        window.location.reload();
+    } catch (err) {
+        console.error("Logout Error:", err.message);
+        alert("登出過程發生錯誤");
+    }
+}
+
 // 檢查使用者是否已登入 (頁面載入時執行)
 document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -81,11 +94,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // 從 metadata 拿回名字，覆蓋原本 localStorage 的假名字
         const realName = session.user.user_metadata.display_name;
-        localStorage.setItem('myChatName', realName);
-        window.myChatName = realName;
-        window.myUID = session.user.id; 
+        localStorage.setItem('myChatName', realName || "使用者");
     } else {
-        // 未登入：顯示登入畫面
+        // 未登入：確保登入畫面顯示
         authModal.classList.remove('hidden');
     }
 });
