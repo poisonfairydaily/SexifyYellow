@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 商業級進化版 
-// (加入圖片壓縮、懶加載、打字狀態、樂觀更新秒發送體驗、精準已讀修正)
+// (加入圖片壓縮、懶加載、打字狀態、樂觀更新、精準已讀與【跨裝置雲端同步】)
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,14 +11,17 @@ window.globalChannel = null;
 let selectedImageFile = null;
 window.currentRoomMessages = []; 
 
-// ★ 新增：打字狀態全域變數
+// 打字狀態全域變數
 window.typingUsers = new Set();
 let typingClearTimer = null;
+
+// 雲端同步全域變數
+window.hasSyncedCloudData = false;
+window.cloudSyncTimer = null;
 
 // 1. 初始化使用者與全局 UI
 let myChatName = localStorage.getItem('myChatName') || "神秘使用者";
 
-// ★ 新增：確保隨時獲取最新的使用者名稱，防止快取殘留[cite: 17]
 function refreshMyName() {
     myChatName = localStorage.getItem('myChatName') || "神秘使用者";
 }
@@ -36,7 +39,7 @@ if(!document.getElementById('enhanced-chat-style')){
         .toast-leave { animation: slideUpFade 0.3s ease-in forwards; }
         .unsend-btn { opacity: 0; transition: opacity 0.2s; }
         .msg-container:hover .unsend-btn { opacity: 1; }
-        .temp-msg { opacity: 0.6; pointer-events: none; } /* 發送中訊息變半透明 */
+        .temp-msg { opacity: 0.6; pointer-events: none; } 
         @keyframes slideDownFade { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes slideUpFade { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
     </style>
@@ -48,7 +51,56 @@ if(!document.getElementById('enhanced-chat-style')){
 
 function generateRoomId(user1, user2) { return [user1, user2].sort().join('_'); }
 
-// ★ 修正：已讀狀態核心邏輯 (解決本地與伺服器時間差)[cite: 17]
+// ==========================================
+// ★ 核心修復：跨裝置雲端同步機制 (Auth User Metadata)
+// ==========================================
+
+// 從雲端抓取最新狀態 (已讀時間、好友、群組) 覆蓋本機
+async function syncDataFromCloud() {
+    try {
+        const { data } = await window.supabaseClient.auth.getUser();
+        const meta = data?.user?.user_metadata || {};
+        
+        // 1. 同步已讀時間 (取雲端與本機最新者)
+        const cloudReads = meta.lastReadTimes || {};
+        const localReads = JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}');
+        let updatedRead = false;
+        
+        for (let key in cloudReads) {
+            if (!localReads[key] || cloudReads[key] > localReads[key]) {
+                localReads[key] = cloudReads[key];
+                updatedRead = true;
+            }
+        }
+        if (updatedRead) localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(localReads));
+
+        // 2. 同步好友與群組 (解決換設備好友不見的問題)
+        if (meta.myFriends) localStorage.setItem('myFriends', JSON.stringify(meta.myFriends));
+        if (meta.myGroups) localStorage.setItem('myGroups', JSON.stringify(meta.myGroups));
+
+    } catch (e) {
+        console.error("雲端同步載入失敗", e);
+    }
+}
+
+// 將本機狀態備份到雲端 (使用防抖 Debounce 避免 API 請求過於頻繁)
+function syncDataToCloud() {
+    clearTimeout(window.cloudSyncTimer);
+    window.cloudSyncTimer = setTimeout(async () => {
+        try {
+            await window.supabaseClient.auth.updateUser({
+                data: { 
+                    lastReadTimes: JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}'),
+                    myFriends: JSON.parse(localStorage.getItem('myFriends') || '[]'),
+                    myGroups: JSON.parse(localStorage.getItem('myGroups') || '[]')
+                }
+            });
+        } catch (e) {
+            console.error("雲端同步備份失敗", e);
+        }
+    }, 2000); 
+}
+
 function getLastReadTimes() { 
     refreshMyName();
     return JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}'); 
@@ -57,13 +109,12 @@ function getLastReadTimes() {
 function updateLastRead(targetId, timestamp = null) {
     refreshMyName();
     const times = getLastReadTimes();
-    // 如果有傳入特定資料庫時間則使用，否則使用本地時間 + 5秒容錯，避免設備時間過慢[cite: 17]
     const newTime = timestamp || (Date.now() + 5000); 
     
-    // 保證時間只會往後推，不會被舊的時間覆蓋
     if (!times[targetId] || newTime > times[targetId]) {
         times[targetId] = newTime;
         localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(times));
+        syncDataToCloud(); // 觸發上傳到雲端
     }
 }
 
@@ -81,6 +132,7 @@ window.addFriend = function() {
     if (!friends.includes(friendName.trim())) {
         friends.push(friendName.trim());
         localStorage.setItem('myFriends', JSON.stringify(friends));
+        syncDataToCloud(); // 觸發上傳到雲端
         alert(`🎉 成功添加 ${friendName.trim()} 為好友！`);
         renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
     }
@@ -98,6 +150,7 @@ window.createGroup = function() {
     let groups = getGroups();
     groups.push({ id: groupId, name: groupName, members: [...new Set(members)] });
     localStorage.setItem('myGroups', JSON.stringify(groups));
+    syncDataToCloud(); // 觸發上傳到雲端
     alert(`🎉 群組「${groupName}」創建成功！`);
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
 }
@@ -117,6 +170,7 @@ window.addGroupMember = function(groupId) {
         }
         groups[groupIndex].members.push(newMember.trim());
         localStorage.setItem('myGroups', JSON.stringify(groups));
+        syncDataToCloud(); // 觸發上傳到雲端
         alert(`🎉 成功將 ${newMember.trim()} 加入群組！`);
         renderMessages(document.getElementById('inbox-search-input')?.value || "");
     }
@@ -130,6 +184,12 @@ window.renderMessages = async function(searchKeyword = "") {
 
     if(!searchKeyword && !window.initialInboxLoaded) {
         container.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-sexify text-2xl"></i><p class="mt-2 text-gray-400 text-sm">載入收件匣中...</p></div>`;
+    }
+
+    // ★ 首次渲染前，強制先跟雲端同步一次跨裝置資料
+    if (!window.hasSyncedCloudData) {
+        await syncDataFromCloud();
+        window.hasSyncedCloudData = true;
     }
 
     try {
@@ -173,7 +233,7 @@ window.renderMessages = async function(searchKeyword = "") {
                 };
             }
 
-            // 嚴格比對：只有訊息時間大於我們儲存的最後已讀時間，才算未讀
+            // 比對已讀時間，判斷是否為未讀
             if ((!isGroup && msg.receiver === myChatName) || (isGroup && msg.sender_name !== myChatName)) {
                 if (msgTime > (lastReadTimes[targetId] || 0)) {
                     roomsMap[targetId].unreadCount++;
@@ -220,7 +280,7 @@ window.renderMessages = async function(searchKeyword = "") {
         container.innerHTML = html;
     } catch (err) {
         console.error("連線錯誤:", err);
-        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫資料格式異常</div>`;
+        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫連線或資料格式異常</div>`;
     }
 };
 
@@ -239,7 +299,6 @@ function setupGlobalRealtime() {
             if (isRelevant) {
                 const activeId = isGroup ? msg.room_id : msg.sender_name;
                 if (window.activeChatTarget === activeId) {
-                    // 如果用戶正在看這個視窗，用這筆訊息的時間更新已讀，並 +1000ms 保證超越
                     updateLastRead(activeId, new Date(msg.created_at).getTime() + 1000);
                     return; 
                 }
@@ -265,7 +324,7 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     window.activeChatTarget = targetId;
     window.isGroupChat = isGroup;
     window.activeRoomId = isGroup ? targetId : generateRoomId(myChatName, targetId);
-    window.typingUsers.clear(); // 清空舊的打字狀態
+    window.typingUsers.clear(); 
 
     updateLastRead(targetId); // 基礎已讀更新
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
@@ -309,11 +368,10 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
         
         window.currentRoomMessages = data || [];
         
-        // ★ 精準時間校對：以最新一則訊息的「伺服器時間」當作基準寫入已讀，徹底杜絕設備時間差導致的紅點殘留
         if (window.currentRoomMessages.length > 0) {
             const latestMsgTime = new Date(window.currentRoomMessages[0].created_at).getTime();
             updateLastRead(targetId, latestMsgTime + 1000); 
-            renderMessages(document.getElementById('inbox-search-input')?.value || ""); // 再次重繪清除紅點
+            renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
         }
 
         drawMessages(window.currentRoomMessages);
@@ -327,11 +385,9 @@ window.filterRoomMessages = function(keyword) {
     drawMessages(filtered, true); 
 }
 
-// ★ 渲染訊息 (加入打字狀態與發送中狀態、圖片懶加載)
 function drawMessages(messages, isSearching = false) {
     const container = document.getElementById('chat-messages');
     
-    // 渲染打字指示器 (放在最前面，因為是 flex-col-reverse)
     let typingHtml = '';
     if (window.typingUsers.size > 0 && !isSearching) {
         const usersArr = Array.from(window.typingUsers);
@@ -357,7 +413,6 @@ function drawMessages(messages, isSearching = false) {
         const bg = isMe ? 'bg-sexify text-white' : 'bg-white border border-gray-100 text-gray-900';
         const borderRadius = isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm';
         const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-        // 判斷是否為「發送中」的臨時訊息
         const tempClass = msg.isTemp ? 'temp-msg' : ''; 
         
         return `
@@ -406,7 +461,6 @@ window.deleteMessage = async function(msgId) {
 function setupRoomRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
     
-    // ★ 加入 Broadcast 監聽打字狀態
     window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, {
         config: { broadcast: { ack: false } }
     })
@@ -418,13 +472,12 @@ function setupRoomRealtime() {
             typingClearTimer = setTimeout(() => {
                 window.typingUsers.delete(payload.payload.sender);
                 drawMessages(window.currentRoomMessages);
-            }, 3000); // 3秒沒打字自動消失
+            }, 3000); 
         }
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
         const newMsg = payload.new;
         
-        // 如果是我自己發的，因為已經有樂觀更新 (temp message)，這時把舊的 temp 拔掉
         if (newMsg.sender_name === myChatName) {
             window.currentRoomMessages = window.currentRoomMessages.filter(m => !m.isTemp);
         }
@@ -434,8 +487,7 @@ function setupRoomRealtime() {
         if(!searchVal) drawMessages(window.currentRoomMessages);
         
         if (newMsg.sender_name !== myChatName) {
-            window.typingUsers.delete(newMsg.sender_name); // 對方發送完畢，取消打字狀態
-            // 使用新訊息的伺服器時間寫入已讀[cite: 17]
+            window.typingUsers.delete(newMsg.sender_name); 
             updateLastRead(window.activeChatTarget, new Date(newMsg.created_at).getTime() + 1000); 
         }
     })
@@ -447,7 +499,6 @@ function setupRoomRealtime() {
     }).subscribe();
 }
 
-// ★ 前端 Canvas 圖片壓縮器
 window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -475,7 +526,6 @@ window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
     });
 };
 
-// 6. 發送動作
 window.handleSendAction = async function() {
     refreshMyName();
     const input = document.getElementById('chat-input');
@@ -485,18 +535,16 @@ window.handleSendAction = async function() {
     const tempImageUrl = selectedImageFile ? document.getElementById('chat-image-preview').src : null;
     const originalFile = selectedImageFile;
 
-    // 清空 UI，讓用戶覺得「已經發出去了」
     input.value = '';
     cancelImageSelection();
 
-    // 建立臨時的虛擬訊息 (樂觀更新)
     const tempMsg = {
         id: 'temp_' + Date.now(),
         sender_name: myChatName,
         content: text.trim() || null,
         image_url: tempImageUrl,
         created_at: new Date().toISOString(),
-        isTemp: true // 標記為臨時
+        isTemp: true 
     };
     
     window.currentRoomMessages.unshift(tempMsg);
@@ -506,7 +554,6 @@ window.handleSendAction = async function() {
 
     if (originalFile) {
         try {
-            // 進行壓縮再上傳
             const compressedFile = await window.compressImage(originalFile);
             const fileName = `${Date.now()}_${compressedFile.name}`;
             
@@ -538,7 +585,6 @@ window.handleSendAction = async function() {
     }
 };
 
-// 7. 輔助功能
 window.handleImageSelection = function(input) {
     const file = input.files[0];
     if (!file) return;
