@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 商業級進化版 
-// (加入圖片壓縮、懶加載、打字狀態、樂觀更新秒發送體驗)
+// (加入圖片壓縮、懶加載、打字狀態、樂觀更新秒發送體驗、精準已讀修正)
 // ==========================================
 
 window.activeRoomId = null;
@@ -16,10 +16,15 @@ window.typingUsers = new Set();
 let typingClearTimer = null;
 
 // 1. 初始化使用者與全局 UI
-// 改由 auth.js 登入後賦值，這裡只做接收
 let myChatName = localStorage.getItem('myChatName') || "神秘使用者";
 
+// ★ 新增：確保隨時獲取最新的使用者名稱，防止快取殘留[cite: 17]
+function refreshMyName() {
+    myChatName = localStorage.getItem('myChatName') || "神秘使用者";
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    refreshMyName();
     const titleEl = document.getElementById('my-chat-title-name');
     if (titleEl) titleEl.innerText = myChatName;
 });
@@ -42,11 +47,24 @@ if(!document.getElementById('enhanced-chat-style')){
 }
 
 function generateRoomId(user1, user2) { return [user1, user2].sort().join('_'); }
-function getLastReadTimes() { return JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}'); }
-function updateLastRead(targetId) {
+
+// ★ 修正：已讀狀態核心邏輯 (解決本地與伺服器時間差)[cite: 17]
+function getLastReadTimes() { 
+    refreshMyName();
+    return JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}'); 
+}
+
+function updateLastRead(targetId, timestamp = null) {
+    refreshMyName();
     const times = getLastReadTimes();
-    times[targetId] = Date.now();
-    localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(times));
+    // 如果有傳入特定資料庫時間則使用，否則使用本地時間 + 5秒容錯，避免設備時間過慢[cite: 17]
+    const newTime = timestamp || (Date.now() + 5000); 
+    
+    // 保證時間只會往後推，不會被舊的時間覆蓋
+    if (!times[targetId] || newTime > times[targetId]) {
+        times[targetId] = newTime;
+        localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(times));
+    }
 }
 
 // 2. 好友與群組系統
@@ -54,6 +72,7 @@ function getFriends() { return JSON.parse(localStorage.getItem('myFriends')) || 
 function getGroups() { return JSON.parse(localStorage.getItem('myGroups')) || []; }
 
 window.addFriend = function() {
+    refreshMyName();
     const friendName = prompt("請輸入你想添加的好友帳號：");
     if (!friendName || friendName.trim() === "") return;
     if (friendName.trim() === myChatName) return alert("不能添加自己為好友！");
@@ -68,6 +87,7 @@ window.addFriend = function() {
 }
 
 window.createGroup = function() {
+    refreshMyName();
     const groupName = prompt("請輸入群組名稱：");
     if (!groupName) return;
     const membersStr = prompt("請輸入群組成員帳號 (用逗號 , 隔開)：");
@@ -83,6 +103,7 @@ window.createGroup = function() {
 }
 
 window.addGroupMember = function(groupId) {
+    refreshMyName();
     const newMember = prompt("請輸入要加入的新成員帳號：");
     if (!newMember || newMember.trim() === "") return;
     if (newMember.trim() === myChatName) return alert("你已經在群組中了！");
@@ -103,6 +124,7 @@ window.addGroupMember = function(groupId) {
 
 // 3. 渲染聊天列表
 window.renderMessages = async function(searchKeyword = "") {
+    refreshMyName();
     const container = document.getElementById('messages-list');
     if (!container) return;
 
@@ -151,6 +173,7 @@ window.renderMessages = async function(searchKeyword = "") {
                 };
             }
 
+            // 嚴格比對：只有訊息時間大於我們儲存的最後已讀時間，才算未讀
             if ((!isGroup && msg.receiver === myChatName) || (isGroup && msg.sender_name !== myChatName)) {
                 if (msgTime > (lastReadTimes[targetId] || 0)) {
                     roomsMap[targetId].unreadCount++;
@@ -216,7 +239,8 @@ function setupGlobalRealtime() {
             if (isRelevant) {
                 const activeId = isGroup ? msg.room_id : msg.sender_name;
                 if (window.activeChatTarget === activeId) {
-                    updateLastRead(activeId);
+                    // 如果用戶正在看這個視窗，用這筆訊息的時間更新已讀，並 +1000ms 保證超越
+                    updateLastRead(activeId, new Date(msg.created_at).getTime() + 1000);
                     return; 
                 }
                 const senderDisplay = isGroup ? `${msg.sender_name} (群組)` : msg.sender_name;
@@ -237,12 +261,13 @@ function showToastNotification(sender, text, avatar) {
 
 // 5. 聊天室內部邏輯
 window.openChat = async function(targetId, isGroup = false, displayName = targetId) {
+    refreshMyName();
     window.activeChatTarget = targetId;
     window.isGroupChat = isGroup;
     window.activeRoomId = isGroup ? targetId : generateRoomId(myChatName, targetId);
     window.typingUsers.clear(); // 清空舊的打字狀態
 
-    updateLastRead(targetId);
+    updateLastRead(targetId); // 基礎已讀更新
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
 
     const modal = document.getElementById('chat-modal');
@@ -262,19 +287,17 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     document.getElementById('room-search-input').value = "";
     document.getElementById('room-search-wrapper').classList.add('hidden');
 
-// 在 openChat 函式中，當頻道建立後加入這段
-const chatInput = document.getElementById('chat-input');
-
-chatInput.oninput = () => {
-    if (window.roomChannel) {
-        // 向該房間的所有人廣播：我正在打字
-        window.roomChannel.send({
-            type: 'broadcast',
-            event: 'typing',
-            payload: { sender: myChatName }
-        });
-    }
-};
+    const chatInput = document.getElementById('chat-input');
+    chatInput.oninput = () => {
+        if (window.roomChannel) {
+            window.roomChannel.send({
+                type: 'broadcast',
+                event: 'typing',
+                payload: { sender: myChatName }
+            });
+        }
+    };
+    
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...</div>`;
@@ -285,6 +308,14 @@ chatInput.oninput = () => {
         if (error) throw error;
         
         window.currentRoomMessages = data || [];
+        
+        // ★ 精準時間校對：以最新一則訊息的「伺服器時間」當作基準寫入已讀，徹底杜絕設備時間差導致的紅點殘留
+        if (window.currentRoomMessages.length > 0) {
+            const latestMsgTime = new Date(window.currentRoomMessages[0].created_at).getTime();
+            updateLastRead(targetId, latestMsgTime + 1000); 
+            renderMessages(document.getElementById('inbox-search-input')?.value || ""); // 再次重繪清除紅點
+        }
+
         drawMessages(window.currentRoomMessages);
         setupRoomRealtime();
     } catch (err) { chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-red-400">無法載入訊息</div>`; }
@@ -404,7 +435,8 @@ function setupRoomRealtime() {
         
         if (newMsg.sender_name !== myChatName) {
             window.typingUsers.delete(newMsg.sender_name); // 對方發送完畢，取消打字狀態
-            updateLastRead(window.activeChatTarget); 
+            // 使用新訊息的伺服器時間寫入已讀[cite: 17]
+            updateLastRead(window.activeChatTarget, new Date(newMsg.created_at).getTime() + 1000); 
         }
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
@@ -415,7 +447,7 @@ function setupRoomRealtime() {
     }).subscribe();
 }
 
-// ★ 新增：前端 Canvas 圖片壓縮器 (降低 Storage 負擔)
+// ★ 前端 Canvas 圖片壓縮器
 window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -443,8 +475,9 @@ window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
     });
 };
 
-// 6. 發送動作 (★ 實作樂觀更新與壓縮機制)
+// 6. 發送動作
 window.handleSendAction = async function() {
+    refreshMyName();
     const input = document.getElementById('chat-input');
     const text = input.value;
     if (!text.trim() && !selectedImageFile) return;
@@ -484,7 +517,6 @@ window.handleSendAction = async function() {
             uploadedImageUrl = publicUrlData.publicUrl;
         } catch (err) {
             alert("圖片壓縮或上傳失敗，請重試！");
-            // 失敗的話移除虛擬訊息
             window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
             drawMessages(window.currentRoomMessages);
             return;
@@ -492,7 +524,6 @@ window.handleSendAction = async function() {
     }
 
     try {
-        // 真實推送到資料庫
         await window.supabaseClient.from('messages').insert([{
             room_id: window.activeRoomId, 
             sender_name: myChatName, 
@@ -500,7 +531,6 @@ window.handleSendAction = async function() {
             content: tempMsg.content,
             image_url: uploadedImageUrl
         }]);
-        // 插入成功後，Supabase Realtime (INSERT) 會抓到真資料，並自動替換掉 tempMsg
     } catch (err) {
         console.error("發送失敗", err);
         window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
