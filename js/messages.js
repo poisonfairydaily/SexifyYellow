@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 商業級進化版 
-// (加入圖片壓縮、懶加載、打字狀態、樂觀更新、精準已讀與【跨裝置雲端同步】)
+// (加入影片上傳、長按錄音、打字狀態、雲端同步與精準已讀)
 // ==========================================
 
 window.activeRoomId = null;
@@ -8,14 +8,16 @@ window.activeChatTarget = null;
 window.isGroupChat = false;    
 window.roomChannel = null;     
 window.globalChannel = null;   
-let selectedImageFile = null;
-window.currentRoomMessages = []; 
 
-// 打字狀態全域變數
+// 媒體全域變數
+let selectedMediaFile = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+// 打字狀態與雲端同步全域變數
 window.typingUsers = new Set();
 let typingClearTimer = null;
-
-// 雲端同步全域變數
 window.hasSyncedCloudData = false;
 window.cloudSyncTimer = null;
 
@@ -52,16 +54,13 @@ if(!document.getElementById('enhanced-chat-style')){
 function generateRoomId(user1, user2) { return [user1, user2].sort().join('_'); }
 
 // ==========================================
-// ★ 核心修復：跨裝置雲端同步機制 (Auth User Metadata)
+// ★ 雲端同步機制
 // ==========================================
-
-// 從雲端抓取最新狀態 (已讀時間、好友、群組) 覆蓋本機
 async function syncDataFromCloud() {
     try {
         const { data } = await window.supabaseClient.auth.getUser();
         const meta = data?.user?.user_metadata || {};
         
-        // 1. 同步已讀時間 (取雲端與本機最新者)
         const cloudReads = meta.lastReadTimes || {};
         const localReads = JSON.parse(localStorage.getItem(`lastRead_${myChatName}`) || '{}');
         let updatedRead = false;
@@ -74,7 +73,6 @@ async function syncDataFromCloud() {
         }
         if (updatedRead) localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(localReads));
 
-        // 2. 同步好友與群組 (解決換設備好友不見的問題)
         if (meta.myFriends) localStorage.setItem('myFriends', JSON.stringify(meta.myFriends));
         if (meta.myGroups) localStorage.setItem('myGroups', JSON.stringify(meta.myGroups));
 
@@ -83,7 +81,6 @@ async function syncDataFromCloud() {
     }
 }
 
-// 將本機狀態備份到雲端 (使用防抖 Debounce 避免 API 請求過於頻繁)
 function syncDataToCloud() {
     clearTimeout(window.cloudSyncTimer);
     window.cloudSyncTimer = setTimeout(async () => {
@@ -114,7 +111,7 @@ function updateLastRead(targetId, timestamp = null) {
     if (!times[targetId] || newTime > times[targetId]) {
         times[targetId] = newTime;
         localStorage.setItem(`lastRead_${myChatName}`, JSON.stringify(times));
-        syncDataToCloud(); // 觸發上傳到雲端
+        syncDataToCloud(); 
     }
 }
 
@@ -132,7 +129,7 @@ window.addFriend = function() {
     if (!friends.includes(friendName.trim())) {
         friends.push(friendName.trim());
         localStorage.setItem('myFriends', JSON.stringify(friends));
-        syncDataToCloud(); // 觸發上傳到雲端
+        syncDataToCloud(); 
         alert(`🎉 成功添加 ${friendName.trim()} 為好友！`);
         renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
     }
@@ -150,7 +147,7 @@ window.createGroup = function() {
     let groups = getGroups();
     groups.push({ id: groupId, name: groupName, members: [...new Set(members)] });
     localStorage.setItem('myGroups', JSON.stringify(groups));
-    syncDataToCloud(); // 觸發上傳到雲端
+    syncDataToCloud(); 
     alert(`🎉 群組「${groupName}」創建成功！`);
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
 }
@@ -170,7 +167,7 @@ window.addGroupMember = function(groupId) {
         }
         groups[groupIndex].members.push(newMember.trim());
         localStorage.setItem('myGroups', JSON.stringify(groups));
-        syncDataToCloud(); // 觸發上傳到雲端
+        syncDataToCloud(); 
         alert(`🎉 成功將 ${newMember.trim()} 加入群組！`);
         renderMessages(document.getElementById('inbox-search-input')?.value || "");
     }
@@ -186,7 +183,6 @@ window.renderMessages = async function(searchKeyword = "") {
         container.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-sexify text-2xl"></i><p class="mt-2 text-gray-400 text-sm">載入收件匣中...</p></div>`;
     }
 
-    // ★ 首次渲染前，強制先跟雲端同步一次跨裝置資料
     if (!window.hasSyncedCloudData) {
         await syncDataFromCloud();
         window.hasSyncedCloudData = true;
@@ -220,20 +216,25 @@ window.renderMessages = async function(searchKeyword = "") {
             if (!targetId) return;
 
             const msgTime = new Date(msg.created_at).getTime();
+            let previewText = msg.content || '';
+            if (msg.image_url) {
+                if (msg.image_url.includes('_video.')) previewText = '傳送了一段影片 🎥';
+                else if (msg.image_url.includes('_audio.')) previewText = '傳送了一則語音 🎤';
+                else previewText = '傳送了一張圖片 🖼️';
+            }
 
             if (!roomsMap[targetId]) {
                 roomsMap[targetId] = {
                     id: targetId,
                     isGroup: isGroup,
                     displayName: isGroup ? `👥 ${groupInfo?.name || '未知群組'}` : targetId,
-                    lastMsg: msg.content || (msg.image_url ? '傳送了一張圖片 🖼️' : ''),
+                    lastMsg: previewText,
                     time: new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}),
                     timestamp: msgTime,
                     unreadCount: 0
                 };
             }
 
-            // 比對已讀時間，判斷是否為未讀
             if ((!isGroup && msg.receiver === myChatName) || (isGroup && msg.sender_name !== myChatName)) {
                 if (msgTime > (lastReadTimes[targetId] || 0)) {
                     roomsMap[targetId].unreadCount++;
@@ -280,11 +281,10 @@ window.renderMessages = async function(searchKeyword = "") {
         container.innerHTML = html;
     } catch (err) {
         console.error("連線錯誤:", err);
-        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫連線或資料格式異常</div>`;
+        container.innerHTML = `<div class="text-center text-red-400 py-10">資料庫連線異常</div>`;
     }
 };
 
-// 4. 全局通知監聽
 function setupGlobalRealtime() {
     if (window.globalChannel) return;
     window.globalChannel = window.supabaseClient.channel('global_notifications')
@@ -303,7 +303,10 @@ function setupGlobalRealtime() {
                     return; 
                 }
                 const senderDisplay = isGroup ? `${msg.sender_name} (群組)` : msg.sender_name;
-                showToastNotification(senderDisplay, msg.content || '傳送了一張圖片 🖼️', `https://i.pravatar.cc/150?u=${activeId}`);
+                let previewText = msg.content || '傳送了一張圖片 🖼️';
+                if(msg.image_url && msg.image_url.includes('_video.')) previewText = '傳送了一段影片 🎥';
+                if(msg.image_url && msg.image_url.includes('_audio.')) previewText = '傳送了一則語音 🎤';
+                showToastNotification(senderDisplay, previewText, `https://i.pravatar.cc/150?u=${activeId}`);
                 renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
             }
         }).subscribe();
@@ -326,7 +329,7 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     window.activeRoomId = isGroup ? targetId : generateRoomId(myChatName, targetId);
     window.typingUsers.clear(); 
 
-    updateLastRead(targetId); // 基礎已讀更新
+    updateLastRead(targetId); 
     renderMessages(document.getElementById('inbox-search-input')?.value || "");
 
     const modal = document.getElementById('chat-modal');
@@ -349,11 +352,7 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     const chatInput = document.getElementById('chat-input');
     chatInput.oninput = () => {
         if (window.roomChannel) {
-            window.roomChannel.send({
-                type: 'broadcast',
-                event: 'typing',
-                payload: { sender: myChatName }
-            });
+            window.roomChannel.send({ type: 'broadcast', event: 'typing', payload: { sender: myChatName } });
         }
     };
     
@@ -415,6 +414,18 @@ function drawMessages(messages, isSearching = false) {
         const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
         const tempClass = msg.isTemp ? 'temp-msg' : ''; 
         
+        // ★ 核心解析：判斷渲染 Image, Video 或 Audio
+        let mediaHtml = '';
+        if (msg.image_url) {
+            if (msg.image_url.includes('_video.')) {
+                mediaHtml = `<video src="${msg.image_url}" controls class="max-w-full rounded-lg mb-1 min-w-[120px] bg-black"></video>`;
+            } else if (msg.image_url.includes('_audio.')) {
+                mediaHtml = `<audio src="${msg.image_url}" controls class="max-w-full mb-1 h-10 min-w-[200px]"></audio>`;
+            } else {
+                mediaHtml = `<img src="${msg.image_url}" loading="lazy" class="max-w-full rounded-lg mb-1 object-cover min-w-[120px] bg-gray-100">`;
+            }
+        }
+
         return `
             <div id="msg-${msg.id}" class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-1 msg-container ${tempClass}">
                 ${window.isGroupChat && !isMe ? `<span class="text-[10px] text-gray-400 mb-1 ml-1">${msg.sender_name}</span>` : ''}
@@ -426,7 +437,7 @@ function drawMessages(messages, isSearching = false) {
                               </div>` : ''}
 
                     <div class="${bg} px-4 py-2.5 ${borderRadius} shadow-sm max-w-[75%] break-words leading-relaxed text-sm relative group">
-                        ${msg.image_url ? `<img src="${msg.image_url}" loading="lazy" class="max-w-full rounded-lg mb-1 object-cover min-w-[120px] bg-gray-100">` : ''}
+                        ${mediaHtml}
                         ${msg.content ? `<span>${msg.content}</span>` : ''}
                     </div>
 
@@ -499,6 +510,108 @@ function setupRoomRealtime() {
     }).subscribe();
 }
 
+// ==========================================
+// ★ 錄音與媒體處理邏輯
+// ==========================================
+
+window.startRecording = async function(event) {
+    if(event) event.preventDefault();
+    if(isRecording) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            // 強制加上 _audio 後綴以供渲染判斷
+            selectedMediaFile = new File([audioBlob], `voice_${Date.now()}_audio.webm`, { type: 'audio/webm' });
+            handleSendAction(); // 錄完即發送
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        
+        // UI 反饋
+        const micBtn = document.getElementById('chat-mic-btn');
+        if(micBtn) micBtn.classList.add('recording-pulse');
+        document.getElementById('chat-input').placeholder = "錄音中... 放開即發送";
+    } catch (err) {
+        alert("無法開啟麥克風，請檢查權限設定！");
+    }
+};
+
+window.stopRecording = function(event) {
+    if(event) event.preventDefault();
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        
+        // 恢復 UI
+        const micBtn = document.getElementById('chat-mic-btn');
+        if(micBtn) micBtn.classList.remove('recording-pulse');
+        document.getElementById('chat-input').placeholder = "發送訊息...";
+    }
+};
+
+window.handleMediaSelection = function(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // 限制大小 25MB
+    if (file.size > 25 * 1024 * 1024) {
+        alert("檔案太大了，請上傳 25MB 以下的媒體。");
+        return;
+    }
+
+    // 為了安全渲染，如果原檔名沒有對應特徵，強加後綴
+    let finalFileName = file.name;
+    const isVid = file.type.startsWith('video');
+    const isImg = file.type.startsWith('image');
+    
+    if(isVid && !finalFileName.includes('_video.')) finalFileName = `upload_${Date.now()}_video.${finalFileName.split('.').pop()}`;
+    if(isImg && !finalFileName.includes('_image.')) finalFileName = `upload_${Date.now()}_image.${finalFileName.split('.').pop()}`;
+    
+    // 重新建構 File 物件以更改檔名
+    selectedMediaFile = new File([file], finalFileName, { type: file.type });
+
+    const container = document.getElementById('chat-media-preview-container');
+    const imgPreview = document.getElementById('chat-image-preview');
+    const vidPreview = document.getElementById('chat-video-preview');
+    const audPreview = document.getElementById('chat-audio-preview');
+
+    imgPreview.classList.add('hidden');
+    vidPreview.classList.add('hidden');
+    audPreview.classList.add('hidden');
+
+    if (isVid) {
+        vidPreview.src = URL.createObjectURL(file);
+        vidPreview.classList.remove('hidden');
+    } else if (file.type.startsWith('audio')) {
+        audPreview.classList.remove('hidden');
+    } else {
+        const reader = new FileReader();
+        reader.onload = e => { imgPreview.src = e.target.result; imgPreview.classList.remove('hidden'); };
+        reader.readAsDataURL(file);
+    }
+
+    container.classList.remove('hidden');
+    container.classList.add('flex');
+};
+
+window.cancelMediaSelection = function() {
+    selectedMediaFile = null;
+    document.getElementById('chat-media-input').value = '';
+    const container = document.getElementById('chat-media-preview-container');
+    container.classList.remove('flex');
+    container.classList.add('hidden');
+    
+    // 清除預覽 src 釋放記憶體
+    document.getElementById('chat-video-preview').src = '';
+    document.getElementById('chat-image-preview').src = '';
+};
+
 window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -530,19 +643,27 @@ window.handleSendAction = async function() {
     refreshMyName();
     const input = document.getElementById('chat-input');
     const text = input.value;
-    if (!text.trim() && !selectedImageFile) return;
+    if (!text.trim() && !selectedMediaFile) return;
 
-    const tempImageUrl = selectedImageFile ? document.getElementById('chat-image-preview').src : null;
-    const originalFile = selectedImageFile;
+    let tempMediaUrl = null;
+    if (selectedMediaFile) {
+        if (selectedMediaFile.type.startsWith('image')) {
+            tempMediaUrl = document.getElementById('chat-image-preview').src;
+        } else {
+            // 語音與影片先產生本機 Blob URL 以供樂觀渲染
+            tempMediaUrl = URL.createObjectURL(selectedMediaFile);
+        }
+    }
+    const originalFile = selectedMediaFile;
 
     input.value = '';
-    cancelImageSelection();
+    cancelMediaSelection();
 
     const tempMsg = {
         id: 'temp_' + Date.now(),
         sender_name: myChatName,
         content: text.trim() || null,
-        image_url: tempImageUrl,
+        image_url: tempMediaUrl,
         created_at: new Date().toISOString(),
         isTemp: true 
     };
@@ -554,16 +675,22 @@ window.handleSendAction = async function() {
 
     if (originalFile) {
         try {
-            const compressedFile = await window.compressImage(originalFile);
-            const fileName = `${Date.now()}_${compressedFile.name}`;
+            let fileToUpload = originalFile;
             
-            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, compressedFile);
+            // 只有圖片才做 Canvas 壓縮，影片/語音直接傳
+            if (originalFile.type.startsWith('image')) {
+                fileToUpload = await window.compressImage(originalFile);
+            }
+            
+            const fileName = `${Date.now()}_${fileToUpload.name}`;
+            
+            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, fileToUpload);
             if (uploadError) throw uploadError;
 
             const { data: publicUrlData } = window.supabaseClient.storage.from('message-images').getPublicUrl(fileName);
             uploadedImageUrl = publicUrlData.publicUrl;
         } catch (err) {
-            alert("圖片壓縮或上傳失敗，請重試！");
+            alert("媒體上傳失敗，請重試或檢查檔案大小！");
             window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
             drawMessages(window.currentRoomMessages);
             return;
@@ -585,31 +712,12 @@ window.handleSendAction = async function() {
     }
 };
 
-window.handleImageSelection = function(input) {
-    const file = input.files[0];
-    if (!file) return;
-    selectedImageFile = file;
-    const reader = new FileReader();
-    reader.onload = e => {
-        document.getElementById('chat-image-preview').src = e.target.result;
-        document.getElementById('chat-image-preview-container').classList.remove('hidden');
-        document.getElementById('chat-image-preview-container').classList.add('flex');
-    };
-    reader.readAsDataURL(file);
-};
-
-window.cancelImageSelection = function() {
-    selectedImageFile = null;
-    document.getElementById('chat-image-input').value = '';
-    document.getElementById('chat-image-preview-container').classList.remove('flex');
-    document.getElementById('chat-image-preview-container').classList.add('hidden');
-};
-
 window.closeChat = function() {
     window.activeChatTarget = null;
     window.activeRoomId = null;
     window.isGroupChat = false;
     window.typingUsers.clear();
+    stopRecording();
     
     const searchWrap = document.getElementById('room-search-wrapper');
     if(searchWrap) {
@@ -621,7 +729,7 @@ window.closeChat = function() {
     setTimeout(() => {
         document.getElementById('chat-modal').classList.add('hidden');
         document.getElementById('chat-messages').innerHTML = ''; 
-        cancelImageSelection();
+        cancelMediaSelection();
     }, 300);
     renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
 };
