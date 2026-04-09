@@ -556,4 +556,212 @@ window.startRecording = async function(event) {
         isRecording = true;
         
         // UI 反饋
-        const micBtn = document
+        const micBtn = document.getElementById('chat-mic-btn');
+        if(micBtn) micBtn.classList.add('recording-pulse');
+        document.getElementById('chat-input').placeholder = "錄音中... 放開以預覽";
+    } catch (err) {
+        alert("無法開啟麥克風，請檢查權限設定！");
+    }
+};
+
+window.stopRecording = function(event) {
+    if(event) event.preventDefault();
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        
+        // 恢復 UI 狀態
+        const micBtn = document.getElementById('chat-mic-btn');
+        if(micBtn) micBtn.classList.remove('recording-pulse');
+    }
+};
+
+window.handleMediaSelection = function(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+        alert("檔案太大了，請上傳 25MB 以下的媒體。");
+        return;
+    }
+
+    let finalFileName = file.name;
+    const isVid = file.type.startsWith('video');
+    const isImg = file.type.startsWith('image');
+    
+    if(isVid && !finalFileName.includes('_video.')) finalFileName = `upload_${Date.now()}_video.${finalFileName.split('.').pop()}`;
+    if(isImg && !finalFileName.includes('_image.')) finalFileName = `upload_${Date.now()}_image.${finalFileName.split('.').pop()}`;
+    
+    selectedMediaFile = new File([file], finalFileName, { type: file.type });
+
+    const container = document.getElementById('chat-media-preview-container');
+    const box = document.getElementById('chat-preview-box');
+    const imgPreview = document.getElementById('chat-image-preview');
+    const vidPreview = document.getElementById('chat-video-preview');
+    const audPreview = document.getElementById('chat-audio-preview');
+
+    imgPreview.classList.add('hidden');
+    vidPreview.classList.add('hidden');
+    audPreview.classList.add('hidden');
+
+    // 恢復為圖片/影片的方形樣式
+    box.className = 'relative w-20 h-20 bg-gray-200 rounded-xl overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 flex-shrink-0';
+
+    if (isVid) {
+        vidPreview.src = URL.createObjectURL(file);
+        vidPreview.classList.remove('hidden');
+    } else if (file.type.startsWith('audio')) {
+        box.className = 'relative flex-1 h-12 bg-white border border-gray-100 rounded-full overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 px-2';
+        audPreview.src = URL.createObjectURL(file);
+        audPreview.classList.remove('hidden');
+    } else {
+        const reader = new FileReader();
+        reader.onload = e => { imgPreview.src = e.target.result; imgPreview.classList.remove('hidden'); };
+        reader.readAsDataURL(file);
+    }
+
+    container.classList.remove('hidden');
+    container.classList.add('flex');
+};
+
+window.cancelMediaSelection = function() {
+    selectedMediaFile = null;
+    document.getElementById('chat-media-input').value = '';
+    
+    const container = document.getElementById('chat-media-preview-container');
+    container.classList.remove('flex');
+    container.classList.add('hidden');
+    
+    document.getElementById('chat-video-preview').src = '';
+    document.getElementById('chat-image-preview').src = '';
+    
+    const audPreview = document.getElementById('chat-audio-preview');
+    audPreview.pause();
+    audPreview.src = '';
+    audPreview.classList.add('hidden');
+};
+
+window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                }, 'image/jpeg', quality);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+};
+
+window.handleSendAction = async function() {
+    refreshMyName();
+    const input = document.getElementById('chat-input');
+    const text = input.value;
+    if (!text.trim() && !selectedMediaFile) return;
+
+    let tempMediaUrl = null;
+    if (selectedMediaFile) {
+        if (selectedMediaFile.type.startsWith('image')) {
+            tempMediaUrl = document.getElementById('chat-image-preview').src;
+        } else {
+            // 語音與影片先產生本機 Blob URL 以供樂觀渲染
+            tempMediaUrl = URL.createObjectURL(selectedMediaFile);
+        }
+    }
+    const originalFile = selectedMediaFile;
+
+    input.value = '';
+    cancelMediaSelection();
+
+    const tempMsg = {
+        id: 'temp_' + Date.now(),
+        sender_name: myChatName,
+        content: text.trim() || null,
+        image_url: tempMediaUrl,
+        created_at: new Date().toISOString(),
+        isTemp: true 
+    };
+    
+    window.currentRoomMessages.unshift(tempMsg);
+    drawMessages(window.currentRoomMessages);
+
+    let uploadedImageUrl = null;
+
+    if (originalFile) {
+        try {
+            let fileToUpload = originalFile;
+            
+            if (originalFile.type.startsWith('image')) {
+                fileToUpload = await window.compressImage(originalFile);
+            }
+            
+            const fileName = `${Date.now()}_${fileToUpload.name}`;
+            
+            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, fileToUpload);
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = window.supabaseClient.storage.from('message-images').getPublicUrl(fileName);
+            uploadedImageUrl = publicUrlData.publicUrl;
+        } catch (err) {
+            alert("媒體上傳失敗，請重試或檢查檔案大小！");
+            window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
+            drawMessages(window.currentRoomMessages);
+            return;
+        }
+    }
+
+    try {
+        await window.supabaseClient.from('messages').insert([{
+            room_id: window.activeRoomId, 
+            sender_name: myChatName, 
+            receiver: window.isGroupChat ? null : window.activeChatTarget,
+            content: tempMsg.content,
+            image_url: uploadedImageUrl
+        }]);
+    } catch (err) {
+        console.error("發送失敗", err);
+        window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
+        drawMessages(window.currentRoomMessages);
+    }
+};
+
+window.closeChat = function() {
+    window.activeChatTarget = null;
+    window.activeRoomId = null;
+    window.isGroupChat = false;
+    window.typingUsers.clear();
+    stopRecording();
+    
+    const searchWrap = document.getElementById('room-search-wrapper');
+    if(searchWrap) {
+        searchWrap.classList.add('hidden');
+        document.getElementById('room-search-input').value = "";
+    }
+
+    document.getElementById('chat-modal').classList.add('translate-x-full');
+    setTimeout(() => {
+        document.getElementById('chat-modal').classList.add('hidden');
+        document.getElementById('chat-messages').innerHTML = ''; 
+        cancelMediaSelection();
+    }, 300);
+    renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { setupGlobalRealtime(); renderMessages(); }, 500);
+});
