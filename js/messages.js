@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 商業級進化版 
-// (加入影片上傳、長按錄音、打字狀態、雲端同步與精準已讀)
+// (加入影片上傳、長按錄音預覽與刪除、打字狀態、雲端同步與精準已讀)
 // ==========================================
 
 window.activeRoomId = null;
@@ -511,7 +511,7 @@ function setupRoomRealtime() {
 }
 
 // ==========================================
-// ★ 錄音與媒體處理邏輯
+// ★ 錄音預覽與媒體處理邏輯 (全新加入預覽防錯機制)
 // ==========================================
 
 window.startRecording = async function(event) {
@@ -523,217 +523,37 @@ window.startRecording = async function(event) {
         audioChunks = [];
         
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        
+        // ★ 當錄音停止時，彈出預覽播放器，而不是直接發送
         mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            // 強制加上 _audio 後綴以供渲染判斷
             selectedMediaFile = new File([audioBlob], `voice_${Date.now()}_audio.webm`, { type: 'audio/webm' });
-            handleSendAction(); // 錄完即發送
+            
+            // 顯示預覽 UI
+            const container = document.getElementById('chat-media-preview-container');
+            const box = document.getElementById('chat-preview-box');
+            const imgPreview = document.getElementById('chat-image-preview');
+            const vidPreview = document.getElementById('chat-video-preview');
+            const audPreview = document.getElementById('chat-audio-preview');
+
+            imgPreview.classList.add('hidden');
+            vidPreview.classList.add('hidden');
+            
+            // 將框框拉長以容納音頻播放器
+            box.className = 'relative flex-1 h-12 bg-white border border-gray-100 rounded-full overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 px-2';
+            
+            audPreview.src = URL.createObjectURL(selectedMediaFile);
+            audPreview.classList.remove('hidden');
+
+            container.classList.remove('hidden');
+            container.classList.add('flex');
+            
+            // 恢復輸入框文字
+            document.getElementById('chat-input').placeholder = "發送訊息...";
         };
 
         mediaRecorder.start();
         isRecording = true;
         
         // UI 反饋
-        const micBtn = document.getElementById('chat-mic-btn');
-        if(micBtn) micBtn.classList.add('recording-pulse');
-        document.getElementById('chat-input').placeholder = "錄音中... 放開即發送";
-    } catch (err) {
-        alert("無法開啟麥克風，請檢查權限設定！");
-    }
-};
-
-window.stopRecording = function(event) {
-    if(event) event.preventDefault();
-    if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
-        isRecording = false;
-        
-        // 恢復 UI
-        const micBtn = document.getElementById('chat-mic-btn');
-        if(micBtn) micBtn.classList.remove('recording-pulse');
-        document.getElementById('chat-input').placeholder = "發送訊息...";
-    }
-};
-
-window.handleMediaSelection = function(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    // 限制大小 25MB
-    if (file.size > 25 * 1024 * 1024) {
-        alert("檔案太大了，請上傳 25MB 以下的媒體。");
-        return;
-    }
-
-    // 為了安全渲染，如果原檔名沒有對應特徵，強加後綴
-    let finalFileName = file.name;
-    const isVid = file.type.startsWith('video');
-    const isImg = file.type.startsWith('image');
-    
-    if(isVid && !finalFileName.includes('_video.')) finalFileName = `upload_${Date.now()}_video.${finalFileName.split('.').pop()}`;
-    if(isImg && !finalFileName.includes('_image.')) finalFileName = `upload_${Date.now()}_image.${finalFileName.split('.').pop()}`;
-    
-    // 重新建構 File 物件以更改檔名
-    selectedMediaFile = new File([file], finalFileName, { type: file.type });
-
-    const container = document.getElementById('chat-media-preview-container');
-    const imgPreview = document.getElementById('chat-image-preview');
-    const vidPreview = document.getElementById('chat-video-preview');
-    const audPreview = document.getElementById('chat-audio-preview');
-
-    imgPreview.classList.add('hidden');
-    vidPreview.classList.add('hidden');
-    audPreview.classList.add('hidden');
-
-    if (isVid) {
-        vidPreview.src = URL.createObjectURL(file);
-        vidPreview.classList.remove('hidden');
-    } else if (file.type.startsWith('audio')) {
-        audPreview.classList.remove('hidden');
-    } else {
-        const reader = new FileReader();
-        reader.onload = e => { imgPreview.src = e.target.result; imgPreview.classList.remove('hidden'); };
-        reader.readAsDataURL(file);
-    }
-
-    container.classList.remove('hidden');
-    container.classList.add('flex');
-};
-
-window.cancelMediaSelection = function() {
-    selectedMediaFile = null;
-    document.getElementById('chat-media-input').value = '';
-    const container = document.getElementById('chat-media-preview-container');
-    container.classList.remove('flex');
-    container.classList.add('hidden');
-    
-    // 清除預覽 src 釋放記憶體
-    document.getElementById('chat-video-preview').src = '';
-    document.getElementById('chat-image-preview').src = '';
-};
-
-window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                canvas.toBlob(blob => {
-                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-                }, 'image/jpeg', quality);
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-};
-
-window.handleSendAction = async function() {
-    refreshMyName();
-    const input = document.getElementById('chat-input');
-    const text = input.value;
-    if (!text.trim() && !selectedMediaFile) return;
-
-    let tempMediaUrl = null;
-    if (selectedMediaFile) {
-        if (selectedMediaFile.type.startsWith('image')) {
-            tempMediaUrl = document.getElementById('chat-image-preview').src;
-        } else {
-            // 語音與影片先產生本機 Blob URL 以供樂觀渲染
-            tempMediaUrl = URL.createObjectURL(selectedMediaFile);
-        }
-    }
-    const originalFile = selectedMediaFile;
-
-    input.value = '';
-    cancelMediaSelection();
-
-    const tempMsg = {
-        id: 'temp_' + Date.now(),
-        sender_name: myChatName,
-        content: text.trim() || null,
-        image_url: tempMediaUrl,
-        created_at: new Date().toISOString(),
-        isTemp: true 
-    };
-    
-    window.currentRoomMessages.unshift(tempMsg);
-    drawMessages(window.currentRoomMessages);
-
-    let uploadedImageUrl = null;
-
-    if (originalFile) {
-        try {
-            let fileToUpload = originalFile;
-            
-            // 只有圖片才做 Canvas 壓縮，影片/語音直接傳
-            if (originalFile.type.startsWith('image')) {
-                fileToUpload = await window.compressImage(originalFile);
-            }
-            
-            const fileName = `${Date.now()}_${fileToUpload.name}`;
-            
-            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage.from('message-images').upload(fileName, fileToUpload);
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = window.supabaseClient.storage.from('message-images').getPublicUrl(fileName);
-            uploadedImageUrl = publicUrlData.publicUrl;
-        } catch (err) {
-            alert("媒體上傳失敗，請重試或檢查檔案大小！");
-            window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
-            drawMessages(window.currentRoomMessages);
-            return;
-        }
-    }
-
-    try {
-        await window.supabaseClient.from('messages').insert([{
-            room_id: window.activeRoomId, 
-            sender_name: myChatName, 
-            receiver: window.isGroupChat ? null : window.activeChatTarget,
-            content: tempMsg.content,
-            image_url: uploadedImageUrl
-        }]);
-    } catch (err) {
-        console.error("發送失敗", err);
-        window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempMsg.id);
-        drawMessages(window.currentRoomMessages);
-    }
-};
-
-window.closeChat = function() {
-    window.activeChatTarget = null;
-    window.activeRoomId = null;
-    window.isGroupChat = false;
-    window.typingUsers.clear();
-    stopRecording();
-    
-    const searchWrap = document.getElementById('room-search-wrapper');
-    if(searchWrap) {
-        searchWrap.classList.add('hidden');
-        document.getElementById('room-search-input').value = "";
-    }
-
-    document.getElementById('chat-modal').classList.add('translate-x-full');
-    setTimeout(() => {
-        document.getElementById('chat-modal').classList.add('hidden');
-        document.getElementById('chat-messages').innerHTML = ''; 
-        cancelMediaSelection();
-    }, 300);
-    renderMessages(document.getElementById('inbox-search-input')?.value || ""); 
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => { setupGlobalRealtime(); renderMessages(); }, 500);
-});
+        const micBtn = document
