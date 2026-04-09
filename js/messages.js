@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 商業級進化版 
-// (加入影片上傳、長按錄音預覽與刪除、打字狀態、雲端同步與精準已讀)
+// (加入影片上傳、長按錄音、打字狀態、雲端同步與精準已讀)
 // ==========================================
 
 window.activeRoomId = null;
@@ -511,7 +511,7 @@ function setupRoomRealtime() {
 }
 
 // ==========================================
-// ★ 錄音預覽與媒體處理邏輯 (全新加入預覽防錯機制)
+// ★ 錄音與媒體處理邏輯
 // ==========================================
 
 window.startRecording = async function(event) {
@@ -523,33 +523,11 @@ window.startRecording = async function(event) {
         audioChunks = [];
         
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        
-        // ★ 當錄音停止時，彈出預覽播放器，而不是直接發送
         mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            // 強制加上 _audio 後綴以供渲染判斷
             selectedMediaFile = new File([audioBlob], `voice_${Date.now()}_audio.webm`, { type: 'audio/webm' });
-            
-            // 顯示預覽 UI
-            const container = document.getElementById('chat-media-preview-container');
-            const box = document.getElementById('chat-preview-box');
-            const imgPreview = document.getElementById('chat-image-preview');
-            const vidPreview = document.getElementById('chat-video-preview');
-            const audPreview = document.getElementById('chat-audio-preview');
-
-            imgPreview.classList.add('hidden');
-            vidPreview.classList.add('hidden');
-            
-            // 將框框拉長以容納音頻播放器
-            box.className = 'relative flex-1 h-12 bg-white border border-gray-100 rounded-full overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 px-2';
-            
-            audPreview.src = URL.createObjectURL(selectedMediaFile);
-            audPreview.classList.remove('hidden');
-
-            container.classList.remove('hidden');
-            container.classList.add('flex');
-            
-            // 恢復輸入框文字
-            document.getElementById('chat-input').placeholder = "發送訊息...";
+            handleSendAction(); // 錄完即發送
         };
 
         mediaRecorder.start();
@@ -558,7 +536,7 @@ window.startRecording = async function(event) {
         // UI 反饋
         const micBtn = document.getElementById('chat-mic-btn');
         if(micBtn) micBtn.classList.add('recording-pulse');
-        document.getElementById('chat-input').placeholder = "錄音中... 放開以預覽";
+        document.getElementById('chat-input').placeholder = "錄音中... 放開即發送";
     } catch (err) {
         alert("無法開啟麥克風，請檢查權限設定！");
     }
@@ -570,9 +548,10 @@ window.stopRecording = function(event) {
         mediaRecorder.stop();
         isRecording = false;
         
-        // 恢復 UI 狀態
+        // 恢復 UI
         const micBtn = document.getElementById('chat-mic-btn');
         if(micBtn) micBtn.classList.remove('recording-pulse');
+        document.getElementById('chat-input').placeholder = "發送訊息...";
     }
 };
 
@@ -580,11 +559,13 @@ window.handleMediaSelection = function(input) {
     const file = input.files[0];
     if (!file) return;
 
+    // 限制大小 25MB
     if (file.size > 25 * 1024 * 1024) {
         alert("檔案太大了，請上傳 25MB 以下的媒體。");
         return;
     }
 
+    // 為了安全渲染，如果原檔名沒有對應特徵，強加後綴
     let finalFileName = file.name;
     const isVid = file.type.startsWith('video');
     const isImg = file.type.startsWith('image');
@@ -592,10 +573,10 @@ window.handleMediaSelection = function(input) {
     if(isVid && !finalFileName.includes('_video.')) finalFileName = `upload_${Date.now()}_video.${finalFileName.split('.').pop()}`;
     if(isImg && !finalFileName.includes('_image.')) finalFileName = `upload_${Date.now()}_image.${finalFileName.split('.').pop()}`;
     
+    // 重新建構 File 物件以更改檔名
     selectedMediaFile = new File([file], finalFileName, { type: file.type });
 
     const container = document.getElementById('chat-media-preview-container');
-    const box = document.getElementById('chat-preview-box');
     const imgPreview = document.getElementById('chat-image-preview');
     const vidPreview = document.getElementById('chat-video-preview');
     const audPreview = document.getElementById('chat-audio-preview');
@@ -604,15 +585,10 @@ window.handleMediaSelection = function(input) {
     vidPreview.classList.add('hidden');
     audPreview.classList.add('hidden');
 
-    // 恢復為圖片/影片的方形樣式
-    box.className = 'relative w-20 h-20 bg-gray-200 rounded-xl overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 flex-shrink-0';
-
     if (isVid) {
         vidPreview.src = URL.createObjectURL(file);
         vidPreview.classList.remove('hidden');
     } else if (file.type.startsWith('audio')) {
-        box.className = 'relative flex-1 h-12 bg-white border border-gray-100 rounded-full overflow-hidden shadow-sm flex items-center justify-center transition-all duration-300 px-2';
-        audPreview.src = URL.createObjectURL(file);
         audPreview.classList.remove('hidden');
     } else {
         const reader = new FileReader();
@@ -627,18 +603,13 @@ window.handleMediaSelection = function(input) {
 window.cancelMediaSelection = function() {
     selectedMediaFile = null;
     document.getElementById('chat-media-input').value = '';
-    
     const container = document.getElementById('chat-media-preview-container');
     container.classList.remove('flex');
     container.classList.add('hidden');
     
+    // 清除預覽 src 釋放記憶體
     document.getElementById('chat-video-preview').src = '';
     document.getElementById('chat-image-preview').src = '';
-    
-    const audPreview = document.getElementById('chat-audio-preview');
-    audPreview.pause();
-    audPreview.src = '';
-    audPreview.classList.add('hidden');
 };
 
 window.compressImage = function(file, maxWidth = 1200, quality = 0.8) {
@@ -706,6 +677,7 @@ window.handleSendAction = async function() {
         try {
             let fileToUpload = originalFile;
             
+            // 只有圖片才做 Canvas 壓縮，影片/語音直接傳
             if (originalFile.type.startsWith('image')) {
                 fileToUpload = await window.compressImage(originalFile);
             }
