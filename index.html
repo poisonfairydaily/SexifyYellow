@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -20,7 +20,7 @@
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
 
-    <div id="age-gate" class="fixed inset-0 z-[300] bg-black flex items-center justify-center p-6 transition-opacity duration-500">
+    <div id="age-gate" class="fixed inset-0 z-[500] bg-black flex items-center justify-center p-6 transition-opacity duration-500">
         <div class="text-center">
             <h1 class="text-white text-3xl font-black mb-4 tracking-widest">SEXIFY</h1>
             <p class="text-gray-400 text-sm mb-8" data-i18n="age_desc">本網站包含成人內容，進入前請確認您已滿 18 歲</p>
@@ -28,38 +28,182 @@
         </div>
     </div>
 
+    <div id="auth-modal" class="fixed inset-0 z-[400] bg-black/60 hidden flex items-center justify-center p-6">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl relative">
+            <div class="text-center mb-8">
+                <h2 id="auth-title" class="text-3xl font-black italic tracking-tighter text-sexify mb-2">SEXIFY</h2>
+                <p id="auth-subtitle" class="text-gray-500 text-sm font-bold">登入以繼續探索</p>
+            </div>
+            <div class="space-y-4">
+                <div id="auth-name-field" class="hidden">
+                    <input type="text" id="auth-name" placeholder="顯示名稱 (如: 健身教練_Max)" class="w-full bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+                </div>
+                <input type="email" id="auth-email" placeholder="電子郵件 Email" class="w-full bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+                <input type="password" id="auth-password" placeholder="密碼 Password" class="w-full bg-gray-100 rounded-2xl px-5 py-4 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+                <button id="auth-btn" onclick="handleAuthAction()" class="w-full bg-sexify text-white font-bold py-4 rounded-2xl shadow-lg shadow-sexify/30 active:scale-95 transition mt-2">登入</button>
+            </div>
+            <div class="mt-6 text-center text-sm text-gray-500">
+                <span id="auth-switch-text">還沒有帳號嗎？</span> 
+                <button id="auth-switch-btn" onclick="toggleAuthMode()" class="text-sexify font-bold underline underline-offset-4">立即註冊</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-drawer" class="fixed inset-0 z-[150] hidden bg-black/50 backdrop-blur-sm transition-opacity">
+        <div id="settings-panel" class="absolute left-0 top-0 bottom-0 w-72 bg-white transform -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                <h2 class="font-black text-xl" data-i18n="settings">設定與數據</h2>
+                <button onclick="toggleSettings()" class="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full text-gray-600 active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto py-4">
+                <div class="px-6 space-y-2">
+                    <button onclick="openPersonalCenter()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-user"></i></div><span class="font-bold text-gray-700" data-i18n="menu_personal">個人中心</span></button>
+                    <button onclick="openFansSubsModal()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center"><i class="fa-solid fa-heart"></i></div><span class="font-bold text-gray-700" data-i18n="menu_fans_subs">粉絲與訂閱用戶</span></button>
+                    <button onclick="toggleLanguage()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="fa-solid fa-earth-americas"></i></div><span class="font-bold text-gray-700" data-i18n="menu_lang">切換語言 (EN/ZH)</span></button>
+                </div>
+            </div>
+            <div class="p-6 border-t bg-gray-50">
+                <button id="logout-btn" class="w-full flex items-center justify-center gap-2 bg-white border-2 border-gray-200 text-gray-700 font-bold py-3.5 rounded-2xl active:scale-95 transition"><i class="fa-solid fa-arrow-right-from-bracket"></i><span data-i18n="menu_logout">登出帳號</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-modal" class="fixed inset-0 z-[200] bg-gray-50 hidden transform translate-x-full transition-transform duration-300 flex flex-col">
+        <header class="bg-white/90 backdrop-blur-md px-4 py-3 border-b flex items-center gap-4 sticky top-0 z-10 shadow-sm">
+            <button onclick="closeChat()" class="w-10 h-10 flex items-center justify-center text-gray-700 active:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-left text-lg"></i></button>
+            <div class="flex-1 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gray-200 overflow-hidden border border-gray-100 relative"><img id="chat-target-avatar" src="https://ui-avatars.com/api/?name=Chat&background=random" class="w-full h-full object-cover"></div>
+                <div><h2 id="my-chat-title-name" class="font-bold text-gray-900 leading-tight">讀取中...</h2><p id="chat-typing-status" class="text-xs text-sexify font-bold h-4"></p></div>
+            </div>
+            <button class="w-10 h-10 flex items-center justify-center text-gray-400"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        </header>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 pb-6"></div>
+        <div class="p-4 border-t bg-white flex flex-col gap-2 pb-8 flex-shrink-0">
+            <div id="chat-media-preview-container" class="hidden relative inline-block mb-2 w-32">
+                <img id="chat-media-preview" class="w-32 h-32 object-cover rounded-xl border border-gray-200 hidden">
+                <video id="chat-video-preview" class="w-32 h-32 object-cover rounded-xl border border-gray-200 hidden" autoplay muted loop></video>
+                <button onclick="cancelMediaSelection()" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md active:scale-90"><i class="fa-solid fa-xmark text-xs"></i></button>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="document.getElementById('chat-media-input').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-sexify active:scale-90 transition text-lg flex-shrink-0"><i class="fa-solid fa-image"></i></button>
+                <input type="file" id="chat-media-input" accept="image/*,video/*" class="hidden" onchange="typeof handleMediaSelection === 'function' && handleMediaSelection(this)">
+                <button id="chat-mic-btn" onpointerdown="startRecording(event)" onpointerup="stopRecording(event)" onpointerleave="stopRecording(event)" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-500 active:scale-90 transition text-lg flex-shrink-0 touch-none"><i class="fa-solid fa-microphone"></i></button>
+                <input type="text" id="chat-input" placeholder="發送訊息..." class="flex-1 bg-gray-100 rounded-full px-4 py-2.5 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
+                <button onclick="typeof handleSendAction === 'function' && handleSendAction()" class="bg-sexify text-white font-bold px-4 py-2 rounded-full shadow-md active:scale-95 transition flex-shrink-0">發送</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="upload-modal" class="fixed inset-0 z-[150] bg-black/50 hidden flex items-end">
+        <div id="upload-panel" class="bg-white w-full h-[90vh] rounded-t-3xl transform translate-y-full transition-transform duration-300 flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+            <div class="p-4 border-b flex justify-between items-center bg-white rounded-t-3xl sticky top-0 z-10">
+                <button onclick="closeUploadModal()" class="w-10 h-10 flex items-center justify-center text-gray-400 bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
+                <span class="font-black text-lg text-gray-800">建立新內容</span>
+                <button onclick="typeof simulatedPublish === 'function' && simulatedPublish()" class="bg-sexify text-white px-6 py-2 rounded-full font-bold shadow-md shadow-sexify/30 active:scale-95 transition">發佈</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <textarea id="post-caption" placeholder="說點什麼...支援文字與表情符號 ✨" class="w-full text-lg outline-none resize-none placeholder-gray-300 text-gray-700 bg-transparent" rows="3"></textarea>
+                <div id="media-preview-container" class="relative bg-gray-50 rounded-2xl overflow-hidden min-h-[250px] flex items-center justify-center border-2 border-dashed border-gray-200 group">
+                    <img id="media-preview" class="hidden w-full h-auto max-h-[60vh] object-contain">
+                    <video id="video-preview" class="hidden w-full h-auto max-h-[60vh] object-contain" controls></video>
+                    <div id="media-placeholder" class="text-center p-8 pointer-events-none">
+                        <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-400 text-2xl mx-auto mb-3 shadow-sm"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                        <p class="text-sm font-bold text-gray-500 mb-1">點擊或拖曳上傳</p>
+                        <p class="text-xs text-gray-400">支援相片與影片格式</p>
+                    </div>
+                    <input type="file" id="post-media-upload" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="typeof handleFileSelect === 'function' && handleFileSelect(event)">
+                </div>
+                <div class="bg-gray-50 p-5 rounded-2xl space-y-4 border border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-gray-700 flex items-center gap-2"><i class="fa-solid fa-lock-open text-green-500"></i><span data-i18n="post_free">免費公開</span></span>
+                        <input type="radio" id="view-free" name="view_mode" class="w-5 h-5 accent-sexify" checked onchange="document.getElementById('price-settings').classList.add('hidden'); document.getElementById('post-price').value=0">
+                    </div>
+                    <div class="h-px bg-gray-200"></div>
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-gray-700 flex items-center gap-2"><i class="fa-solid fa-lock text-sexify"></i><span data-i18n="post_paid">付費解鎖</span></span>
+                        <input type="radio" id="view-paid" name="view_mode" class="w-5 h-5 accent-sexify" onchange="document.getElementById('price-settings').classList.remove('hidden')">
+                    </div>
+                    <div id="price-settings" class="hidden pt-4 mt-2 border-t border-gray-200">
+                        <label class="block text-xs font-bold text-gray-500 mb-2">設定解鎖價格 (金幣)</label>
+                        <input type="number" id="post-price" placeholder="例如: 99" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none text-gray-700 font-bold focus:border-sexify focus:ring-1 focus:ring-sexify transition">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="comment-sheet" class="fixed inset-0 z-[150] bg-black/50 hidden flex items-end">
+        <div id="comment-panel" class="bg-white w-full h-[75vh] rounded-t-3xl transform translate-y-full transition-transform duration-300 flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center relative">
+                <span class="font-bold flex-1 text-center">留言</span>
+                <button onclick="closeComments()" class="absolute right-4 text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div id="comment-list" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+            <div class="p-4 border-t bg-gray-50 flex items-center gap-3">
+                <input type="text" id="comment-input" class="flex-1 bg-white border border-gray-200 rounded-full px-4 py-2.5 text-sm outline-none focus:border-sexify" placeholder="留個言吧...">
+                <button onclick="typeof sendComment === 'function' && sendComment()" class="text-sexify font-bold px-3"><i class="fa-solid fa-paper-plane text-xl"></i></button>
+            </div>
+            <div id="post-detail" class="hidden" data-source-id=""></div>
+        </div>
+    </div>
+
+    <div id="product-modal-container"></div>
+    <div id="personal-center-modal" class="fixed inset-0 z-[150] bg-white hidden transform translate-x-full transition-transform duration-300">
+        <header class="p-4 border-b flex items-center"><button onclick="closePersonalCenter()" class="mr-4"><i class="fa-solid fa-chevron-left"></i></button><h2 class="font-bold flex-1">個人中心</h2></header>
+        <div class="p-6 text-center text-gray-500">個人資料設定區域</div>
+    </div>
+    <div id="fans-subs-modal" class="fixed inset-0 z-[150] bg-white hidden transform translate-x-full transition-transform duration-300">
+        <header class="p-4 border-b flex items-center"><button onclick="closeFansSubsModal()" class="mr-4"><i class="fa-solid fa-chevron-left"></i></button><h2 class="font-bold flex-1">粉絲與訂閱</h2></header>
+        <div class="p-4"><div id="subs-list"></div><div id="fans-list" class="mt-4"></div></div>
+    </div>
+
     <div id="search-overlay" class="search-overlay">
         <div class="p-4 flex items-center gap-3 border-b">
             <div class="flex-1 bg-gray-100 rounded-full flex items-center px-4 py-2">
                 <i class="fa-solid fa-magnifying-glass text-gray-400 mr-2"></i>
-                <input type="text" id="searchInput" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋創作者名稱..." data-i18n="search_placeholder">
+                <input type="text" id="searchInput" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋創作者名稱..." data-i18n="search_placeholder" autocomplete="off">
             </div>
-            <button onclick="toggleSearch(false)" class="text-gray-500 font-bold">取消</button>
+            <button id="closeSearchBtn" onclick="toggleSearch(false)" class="text-gray-500 font-bold">取消</button>
         </div>
         <div id="searchResults" class="flex-1 overflow-y-auto p-4 space-y-4">
-            </div>
+            <div class="text-center text-gray-400 py-10 text-sm">輸入名稱開始搜尋...</div>
+        </div>
     </div>
+
 
     <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-700 pb-20">
         
         <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify">SEXIFY</h1>
             <div class="flex gap-4">
-                <button onclick="toggleSearch(true)" class="text-xl text-gray-700"><i class="fa-solid fa-magnifying-glass"></i></button>
-                <button onclick="toggleSettings()" class="text-xl text-gray-700"><i class="fa-solid fa-bars-staggered"></i></button>
+                <button onclick="toggleSearch(true)" class="text-xl text-gray-700 active:scale-90 transition"><i class="fa-solid fa-magnifying-glass"></i></button>
+                <button onclick="toggleSettings()" class="text-xl text-gray-700 active:scale-90 transition"><i class="fa-solid fa-bars-staggered"></i></button>
             </div>
         </header>
 
         <main>
             <section id="home-tab" class="tab-content active">
-                <div id="discovery-grid" class="masonry-grid"></div>
+                <div id="creator-entry-point"></div> <div id="discovery-grid" class="masonry-grid mt-2"></div>
             </section>
 
             <section id="shop-tab" class="tab-content">
-                <div id="shop-grid" class="grid grid-cols-1 gap-4 p-4"></div>
+                <div class="p-4">
+                    <div class="bg-gray-100 rounded-full flex items-center px-4 py-2 mb-4">
+                        <i class="fa-solid fa-magnifying-glass text-gray-400 mr-2"></i>
+                        <input type="text" id="shop-search" onkeyup="searchShop()" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋寫真或商品...">
+                        <button id="shop-search-clear-btn" onclick="clearShopSearch()" class="hidden text-gray-400"><i class="fa-solid fa-circle-xmark"></i></button>
+                    </div>
+                </div>
+                <div id="shop-grid" class="grid grid-cols-1 gap-4 p-4 pt-0"></div>
             </section>
 
             <section id="messages-tab" class="tab-content">
+                <div class="p-4 border-b">
+                    <div class="bg-gray-100 rounded-full flex items-center px-4 py-2" id="room-search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass text-gray-400 mr-2"></i>
+                        <input type="text" id="room-search-input" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋聊天室...">
+                    </div>
+                </div>
                 <div id="inbox-container" class="p-4 space-y-4"></div>
             </section>
 
@@ -68,7 +212,7 @@
             </section>
         </main>
 
-        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center py-3 z-50">
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center py-3 z-40">
             <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active"><i class="fa-solid fa-house"></i></button>
             <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400"><i class="fa-solid fa-bag-shopping"></i></button>
             <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400"><i class="fa-solid fa-comment-dots"></i></button>
@@ -76,22 +220,22 @@
         </nav>
     </div>
 
-    <div id="auth-modal" class="fixed inset-0 z-[400] bg-black/60 hidden flex items-center justify-center p-6">
-        </div>
-
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
-    <script src="js/discovery.js"></script>
-    <script src="js/search.js"></script>
-    <script src="js/messages.js"></script>
-    <script src="js/shop.js"></script>
-    <script src="js/profile.js"></script>
-    <script>
+    <script src="js/create.js"></script>     <script src="js/discovery.js"></script>  <script src="js/messages.js"></script>   <script src="js/shop.js"></script>       <script src="js/profile.js"></script>    <script src="js/search.js"></script>     <script>
+        // 控制新搜尋介面的開關
         function toggleSearch(show) {
-            document.getElementById('search-overlay').classList.toggle('active', show);
+            const overlay = document.getElementById('search-overlay');
+            if(overlay) {
+                if (show) {
+                    overlay.classList.add('active');
+                } else {
+                    overlay.classList.remove('active');
+                }
+            }
         }
     </script>
 </body>
