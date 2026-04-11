@@ -12,9 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
         searchInput.addEventListener("input", (e) => {
             const query = e.target.value.trim();
             
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
+            if (searchTimeout) clearTimeout(searchTimeout);
 
             if (query === "") {
                 renderEmptyState();
@@ -79,6 +77,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderNoResults() {
-        if(searchResults) searchResults.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-bold">沒有該用戶</div>`;
+        if(searchResults) searchResults.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-bold flex flex-col items-center"><i class="fa-solid fa-user-slash text-3xl mb-2 opacity-50"></i>沒有該用戶</div>`;
     }
 });
