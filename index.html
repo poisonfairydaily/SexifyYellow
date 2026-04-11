@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -48,29 +48,7 @@
             </div>
         </div>
     </div>
-<div id="edit-profile-modal" class="fixed inset-0 z-[300] bg-white hidden flex-col transform translate-y-full transition-transform duration-300">
-        <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-            <button onclick="closeEditProfile()" class="text-gray-500 font-bold">取消</button>
-            <h2 class="font-black text-lg">編輯個人資料</h2>
-            <button onclick="saveProfileData()" id="save-profile-btn" class="text-sexify font-bold active:scale-95 transition">儲存</button>
-        </header>
-        <div class="flex-1 overflow-y-auto p-6 space-y-6">
-            <div class="flex flex-col items-center">
-                <div class="relative w-24 h-24 mb-4">
-                    <img id="edit-avatar-preview" src="https://ui-avatars.com/api/?name=User" class="w-full h-full rounded-full object-cover border-2 border-gray-200">
-                    <button class="absolute bottom-0 right-0 bg-sexify text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md"><i class="fa-solid fa-camera"></i></button>
-                </div>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-2">顯示名稱 (Display Name)</label>
-                <input type="text" id="edit-display-name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-sexify transition">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-2">個人簡介 (Bio)</label>
-                <textarea id="edit-bio" rows="4" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-sexify transition resize-none" placeholder="介紹一下你自己吧..."></textarea>
-            </div>
-        </div>
-    </div>
+
     <div id="settings-drawer" class="fixed inset-0 z-[150] hidden bg-black/50 backdrop-blur-sm transition-opacity">
         <div id="settings-panel" class="absolute left-0 top-0 bottom-0 w-72 bg-white transform -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
             <div class="p-6 border-b flex justify-between items-center bg-gray-50">
@@ -79,7 +57,7 @@
             </div>
             <div class="flex-1 overflow-y-auto py-4">
                 <div class="px-6 space-y-2">
-                    <button onclick="openPersonalCenter()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-user"></i></div><span class="font-bold text-gray-700" data-i18n="menu_personal">個人中心</span></button>
+                    <button onclick="openEditProfile()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-user"></i></div><span class="font-bold text-gray-700" data-i18n="menu_personal">個人中心</span></button>
                     <button onclick="openFansSubsModal()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center"><i class="fa-solid fa-heart"></i></div><span class="font-bold text-gray-700" data-i18n="menu_fans_subs">粉絲與訂閱用戶</span></button>
                     <button onclick="toggleLanguage()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95"><div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="fa-solid fa-earth-americas"></i></div><span class="font-bold text-gray-700" data-i18n="menu_lang">切換語言 (EN/ZH)</span></button>
                 </div>
@@ -90,26 +68,108 @@
         </div>
     </div>
 
+    <div id="edit-profile-modal" class="fixed inset-0 z-[300] bg-gray-50 hidden flex-col transform translate-y-full transition-transform duration-300">
+        <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+            <button onclick="closeEditProfile()" class="text-gray-500 font-bold px-2 py-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="font-black text-lg">編輯個人資料</h2>
+            <button onclick="saveProfileData()" id="save-profile-btn" class="text-white bg-sexify px-4 py-1.5 rounded-full font-bold active:scale-95 transition shadow-sm">儲存</button>
+        </header>
+        
+        <div class="flex-1 overflow-y-auto pb-20">
+            <div class="bg-white p-6 flex flex-col items-center border-b border-gray-100 mb-2">
+                <div class="relative w-24 h-24 mb-3">
+                    <img id="edit-avatar-preview" src="https://ui-avatars.com/api/?name=User" class="w-full h-full rounded-full object-cover border-2 border-gray-100 shadow-sm">
+                    <div class="absolute bottom-0 right-0 bg-gray-900 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md border-2 border-white cursor-pointer"><i class="fa-solid fa-camera text-xs"></i></div>
+                </div>
+            </div>
+
+            <div class="bg-white px-5 py-2 border-y border-gray-100 mb-2">
+                <h3 class="text-xs font-black text-gray-400 mb-3 mt-2">基本資訊</h3>
+                <div class="space-y-4 mb-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">顯示名稱</label>
+                        <input type="text" id="edit-display-name" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sexify text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">用戶 ID</label>
+                        <div class="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-sexify">
+                            <span class="text-gray-400 mr-1 text-sm">@</span>
+                            <input type="text" id="edit-username" class="w-full bg-transparent outline-none text-sm" placeholder="your_unique_id">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">個人簡介</label>
+                        <textarea id="edit-bio" rows="3" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sexify text-sm resize-none" placeholder="介紹一下你自己吧..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white px-5 py-2 border-y border-gray-100 mb-2">
+                <h3 class="text-xs font-black text-gray-400 mb-3 mt-2">私密設定</h3>
+                <div class="space-y-4 mb-4">
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-gray-700 mb-1">性別</label>
+                            <select id="edit-gender" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sexify text-sm">
+                                <option value="">保密</option>
+                                <option value="male">男性</option>
+                                <option value="female">女性</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-gray-700 mb-1">生日</label>
+                            <input type="date" id="edit-birthday" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sexify text-sm text-gray-700">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">公開聯絡信箱 (選填)</label>
+                        <input type="email" id="edit-contact-email" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-sexify text-sm" placeholder="business@example.com">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white px-5 py-2 border-y border-gray-100">
+                <h3 class="text-xs font-black text-gray-400 mb-3 mt-2">外部社群連結</h3>
+                <div class="space-y-4 mb-4">
+                    <div class="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-sexify">
+                        <i class="fa-brands fa-instagram text-gray-400 mr-2"></i>
+                        <input type="text" id="edit-social-ig" class="w-full bg-transparent outline-none text-sm" placeholder="Instagram 帳號">
+                    </div>
+                    <div class="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-sexify">
+                        <i class="fa-brands fa-x-twitter text-gray-400 mr-2"></i>
+                        <input type="text" id="edit-social-x" class="w-full bg-transparent outline-none text-sm" placeholder="X (Twitter) 帳號">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="chat-modal" class="fixed inset-0 z-[200] bg-gray-50 hidden transform translate-x-full transition-transform duration-300 flex flex-col">
         <header class="bg-white/90 backdrop-blur-md px-4 py-3 border-b flex items-center gap-4 sticky top-0 z-10 shadow-sm">
             <button onclick="closeChat()" class="w-10 h-10 flex items-center justify-center text-gray-700 active:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-left text-lg"></i></button>
             <div class="flex-1 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-gray-200 overflow-hidden border border-gray-100 relative"><img id="chat-target-avatar" src="https://ui-avatars.com/api/?name=Chat&background=random" class="w-full h-full object-cover"></div>
-                <div><h2 id="my-chat-title-name" class="font-bold text-gray-900 leading-tight">讀取中...</h2><p id="chat-typing-status" class="text-xs text-sexify font-bold h-4"></p></div>
+                <div><h2 id="chat-name" class="font-bold text-gray-900 leading-tight">讀取中...</h2><p id="chat-typing-status" class="text-xs text-sexify font-bold h-4"></p></div>
             </div>
-            <button class="w-10 h-10 flex items-center justify-center text-gray-400"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div id="chat-header-actions" class="flex gap-2"></div>
         </header>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 pb-6"></div>
+        
+        <div id="room-search-wrapper" class="hidden bg-gray-100 px-4 py-2 border-b">
+            <input type="text" id="room-search-input" placeholder="在對話中搜尋..." oninput="filterRoomMessages(this.value)" class="w-full bg-white rounded-full px-4 py-1.5 text-sm outline-none border border-gray-200 focus:border-sexify">
+        </div>
+
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 pb-6 flex flex-col-reverse relative"></div>
+        
         <div class="p-4 border-t bg-white flex flex-col gap-2 pb-8 flex-shrink-0">
-            <div id="chat-media-preview-container" class="hidden relative inline-block mb-2 w-32">
-                <img id="chat-media-preview" class="w-32 h-32 object-cover rounded-xl border border-gray-200 hidden">
-                <video id="chat-video-preview" class="w-32 h-32 object-cover rounded-xl border border-gray-200 hidden" autoplay muted loop></video>
-                <button onclick="cancelMediaSelection()" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md active:scale-90"><i class="fa-solid fa-xmark text-xs"></i></button>
+            <div id="chat-image-preview-container" class="hidden relative inline-block mb-2 w-32">
+                <img id="chat-image-preview" class="w-32 h-32 object-cover rounded-xl border border-gray-200">
+                <button onclick="cancelImageSelection()" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md active:scale-90"><i class="fa-solid fa-xmark text-xs"></i></button>
             </div>
             <div class="flex items-center gap-3">
-                <button onclick="document.getElementById('chat-media-input').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-sexify active:scale-90 transition text-lg flex-shrink-0"><i class="fa-solid fa-image"></i></button>
-                <input type="file" id="chat-media-input" accept="image/*,video/*" class="hidden" onchange="typeof handleMediaSelection === 'function' && handleMediaSelection(this)">
-                <button id="chat-mic-btn" onpointerdown="startRecording(event)" onpointerup="stopRecording(event)" onpointerleave="stopRecording(event)" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-500 active:scale-90 transition text-lg flex-shrink-0 touch-none"><i class="fa-solid fa-microphone"></i></button>
+                <button onclick="document.getElementById('chat-image-input').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-sexify active:scale-90 transition text-lg flex-shrink-0"><i class="fa-solid fa-image"></i></button>
+                <input type="file" id="chat-image-input" accept="image/*,video/*" class="hidden" onchange="typeof handleImageSelection === 'function' && handleImageSelection(this)">
+                <button id="chat-mic-btn" onpointerdown="typeof startRecording === 'function' && startRecording(event)" onpointerup="typeof stopRecording === 'function' && stopRecording(event)" onpointerleave="typeof stopRecording === 'function' && stopRecording(event)" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-500 active:scale-90 transition text-lg flex-shrink-0 touch-none"><i class="fa-solid fa-microphone"></i></button>
                 <input type="text" id="chat-input" placeholder="發送訊息..." class="flex-1 bg-gray-100 rounded-full px-4 py-2.5 outline-none text-sm focus:ring-2 focus:ring-sexify/20 transition">
                 <button onclick="typeof handleSendAction === 'function' && handleSendAction()" class="bg-sexify text-white font-bold px-4 py-2 rounded-full shadow-md active:scale-95 transition flex-shrink-0">發送</button>
             </div>
@@ -121,7 +181,7 @@
             <div class="p-4 border-b flex justify-between items-center bg-white rounded-t-3xl sticky top-0 z-10">
                 <button onclick="closeUploadModal()" class="w-10 h-10 flex items-center justify-center text-gray-400 bg-gray-100 rounded-full active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
                 <span class="font-black text-lg text-gray-800">建立新內容</span>
-                <button onclick="typeof simulatedPublish === 'function' && simulatedPublish()" class="bg-sexify text-white px-6 py-2 rounded-full font-bold shadow-md shadow-sexify/30 active:scale-95 transition">發佈</button>
+                <button onclick="typeof publishPost === 'function' && publishPost()" class="bg-sexify text-white px-6 py-2 rounded-full font-bold shadow-md shadow-sexify/30 active:scale-95 transition">發佈</button>
             </div>
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <textarea id="post-caption" placeholder="說點什麼...支援文字與表情符號 ✨" class="w-full text-lg outline-none resize-none placeholder-gray-300 text-gray-700 bg-transparent" rows="3"></textarea>
@@ -133,7 +193,7 @@
                         <p class="text-sm font-bold text-gray-500 mb-1">點擊或拖曳上傳</p>
                         <p class="text-xs text-gray-400">支援相片與影片格式</p>
                     </div>
-                    <input type="file" id="post-media-upload" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="typeof handleFileSelect === 'function' && handleFileSelect(event)">
+                    <input type="file" id="post-media-upload" accept="image/*,video/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="typeof handleFileSelect === 'function' && handleFileSelect(event)">
                 </div>
                 <div class="bg-gray-50 p-5 rounded-2xl space-y-4 border border-gray-100">
                     <div class="flex items-center justify-between">
@@ -165,35 +225,33 @@
                 <input type="text" id="comment-input" class="flex-1 bg-white border border-gray-200 rounded-full px-4 py-2.5 text-sm outline-none focus:border-sexify" placeholder="留個言吧...">
                 <button onclick="typeof sendComment === 'function' && sendComment()" class="text-sexify font-bold px-3"><i class="fa-solid fa-paper-plane text-xl"></i></button>
             </div>
-            <div id="post-detail" class="hidden" data-source-id=""></div>
         </div>
     </div>
 
-    <div id="product-modal-container"></div>
-    <div id="personal-center-modal" class="fixed inset-0 z-[150] bg-white hidden transform translate-x-full transition-transform duration-300">
-        <header class="p-4 border-b flex items-center"><button onclick="closePersonalCenter()" class="mr-4"><i class="fa-solid fa-chevron-left"></i></button><h2 class="font-bold flex-1">個人中心</h2></header>
-        <div class="p-6 text-center text-gray-500">個人資料設定區域</div>
-    </div>
-    <div id="fans-subs-modal" class="fixed inset-0 z-[150] bg-white hidden transform translate-x-full transition-transform duration-300">
-        <header class="p-4 border-b flex items-center"><button onclick="closeFansSubsModal()" class="mr-4"><i class="fa-solid fa-chevron-left"></i></button><h2 class="font-bold flex-1">粉絲與訂閱</h2></header>
-        <div class="p-4"><div id="subs-list"></div><div id="fans-list" class="mt-4"></div></div>
+    <div id="fans-subs-modal" class="fixed inset-0 z-[150] bg-white hidden transform translate-x-full transition-transform duration-300 flex flex-col">
+        <header class="p-4 border-b flex items-center bg-white"><button onclick="closeFansSubsModal()" class="mr-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-chevron-left"></i></button><h2 class="font-bold flex-1">粉絲與訂閱</h2></header>
+        <div class="p-4 flex-1 overflow-y-auto bg-gray-50">
+            <h3 class="text-xs font-bold text-gray-500 mb-2">我的追蹤</h3>
+            <div id="subs-list" class="mb-6 space-y-2"></div>
+            <h3 class="text-xs font-bold text-gray-500 mb-2 border-t pt-4">我的粉絲</h3>
+            <div id="fans-list" class="space-y-2"></div>
+        </div>
     </div>
 
     <div id="search-overlay" class="search-overlay">
         <div class="p-4 flex items-center gap-3 border-b">
             <div class="flex-1 bg-gray-100 rounded-full flex items-center px-4 py-2">
                 <i class="fa-solid fa-magnifying-glass text-gray-400 mr-2"></i>
-                <input type="text" id="searchInput" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋創作者名稱..." data-i18n="search_placeholder" autocomplete="off">
+                <input type="text" id="globalSearchInput" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋創作者名稱..." autocomplete="off">
             </div>
-            <button id="closeSearchBtn" onclick="toggleSearch(false)" class="text-gray-500 font-bold">取消</button>
+            <button onclick="toggleSearch(false)" class="text-gray-500 font-bold">取消</button>
         </div>
         <div id="searchResults" class="flex-1 overflow-y-auto p-4 space-y-4">
             <div class="text-center text-gray-400 py-10 text-sm">輸入名稱開始搜尋...</div>
         </div>
     </div>
 
-
-    <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-700 pb-20">
+    <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-700 pb-24">
         
         <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify">SEXIFY</h1>
@@ -205,7 +263,7 @@
 
         <main>
             <section id="home-tab" class="tab-content active">
-                <div id="creator-entry-point"></div> <div id="discovery-grid" class="masonry-grid mt-2"></div>
+                <div id="discovery-grid" class="masonry-grid mt-2"></div>
             </section>
 
             <section id="shop-tab" class="tab-content">
@@ -216,29 +274,32 @@
                         <button id="shop-search-clear-btn" onclick="clearShopSearch()" class="hidden text-gray-400"><i class="fa-solid fa-circle-xmark"></i></button>
                     </div>
                 </div>
-                <div id="shop-grid" class="grid grid-cols-1 gap-4 p-4 pt-0"></div>
+                <div id="shop-grid" class="grid grid-cols-2 gap-4 p-4 pt-0"></div>
             </section>
 
             <section id="messages-tab" class="tab-content">
                 <div class="p-4 border-b">
-                    <div class="bg-gray-100 rounded-full flex items-center px-4 py-2" id="room-search-wrapper">
+                    <div class="bg-gray-100 rounded-full flex items-center px-4 py-2">
                         <i class="fa-solid fa-magnifying-glass text-gray-400 mr-2"></i>
-                        <input type="text" id="room-search-input" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋聊天室...">
+                        <input type="text" id="inbox-search-input" oninput="typeof searchUsersToChat === 'function' && searchUsersToChat()" class="bg-transparent border-none outline-none text-sm w-full" placeholder="搜尋用戶或聊天室...">
                     </div>
                 </div>
-                <div id="inbox-container" class="p-4 space-y-4"></div>
-            </section>
+                <div id="chat-list" class="space-y-1"></div>
+                <div id="messages-list" class="space-y-1 hidden"></div> </section>
 
             <section id="profile-tab" class="tab-content">
                 <div id="my-profile-container"></div>
             </section>
         </main>
 
-        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center py-3 z-40">
-            <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active"><i class="fa-solid fa-house"></i></button>
-            <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400"><i class="fa-solid fa-bag-shopping"></i></button>
-            <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400"><i class="fa-solid fa-comment-dots"></i></button>
-            <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400"><i class="fa-solid fa-user"></i></button>
+        <nav class="fixed bottom-0 w-full bg-white border-t border-gray-100 flex justify-around items-end pb-safe pt-2 px-2 z-40 shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
+            <button onclick="switchTab('home-tab', this)" class="nav-btn nav-active flex flex-col items-center p-2 w-16 mb-1"><i class="fa-solid fa-house mb-1 text-lg"></i><span class="text-[10px] font-bold">首頁</span></button>
+            <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center p-2 w-16 mb-1"><i class="fa-solid fa-store mb-1 text-lg"></i><span class="text-[10px] font-bold">商城</span></button>
+            <div class="relative -top-4 flex justify-center w-16">
+                <button onclick="openUploadModal()" class="w-14 h-14 bg-sexify rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(255,36,66,0.4)] active:scale-95 transition-transform border-4 border-[#f8f8f8]"><i class="fa-solid fa-plus text-2xl font-black"></i></button>
+            </div>
+            <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center p-2 w-16 mb-1"><i class="fa-solid fa-comment-dots mb-1 text-lg"></i><span class="text-[10px] font-bold">訊息</span></button>
+            <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center p-2 w-16 mb-1"><i class="fa-regular fa-user mb-1 text-lg"></i><span class="text-[10px] font-bold">我</span></button>
         </nav>
     </div>
 
@@ -247,8 +308,14 @@
     <script src="js/i18n.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
-    <script src="js/create.js"></script>     <script src="js/discovery.js"></script>  <script src="js/messages.js"></script>   <script src="js/shop.js"></script>       <script src="js/profile.js"></script>    <script src="js/search.js"></script>     <script>
-        // 控制新搜尋介面的開關
+    <script src="js/create.js"></script>
+    <script src="js/discovery.js"></script>
+    <script src="js/messages.js"></script>
+    <script src="js/shop.js"></script>
+    <script src="js/profile.js"></script>
+    <script src="js/search.js"></script>
+    
+    <script>
         function toggleSearch(show) {
             const overlay = document.getElementById('search-overlay');
             if(overlay) {
@@ -256,6 +323,8 @@
                     overlay.classList.add('active');
                 } else {
                     overlay.classList.remove('active');
+                    document.getElementById('globalSearchInput').value = '';
+                    document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 py-10 text-sm">輸入名稱開始搜尋...</div>';
                 }
             }
         }
