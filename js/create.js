@@ -1,15 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const entry = document.getElementById('creator-entry-point');
-    if (entry) {
-        entry.innerHTML = `
-            <div class="px-6">
-                <button onclick="openUploadModal()" class="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-700 py-3.5 rounded-2xl border border-gray-200 active:scale-95 transition">
-                    <i class="fa-solid fa-cloud-arrow-up text-sexify"></i>
-                    <span class="text-sm font-bold">發佈動態或作品</span>
-                </button>
-            </div>`;
-    }
-});
+// ==========================================
+// js/create.js - 真實資料庫版
+// ==========================================
 
 function openUploadModal() {
     document.getElementById('upload-modal').classList.remove('hidden');
@@ -27,70 +18,83 @@ function closeUploadModal() {
 function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
     const isVideo = file.type.startsWith('video/');
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
     const other = isVideo ? document.getElementById('media-preview') : document.getElementById('video-preview');
     
     other.classList.add('hidden');
-    preview.classList.remove('hidden');
+    other.src = '';
     document.getElementById('media-placeholder').classList.add('hidden');
     
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = function(event) {
         preview.src = event.target.result;
+        preview.classList.remove('hidden');
         document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
     };
-    if(!isVideo) reader.readAsDataURL(file);
-    else preview.src = URL.createObjectURL(file);
-}
-
-function setPrice(p) {
-    const container = document.getElementById('price-input-container');
-    p > 0 ? container.classList.remove('hidden') : container.classList.add('hidden');
+    reader.readAsDataURL(file);
 }
 
 function resetUploadForm() {
-    document.getElementById('file-input').value = '';
+    document.getElementById('post-price').value = '';
     document.getElementById('post-caption').value = '';
     document.getElementById('view-free').checked = true;
-    setPrice(0);
+    if(typeof setPrice === 'function') setPrice(0);
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
     document.getElementById('media-preview-container').dataset.mediaType = ''; 
+    document.getElementById('media-preview').src = '';
 }
 
-function simulatedPublish() {
+// 🔥 真正推送到 Supabase 的發佈邏輯
+window.publishPost = async function() {
     const caption = document.getElementById('post-caption').value.trim();
     const price = parseInt(document.getElementById('post-price').value) || 0;
-    
+    const isPaid = document.getElementById('view-paid').checked;
+    const userId = localStorage.getItem('userId');
+    const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
+
+    if (!userId) return alert('請先登入後再發佈！');
+
     let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
-    
-    if (mediaType === 'text' && !caption) {
-        return alert('請輸入文字內容或上傳相片/影片！');
+    if (mediaType === 'text' && !caption) return alert('請輸入文字內容或上傳相片/影片！');
+
+    // 取得預覽圖片的 base64 碼 (正式產品建議串接 Storage，目前我們存進 DB)
+    let mediaUrl = '';
+    if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
+    if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src; // 注意：大影片轉 base64 可能會卡頓
+
+    publishBtn.innerText = "發佈中...";
+    publishBtn.disabled = true;
+
+    try {
+        const { error } = await window.supabaseClient.from('posts').insert([{
+            user_id: userId,
+            caption: caption,
+            media_url: mediaUrl,
+            is_paid: isPaid,
+            price: price
+        }]);
+
+        if (error) throw error;
+
+        alert('✨ 發佈成功！');
+        closeUploadModal();
+        
+        // 自動刷新目前所在的頁面
+        if (document.getElementById('profile-tab').classList.contains('active') && typeof renderProfile === 'function') {
+            renderProfile();
+        } else if (document.getElementById('home-tab').classList.contains('active') && typeof renderDiscovery === 'function') {
+            renderDiscovery();
+        }
+
+    } catch (err) {
+        console.error("發佈失敗:", err);
+        alert('發佈失敗：' + err.message);
+    } finally {
+        publishBtn.innerText = "發佈";
+        publishBtn.disabled = false;
     }
-
-    let src = '';
-    if (mediaType === 'image') src = document.getElementById('media-preview').src;
-    if (mediaType === 'video') src = document.getElementById('video-preview').src;
-    
-    const newPost = {
-        id: 'user-post-' + Date.now(),
-        user: currentUser.name, 
-        avatar: currentUser.avatar,
-        type: mediaType,
-        src: src,
-        title: caption || '分享了新內容 ✨',
-        likes: 0,
-        isPaid: price > 0,
-        price: price
-    };
-
-    if(typeof allPosts !== 'undefined') {
-        allPosts.unshift(newPost);
-        renderDiscovery(); 
-    }
-
-    switchTab('home-tab', document.querySelector('.nav-btn')); 
-    closeUploadModal();
 }
