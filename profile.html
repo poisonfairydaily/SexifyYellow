@@ -1,0 +1,50 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>創作者檔案 - Sexify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-50">
+
+    <header class="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b p-4 flex items-center">
+        <button onclick="window.history.back()" class="w-10 h-10 flex items-center justify-center text-gray-700">
+            <i class="fa-solid fa-chevron-left text-xl"></i>
+        </button>
+        <h2 id="header-name" class="flex-1 text-center font-bold text-lg">載入中...</h2>
+        <div class="w-10"></div> </header>
+
+    <main class="pt-20 pb-10">
+        <div id="creator-header" class="px-6 mb-6">
+            <div class="flex items-center gap-6 mb-4">
+                <img id="creator-avatar" src="" class="w-20 h-20 rounded-full object-cover border-2 border-sexify p-0.5">
+                <div class="flex-1">
+                    <h1 id="creator-display-name" class="text-xl font-black mb-1">---</h1>
+                    <p id="creator-username" class="text-gray-400 text-xs">@---</p>
+                </div>
+                <button id="follow-btn" class="bg-sexify text-white px-6 py-2 rounded-full font-bold text-sm shadow-lg active:scale-95 transition">
+                    關注
+                </button>
+            </div>
+            <p id="creator-bio" class="text-gray-600 text-sm leading-relaxed whitespace-pre-line"></p>
+        </div>
+
+        <div class="border-t pt-4">
+            <div class="flex justify-around mb-4 border-b">
+                <button class="pb-2 border-b-2 border-sexify font-bold text-sm text-sexify">所有作品</button>
+                <button class="pb-2 text-gray-400 font-bold text-sm">付費限定</button>
+            </div>
+            <div id="creator-posts-grid" class="masonry-grid">
+                <p class="text-center text-gray-300 py-20 w-full col-span-2">尚無作品內容</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/profile-view.js"></script>
+</body>
+</html>
