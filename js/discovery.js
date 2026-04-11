@@ -1,248 +1,157 @@
-let allPosts = [
-    { id: 'ex-1', user: 'Mina_米娜', avatar: 'https://i.pravatar.cc/150?u=mina', type: 'image', src: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&q=80', title: '今天天氣很好，出門透透氣✨', likes: 1205, isPaid: false, price: 0 },
-    { id: 'ex-2', user: 'Xaiver_Fitness', avatar: 'https://i.pravatar.cc/150?u=xaiver', type: 'image', src: 'https://images.unsplash.com/photo-1529139513065-07b2ee722f5a?w=500&q=80', title: '深蹲破紀錄！', likes: 892, isPaid: true, price: 99 }
-];
+// ==========================================
+// js/discovery.js - 真實資料庫版
+// ==========================================
 
-const postComments = {
-    'ex-1': [{ user: '酷炫男孩', text: '照片拍得好美！', time: '2小時前' }]
-};
-
-// 用來區分單擊與雙擊的計時器
 let clickTimer = null;
 
-function renderDiscovery(filterKeyword = '') {
+// --- 渲染首頁動態 (真實撈取 Supabase) ---
+window.renderDiscovery = async function(filterKeyword = '') {
     const grid = document.getElementById('discovery-grid');
     if (!grid) return;
     
-    let displayPosts = allPosts;
-    if (filterKeyword.trim() !== '') {
-        const kw = filterKeyword.toLowerCase();
-        displayPosts = allPosts.filter(p => p.user.toLowerCase().includes(kw) || p.title.toLowerCase().includes(kw));
-    }
-    
-    // 【升級】精美的空白狀態插畫與按鈕
-    if (displayPosts.length === 0) {
-        grid.innerHTML = `
-            <div class="col-span-2 flex flex-col items-center justify-center py-20 animate-fade-in">
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Magnifying%20Glass%20Tilted%20Left.png" class="w-24 h-24 mb-4 drop-shadow-md hover:scale-110 transition">
-                <h3 class="text-gray-800 font-bold text-lg mb-2">找不到相關內容</h3>
-                <p class="text-gray-400 text-xs mb-8 text-center px-4 leading-relaxed">試試看其他關鍵字，<br>或者回首頁看看大家都在討論什麼吧！</p>
-                <button onclick="clearSearch()" class="bg-sexify text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-sexify/30 active:scale-95 transition flex items-center gap-2 text-sm">
-                    <i class="fa-solid fa-fire"></i> 看看其他熱門內容
-                </button>
-            </div>`;
-        return;
-    }
+    grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-3xl"></i></div>`;
 
-    grid.innerHTML = displayPosts.map(post => generateCardHtml(post)).join('');
-}
+    try {
+        // 從 posts 撈取資料，並嘗試 join profiles 表以取得頭像與名稱
+        let query = window.supabaseClient
+            .from('posts')
+            .select('*, profiles(display_name, avatar_url, username)')
+            .order('created_at', { ascending: false });
+        
+        if (filterKeyword.trim() !== '') {
+            query = query.ilike('caption', `%${filterKeyword}%`);
+        }
 
-function searchPosts() {
-    renderDiscovery(document.getElementById('home-search').value);
-}
+        const { data: posts, error } = await query;
+        
+        if (error) throw error;
 
-function generateCardHtml(post) {
-    let mediaHtml = '';
-    
-    // 【升級】加入 skeleton 骨架屏佔位，圖片 onload 後隱藏骨架並淡入圖片
-    if (post.type === 'image' && post.src) {
-        mediaHtml = `
-            <div class="absolute inset-0 skeleton z-10" id="skel-${post.id}"></div>
-            <img src="${post.src}" class="w-full h-full object-cover opacity-0 transition-opacity duration-500" onload="document.getElementById('skel-${post.id}').style.display='none'; this.classList.remove('opacity-0');">
-        `;
-    } else if (post.type === 'video' && post.src) {
-        mediaHtml = `
-            <div class="absolute inset-0 skeleton z-10" id="skel-${post.id}"></div>
-            <video src="${post.src}" class="w-full h-full object-cover opacity-0 transition-opacity duration-500" muted autoplay loop onloadeddata="document.getElementById('skel-${post.id}').style.display='none'; this.classList.remove('opacity-0');"></video>
-            <div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-md font-bold z-20"><i class="fa-solid fa-play"></i></div>
-        `;
-    } else {
-        mediaHtml = `<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-6 text-center"><p class="font-bold text-gray-800 text-sm line-clamp-4">${post.title}</p></div>`;
-    }
-    
-    let lockHtml = post.isPaid ? `<div class="absolute inset-0 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center text-white z-30 pointer-events-none"><i class="fa-solid fa-lock text-3xl mb-2"></i><span class="font-black text-sm">${post.price} 金幣</span></div>` : '';
+        if (!posts || posts.length === 0) {
+            grid.innerHTML = `
+                <div class="col-span-2 text-center py-20 mt-10 text-gray-400 flex flex-col items-center">
+                    <i class="fa-solid fa-ghost text-4xl mb-4 opacity-30"></i>
+                    <p class="font-bold">目前大廳空空如也</p>
+                    <p class="text-xs mt-1">成為第一個發佈貼文的人吧！</p>
+                </div>`;
+            return;
+        }
 
-    const safeTitle = post.title.replace(/'/g, "\\'");
-
-    // 【升級】將 onclick 改為 handleMediaClick，讓程式去判斷是單擊還是雙擊
-    return `
-        <div id="${post.id}" class="masonry-item animate-fade-in relative">
-            <div class="relative overflow-hidden aspect-[4/5] bg-gray-100 cursor-pointer" onclick="handleMediaClick(event, '${post.src}', '${post.user}', '${post.avatar}', '${safeTitle}', '${post.likes}', '${post.id}', ${post.isPaid}, ${post.price}, '${post.type}')">
-                ${mediaHtml}
-                ${lockHtml}
-            </div>
-            <div class="p-3 bg-white">
-                <h4 class="text-[13px] font-bold mb-2 text-gray-800 line-clamp-2 leading-snug cursor-pointer" onclick="openDetail('${post.src}', '${post.user}', '${post.avatar}', '${safeTitle}', '${post.likes}', '${post.id}', ${post.isPaid}, ${post.price}, '${post.type}')">${post.title}</h4>
-                <div class="flex justify-between items-center text-[10px] text-gray-500">
-                    <div class="flex items-center gap-1.5 cursor-pointer active:scale-95" onclick="event.stopPropagation(); openOtherProfile('${post.user}', '${post.avatar}')">
-                        <img src="${post.avatar}" class="w-4 h-4 rounded-full object-cover">
-                        <span class="font-bold hover:underline">${post.user}</span>
-                    </div>
-                    <div class="flex items-center gap-1 cursor-pointer" onclick="toggleLike(this)"><i class="fa-regular fa-heart text-xs"></i><span class="like-count">${post.likes}</span></div>
+        grid.innerHTML = posts.map(post => {
+            const authorName = post.profiles?.display_name || '未知創作者';
+            const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
+            // 處理內容鎖定
+            const isLocked = post.is_paid;
+            const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
+            
+            return `
+            <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2" ondblclick="handleDoubleTap(this, '${post.id}')">
+                
+                ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
+                
+                <div class="absolute top-2 left-2 flex items-center gap-1.5 bg-black/50 backdrop-blur-md rounded-full px-2.5 py-1.5 z-20 cursor-pointer hover:bg-black/70 transition" onclick="event.stopPropagation(); window.location.href='profile.html?userId=${post.user_id}'">
+                    <img src="${authorAvatar}" class="w-5 h-5 rounded-full border border-white/50 object-cover">
+                    <span class="text-white text-[10px] font-bold shadow-sm tracking-wide">${authorName}</span>
                 </div>
-            </div>
-        </div>
-    `;
+
+                <div class="relative bg-gray-100 min-h-[150px]">
+                    ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass}">純文字內容</div>`}
+                </div>
+                
+                <div class="p-3 bg-white relative z-20">
+                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${post.caption || ''}</p>
+                    <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
+                        <div class="flex gap-4">
+                            <button class="text-gray-400 text-xs hover:text-sexify transition flex items-center gap-1" onclick="toggleLike(this, '${post.id}')"><i class="fa-regular fa-heart text-base"></i> <span class="font-bold">${post.likes || 0}</span></button>
+                            <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="openComments('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
+                        </div>
+                        <button class="text-gray-300 text-xs hover:text-gray-600 transition"><i class="fa-solid fa-bookmark text-base"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (err) {
+        console.error("載入動態失敗:", err);
+        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 text-sm mt-10">無法連線到伺服器，請確認資料庫設定。</div>`;
+    }
 }
 
-// 【升級】單擊/雙擊控制器
-function handleMediaClick(event, src, user, avatar, title, likes, id, isPaid, price, type) {
+// --- 雙擊愛心與留言邏輯 ---
+window.handleDoubleTap = function(element, postId) {
     if (clickTimer) {
-        // 如果在 250 毫秒內點了第二次，就取消單擊事件，觸發雙擊
         clearTimeout(clickTimer);
         clickTimer = null;
-        triggerDoubleTapLike(event, id);
+        triggerBigHeart(element);
+        const likeBtn = element.querySelector('.fa-heart').parentElement;
+        if (!likeBtn.querySelector('.fa-solid')) {
+            toggleLike(likeBtn, postId);
+        }
     } else {
-        // 第一下點擊，等待 250 毫秒看會不會有第二下
-        clickTimer = setTimeout(() => {
-            clickTimer = null;
-            openDetail(src, user, avatar, title, likes, id, isPaid, price, type);
-        }, 250);
+        clickTimer = setTimeout(() => { clickTimer = null; }, 300);
     }
 }
 
-// 【升級】雙擊觸發巨型愛心動畫與點讚
-function triggerDoubleTapLike(e, postId) {
-    const container = e.currentTarget;
-    
-    // 1. 創建一個愛心元素
+window.triggerBigHeart = function(container) {
     const heart = document.createElement('i');
     heart.className = 'fa-solid fa-heart big-heart-anim';
-    
-    // 2. 獲取點擊位置，讓愛心出現在手指點的地方
-    const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    heart.style.left = `${x}px`;
-    heart.style.top = `${y}px`;
-    
-    // 3. 把愛心放進去，並在動畫結束後刪除
+    heart.style.left = '50%';
+    heart.style.top = '40%';
     container.appendChild(heart);
-    setTimeout(() => { heart.remove(); }, 800);
-    
-    // 4. 連動底部的真實點讚按鈕 (如果還沒按讚的話)
-    const card = document.getElementById(postId);
-    if (card) {
-        const likeBtn = card.querySelector('.fa-heart.fa-regular'); // 找尋空心愛心
-        if (likeBtn) {
-            likeBtn.parentElement.click(); // 觸發真實的 toggleLike 邏輯
-        }
-    }
+    setTimeout(() => heart.remove(), 800);
 }
 
-
-// === 以下為原有完整功能，完全未刪減 ===
-
-function openDetail(src, user, avatar, title, likes, id, isPaid, price, type) {
-    if (isPaid && price > 0) {
-        if (!confirm(`【解鎖提示】\n這是一個專屬付費作品，需要 ${price} 金幣解鎖。\n\n確認解鎖觀看嗎？`)) return;
-    }
-
-    const detail = document.getElementById('post-detail');
-    const container = document.getElementById('detail-media-container');
-    
-    if (type === 'video' && src) {
-        container.innerHTML = `<video src="${src}" class="w-full max-h-[65vh] object-contain bg-black" controls autoplay></video>`;
-    } else if (type === 'image' && src) {
-        container.innerHTML = `<img src="${src}" class="w-full object-contain max-h-[65vh]">`;
-    } else {
-        container.innerHTML = `<div class="w-full h-full min-h-[40vh] flex items-center justify-center bg-gradient-to-br from-pink-50 to-red-50 p-8 text-center"><p class="font-bold text-gray-800 text-lg leading-relaxed">${title}</p></div>`;
-    }
-
-    document.getElementById('detail-avatar').src = avatar;
-    document.getElementById('detail-username').innerText = user;
-    document.getElementById('detail-title').innerText = title;
-    detail.dataset.sourceId = id;
-    
-    detail.querySelector('.like-count').innerText = likes;
-
-    loadComments(id);
-    detail.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    setTimeout(() => detail.classList.remove('translate-y-full'), 10);
-}
-
-function closeDetail() {
-    document.getElementById('post-detail').classList.add('translate-y-full');
-    setTimeout(() => {
-        document.getElementById('post-detail').classList.add('hidden');
-        document.getElementById('detail-media-container').innerHTML = ''; 
-        document.body.style.overflow = ''; 
-    }, 300);
-}
-
-function goToProfileFromDetail() {
-    const sid = document.getElementById('post-detail').dataset.sourceId;
-    const post = allPosts.find(p => p.id === sid);
-    if(post) {
-        closeDetail();
-        setTimeout(() => openOtherProfile(post.user, post.avatar), 300);
-    }
-}
-
-function giveTip() {
-    const detail = document.getElementById('post-detail');
-    const sid = detail.dataset.sourceId;
-    const post = allPosts.find(p => p.id === sid);
-    
-    if(post) {
-        const amount = prompt(`你要打賞給 ${post.user} 多少金幣？`, "50");
-        if(amount && !isNaN(amount) && parseInt(amount) > 0) {
-            alert(`成功打賞 ${amount} 金幣給 ${post.user}！`);
-        }
-    }
-}
-
-function toggleLike(el) {
-    const heart = el.querySelector('i.fa-heart');
-    const countSpan = el.querySelector('.like-count');
+window.toggleLike = function(btn, postId) {
+    const icon = btn.querySelector('i');
+    const countSpan = btn.querySelector('span');
     let count = parseInt(countSpan.innerText) || 0;
-    heart.classList.toggle('fa-regular');
-    heart.classList.toggle('fa-solid');
-    heart.classList.toggle('text-sexify');
-    heart.classList.contains('fa-solid') ? count++ : count--;
+
+    if (icon.classList.contains('fa-regular')) {
+        icon.classList.replace('fa-regular', 'fa-solid');
+        icon.classList.add('text-sexify', 'scale-125');
+        count++;
+    } else {
+        icon.classList.replace('fa-solid', 'fa-regular');
+        icon.classList.remove('text-sexify', 'scale-125');
+        count--;
+    }
     countSpan.innerText = count;
+    setTimeout(() => icon.classList.remove('scale-125'), 200);
+    
+    // (未來可擴充：將 Like 數寫回 Supabase)
 }
 
-function toggleBookmark(el) {
-    const bookmark = el.querySelector('i.fa-bookmark');
-    bookmark.classList.toggle('fa-regular');
-    bookmark.classList.toggle('fa-solid');
-    bookmark.classList.toggle('text-yellow-500'); 
-}
-
-function loadComments(id) {
-    const list = document.getElementById('comment-list');
-    const cms = postComments[id] || [];
-    list.innerHTML = cms.length ? cms.map(c => `
-        <div class="flex gap-3">
-            <img src="https://i.pravatar.cc/100?u=${c.user}" class="w-8 h-8 rounded-full">
-            <div class="flex-1 bg-gray-50 p-3 rounded-2xl">
-                <p class="text-[11px] font-bold text-gray-400">${c.user}</p>
-                <p class="text-sm mt-1 text-gray-800">${c.text}</p>
-            </div>
-        </div>`).join('') : '<p class="text-center text-gray-300 py-10">尚無留言</p>';
-}
-
-function openComments() { 
+window.openComments = function(postId) { 
     document.getElementById('comment-sheet').classList.remove('hidden'); 
     setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
+    
+    // 簡單模擬載入留言
+    const list = document.getElementById('comment-list');
+    list.innerHTML = `<div class="p-10 text-center text-gray-400 text-sm">目前沒有留言，搶頭香！</div>`;
 }
 
-function closeComments() { 
+window.closeComments = function() { 
     document.getElementById('comment-panel').classList.add('translate-y-full'); 
     setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
 }
 
-function sendComment() {
+window.sendComment = function() {
     const input = document.getElementById('comment-input');
-    const sid = document.getElementById('post-detail').dataset.sourceId;
     if(!input.value.trim()) return;
-    if(!postComments[sid]) postComments[sid] = [];
-    postComments[sid].unshift({ user: 'Me', text: input.value, time: '剛剛' });
-    loadComments(sid);
+    
+    const list = document.getElementById('comment-list');
+    if(list.innerText.includes('沒有留言')) list.innerHTML = '';
+    
+    const myName = localStorage.getItem('myChatName') || '我';
+    
+    list.innerHTML += `
+        <div class="flex gap-3 mb-4">
+            <img src="https://ui-avatars.com/api/?name=${myName}&background=random" class="w-8 h-8 rounded-full shadow-sm">
+            <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm">
+                <p class="text-[11px] font-bold text-sexify">${myName}</p>
+                <p class="text-sm mt-1 text-gray-800">${input.value}</p>
+            </div>
+        </div>`;
+    
     input.value = '';
+    list.scrollTop = list.scrollHeight;
 }
-
-document.addEventListener('DOMContentLoaded', () => renderDiscovery());
