@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -48,7 +48,29 @@
             </div>
         </div>
     </div>
-
+<div id="edit-profile-modal" class="fixed inset-0 z-[300] bg-white hidden flex-col transform translate-y-full transition-transform duration-300">
+        <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+            <button onclick="closeEditProfile()" class="text-gray-500 font-bold">取消</button>
+            <h2 class="font-black text-lg">編輯個人資料</h2>
+            <button onclick="saveProfileData()" id="save-profile-btn" class="text-sexify font-bold active:scale-95 transition">儲存</button>
+        </header>
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex flex-col items-center">
+                <div class="relative w-24 h-24 mb-4">
+                    <img id="edit-avatar-preview" src="https://ui-avatars.com/api/?name=User" class="w-full h-full rounded-full object-cover border-2 border-gray-200">
+                    <button class="absolute bottom-0 right-0 bg-sexify text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md"><i class="fa-solid fa-camera"></i></button>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2">顯示名稱 (Display Name)</label>
+                <input type="text" id="edit-display-name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-sexify transition">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2">個人簡介 (Bio)</label>
+                <textarea id="edit-bio" rows="4" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-sexify transition resize-none" placeholder="介紹一下你自己吧..."></textarea>
+            </div>
+        </div>
+    </div>
     <div id="settings-drawer" class="fixed inset-0 z-[150] hidden bg-black/50 backdrop-blur-sm transition-opacity">
         <div id="settings-panel" class="absolute left-0 top-0 bottom-0 w-72 bg-white transform -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col">
             <div class="p-6 border-b flex justify-between items-center bg-gray-50">
