@@ -1,4 +1,4 @@
-// 1. 基本畫面狀態控制
+﻿// 1. 基本畫面狀態控制
 function verifyAge() {
     const ageGate = document.getElementById('age-gate');
     if(ageGate) {
@@ -30,6 +30,7 @@ function switchTab(tabId, btn) {
     if(tabId === 'home-tab' && typeof window.renderDiscovery === 'function') window.renderDiscovery();
     if(tabId === 'shop-tab' && typeof window.renderShop === 'function') window.renderShop();
     if(tabId === 'messages-tab' && typeof window.renderMessages === 'function') window.renderMessages();
+    // 呼叫個人頁面渲染
     if(tabId === 'profile-tab' && typeof window.renderProfile === 'function') window.renderProfile();
 }
 
@@ -76,14 +77,25 @@ function toggleModal(modalId, action) {
 function openPersonalCenter() { toggleSettings(); toggleModal('personal-center-modal', 'open'); }
 function closePersonalCenter() { toggleModal('personal-center-modal', 'close'); }
 
-function openFansSubsModal() { toggleSettings(); toggleModal('fans-subs-modal', 'open'); }
+function openFansSubsModal() { 
+    toggleSettings(); 
+    if(typeof renderSubsList === 'function') renderSubsList();
+    if(typeof renderFansList === 'function') renderFansList();
+    toggleModal('fans-subs-modal', 'open'); 
+}
 function closeFansSubsModal() { toggleModal('fans-subs-modal', 'close'); }
 
-function openNotifications() { toggleModal('notifications-modal', 'open'); }
-function closeNotifications() { toggleModal('notifications-modal', 'close'); }
-
-function openEditProfile() { document.getElementById('edit-profile-modal').classList.remove('hidden'); }
-function closeEditProfile() { document.getElementById('edit-profile-modal').classList.add('hidden'); }
+// 【新增】編輯個人資料視窗
+function openEditProfile() {
+    const modal = document.getElementById('edit-profile-modal');
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+}
+function closeEditProfile() {
+    const modal = document.getElementById('edit-profile-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+}
 
 function openUploadModal() { toggleModal('upload-modal', 'open'); }
 function closeUploadModal() { toggleModal('upload-modal', 'close'); }
@@ -91,39 +103,7 @@ function closeUploadModal() { toggleModal('upload-modal', 'close'); }
 function openComments() { toggleModal('comment-sheet', 'open'); }
 function closeComments() { toggleModal('comment-sheet', 'close'); }
 
-function closeDetail() { toggleModal('post-detail', 'close'); }
-function closeChat() { toggleModal('chat-modal', 'close'); }
-
-// 5. 搜尋功能綁定
-function handleSearch() {
-    const val = document.getElementById('home-search').value;
-    const clearBtn = document.getElementById('search-clear-btn');
-    if(val.length > 0) clearBtn.classList.remove('hidden');
-    else clearBtn.classList.add('hidden');
-    
-    if(typeof window.renderDiscovery === 'function') window.renderDiscovery(val);
-}
-function clearSearch() {
-    document.getElementById('home-search').value = '';
-    document.getElementById('search-clear-btn').classList.add('hidden');
-    if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
-}
-
-function searchShop() {
-    const val = document.getElementById('shop-search').value;
-    const clearBtn = document.getElementById('shop-search-clear-btn');
-    if(val.length > 0) clearBtn.classList.remove('hidden');
-    else clearBtn.classList.add('hidden');
-    
-    if(typeof window.renderShop === 'function') window.renderShop(val);
-}
-function clearShopSearch() {
-    document.getElementById('shop-search').value = '';
-    document.getElementById('shop-search-clear-btn').classList.add('hidden');
-    if(typeof window.renderShop === 'function') window.renderShop();
-}
-
-// 6. 登出事件監聽器綁定
+// 5. 登出事件監聽器綁定
 document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
@@ -139,10 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 【修復核心 3】控制邏輯順序：等待 auth.js 發出「authReady」後，才進行首次 UI 渲染
+// 6. 控制邏輯順序
 window.addEventListener('authReady', () => {
-    // 這樣可以保證首頁渲染時，localStorage 裡絕對已經有最新的 userId 了
-    const homeBtn = document.querySelector('.nav-btn'); // 抓取第一個導航按鈕 (首頁)
+    const homeBtn = document.querySelector('.nav-btn'); 
     if (homeBtn && document.getElementById('home-tab')) {
         switchTab('home-tab', homeBtn);
     }
