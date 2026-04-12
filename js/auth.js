@@ -120,16 +120,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     const authModal = document.getElementById('auth-modal');
+    const appContent = document.getElementById('app-content');
 
     if (session) {
+        // 如果有登入狀態，隱藏登入框
         if(authModal) authModal.classList.add('hidden');
+        
+        // 核心修復：解除首頁的模糊鎖死狀態，讓使用者可以操作
+        if(appContent) {
+            appContent.classList.remove('blur-2xl', 'pointer-events-none');
+        }
         
         localStorage.setItem('userId', session.user.id);
         localStorage.setItem('myChatName', session.user.user_metadata?.display_name || "使用者");
         
         window.dispatchEvent(new Event('authReady'));
     } else {
+        // 沒有登入狀態，顯示登入框
         if(authModal) authModal.classList.remove('hidden');
+        // 確保沒登入時畫面保持模糊不可點
+        if(appContent) {
+            appContent.classList.add('blur-2xl', 'pointer-events-none');
+        }
         localStorage.clear();
         sessionStorage.clear();
     }
@@ -139,7 +151,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             localStorage.clear();
             sessionStorage.clear();
             const authModalEl = document.getElementById('auth-modal');
+            const appContentEl = document.getElementById('app-content');
             if (authModalEl) authModalEl.classList.remove('hidden');
+            if (appContentEl) appContentEl.classList.add('blur-2xl', 'pointer-events-none');
         }
     });
 });
