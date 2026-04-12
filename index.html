@@ -71,9 +71,9 @@
             </header>
             <div class="flex-1 overflow-y-auto py-4">
                 <div class="px-6 space-y-2">
-                    <button onclick="openEditProfile()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
-                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-user"></i></div>
-                        <span class="font-bold text-gray-700">編輯個人資料</span>
+                    <button onclick="openPersonalCenter()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-id-card"></i></div>
+                        <span class="font-bold text-gray-700">個人中心</span>
                     </button>
                     <button onclick="openFansSubsModal()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
                         <div class="w-10 h-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center"><i class="fa-solid fa-heart"></i></div>
@@ -213,24 +213,46 @@
         </div>
     </div>
 
+    <div id="personal-center-modal" class="fixed inset-0 z-[300] bg-gray-50 hidden flex-col transform translate-y-full transition-transform duration-300">
+        <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+            <button onclick="closePersonalCenter()" class="text-gray-500 font-bold px-2 py-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="font-black text-lg">個人中心</h2>
+            <button onclick="savePersonalCenter()" id="save-personal-btn" class="text-white bg-sexify px-4 py-1.5 rounded-full font-bold active:scale-95 transition shadow-sm">儲存</button>
+        </header>
+        <div class="flex-1 overflow-y-auto pb-20 p-6 space-y-4">
+            <div><label class="block text-xs font-bold text-gray-700 mb-1">電子郵件 (修改後需重新驗證)</label><input type="email" id="pc-email" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+            <div><label class="block text-xs font-bold text-gray-700 mb-1">性別</label><select id="pc-gender" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"><option value="Male">男性</option><option value="Female">女性</option><option value="Unspecified">不透露</option></select></div>
+            <div><label class="block text-xs font-bold text-gray-700 mb-1">出生日期</label><input type="date" id="pc-birthday" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+        </div>
+    </div>
+
     <div id="edit-profile-modal" class="fixed inset-0 z-[300] bg-gray-50 hidden flex-col transform translate-y-full transition-transform duration-300">
         <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
             <button onclick="closeEditProfile()" class="text-gray-500 font-bold px-2 py-1"><i class="fa-solid fa-xmark text-xl"></i></button>
             <h2 class="font-black text-lg">編輯個人資料</h2>
             <button onclick="saveProfileData()" id="save-profile-btn" class="text-white bg-sexify px-4 py-1.5 rounded-full font-bold active:scale-95 transition shadow-sm">儲存</button>
         </header>
-        <div class="flex-1 overflow-y-auto pb-20 p-6 space-y-4">
-            <div class="flex justify-center mb-4">
-                <div class="relative w-24 h-24">
-                    <img id="edit-avatar-preview" src="" class="w-full h-full rounded-full object-cover shadow-sm border border-gray-200">
-                    <div class="absolute bottom-0 right-0 bg-gray-900 text-white w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-camera text-xs"></i></div>
+        <div class="flex-1 overflow-y-auto pb-20 p-6">
+            <div class="relative w-full h-32 bg-gray-200 rounded-xl mb-12 border border-gray-200">
+                <img id="edit-banner-preview" src="" class="w-full h-full object-cover rounded-xl shadow-sm hidden">
+                <div class="absolute bottom-2 right-2 bg-gray-900 text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-gray-800 transition" onclick="document.getElementById('edit-banner-input').click()"><i class="fa-solid fa-camera text-xs"></i></div>
+                <input type="file" id="edit-banner-input" accept="image/*" class="hidden" onchange="typeof previewImage === 'function' && previewImage(this, 'edit-banner-preview')">
+                
+                <div class="absolute -bottom-10 left-1/2 -translate-x-1/2 z-10">
+                    <div class="relative w-24 h-24">
+                        <img id="edit-avatar-preview" src="" class="w-full h-full rounded-full object-cover shadow-sm border-4 border-white bg-white">
+                        <div class="absolute bottom-0 right-0 bg-gray-900 text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-gray-800 transition" onclick="document.getElementById('edit-avatar-input').click()"><i class="fa-solid fa-camera text-xs"></i></div>
+                        <input type="file" id="edit-avatar-input" accept="image/*" class="hidden" onchange="typeof previewImage === 'function' && previewImage(this, 'edit-avatar-preview')">
+                    </div>
                 </div>
             </div>
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">顯示名稱</label><input type="text" id="edit-display-name" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">個人簡介</label><textarea id="edit-bio" rows="3" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none resize-none"></textarea></div>
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">性別</label><select id="edit-gender" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"><option value="Male">男性</option><option value="Female">女性</option><option value="Unspecified">不透露</option></select></div>
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">Instagram</label><input type="text" id="edit-social-ig" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">X (Twitter)</label><input type="text" id="edit-social-x" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+
+            <div class="space-y-4">
+                <div><label class="block text-xs font-bold text-gray-700 mb-1">顯示名稱</label><input type="text" id="edit-display-name" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+                <div><label class="block text-xs font-bold text-gray-700 mb-1">個人簡介</label><textarea id="edit-bio" rows="3" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none resize-none"></textarea></div>
+                <div><label class="block text-xs font-bold text-gray-700 mb-1">Instagram</label><input type="text" id="edit-social-ig" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+                <div><label class="block text-xs font-bold text-gray-700 mb-1">X (Twitter)</label><input type="text" id="edit-social-x" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+            </div>
         </div>
     </div>
 
