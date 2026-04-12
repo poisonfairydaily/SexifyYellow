@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 留言與收藏擴充版
+// js/discovery.js - 留言、收藏、編輯檢舉擴充版
 // ==========================================
 
 let clickTimer = null;
@@ -33,7 +33,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
             return;
         }
 
-        // 讀取本地收藏狀態
         let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
 
         grid.innerHTML = posts.map(post => {
@@ -42,18 +41,10 @@ window.renderDiscovery = async function(filterKeyword = '') {
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
             
-            // 檢查是否已收藏
             const isBookmarked = bookmarks.some(b => b.id === post.id);
             const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
             
-            // 將物件轉成字串以供收藏功能寫入
-            const safePost = {
-                id: post.id,
-                caption: post.caption,
-                media_url: post.media_url,
-                authorName: authorName,
-                authorAvatar: authorAvatar
-            };
+            const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
             const postStr = encodeURIComponent(JSON.stringify(safePost));
 
             return `
@@ -150,27 +141,100 @@ window.viewPost = async function(postId) {
             
         if (error) throw error;
         
+        const myUserId = localStorage.getItem('userId');
         const authorName = post.profiles?.display_name || '未知創作者';
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
         const isLocked = post.is_paid;
         const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
 
+        // 判斷是否為自己發佈的貼文，產生不同的選單內容
+        const optionsMenu = document.getElementById('post-options-menu');
+        if (post.user_id === myUserId) {
+            optionsMenu.innerHTML = `
+                <button onclick="editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50 active:bg-gray-100">編輯貼文</button>
+                <button onclick="deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50 active:bg-gray-100">刪除貼文</button>
+            `;
+        } else {
+            optionsMenu.innerHTML = `
+                <button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50 active:bg-gray-100">檢舉貼文</button>
+            `;
+        }
+
+        // 判斷收藏狀態以顯示正確圖示
+        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
+        const isBookmarked = bookmarks.some(b => b.id === post.id);
+        const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
+        
+        const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
+        const postStr = encodeURIComponent(JSON.stringify(safePost));
+
         contentDiv.innerHTML = `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50">
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition" onclick="closePostDetail(); viewOtherProfile('${post.user_id}')">
                 <img src="${authorAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm">
                 <div class="flex-1">
                     <div class="font-bold text-sm text-gray-900">${authorName}</div>
                     <div class="text-[10px] text-gray-400">${new Date(post.created_at).toLocaleString()}</div>
                 </div>
+                <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
             </div>
+            
             ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}">` : `<div class="p-10 text-center text-gray-400 italic bg-gray-50 ${blurClass}">純文字內容</div>`}
-            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed">${post.caption || ''}</div>
+            
+            <div class="p-4 border-b border-gray-50 flex justify-between items-center">
+                <button class="text-gray-400 text-sm hover:text-sexify transition flex items-center gap-1.5" onclick="toggleLike(this, '${post.id}')">
+                    <i class="fa-regular fa-heart text-xl"></i> <span class="font-bold">${post.likes || 0}</span>
+                </button>
+                <button class="text-xl hover:text-gray-600 transition" onclick="toggleBookmark(this, '${post.id}', '${postStr}')">
+                    <i class="${bmIcon} fa-bookmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed" id="detail-caption">${post.caption || ''}</div>
         `;
         
         renderComments();
     } catch(e) {
         contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容</div>`;
     }
+}
+
+// 編輯與刪除貼文功能 (在 Modal 內觸發)
+window.editPostContent = async function(postId) {
+    document.getElementById('post-options-menu').classList.add('hidden');
+    const newText = prompt("請輸入新的貼文內容：");
+    if (newText === null) return;
+    
+    try {
+        const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
+        if (error) throw error;
+        document.getElementById('detail-caption').innerText = newText;
+        alert("貼文更新成功！");
+        if(typeof renderDiscovery === 'function') renderDiscovery();
+        if(typeof renderProfile === 'function') renderProfile();
+    } catch (err) {
+        alert("更新失敗：" + err.message);
+    }
+}
+
+window.deletePostFromModal = async function(postId) {
+    document.getElementById('post-options-menu').classList.add('hidden');
+    if (!confirm("確定要刪除這則貼文嗎？刪除後將無法恢復。")) return;
+    
+    try {
+        const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
+        if (error) throw error;
+        alert("貼文已成功刪除！");
+        closePostDetail();
+        if(typeof renderDiscovery === 'function') renderDiscovery();
+        if(typeof renderProfile === 'function') renderProfile();
+    } catch (err) {
+        alert("刪除失敗：" + err.message);
+    }
+}
+
+window.reportPost = function(postId) {
+    document.getElementById('post-options-menu').classList.add('hidden');
+    alert("已收到您的檢舉！我們的管理團隊將會盡快進行人工審查，感謝您共同維護社群環境。");
 }
 
 window.closePostDetail = function() {
