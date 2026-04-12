@@ -22,13 +22,11 @@ window.openPersonalCenter = async function() {
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 
     try {
-        // 從 Auth 抓取信箱與生日
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         if (user) {
             document.getElementById('pc-email').value = user.email || '';
             document.getElementById('pc-birthday').value = user.user_metadata?.birthday || '';
             
-            // 從 Profiles 抓取性別
             const { data: profile } = await window.supabaseClient.from('profiles').select('gender').eq('id', user.id).single();
             if (profile) {
                 document.getElementById('pc-gender').value = profile.gender || 'Unspecified';
@@ -54,13 +52,11 @@ window.savePersonalCenter = async function() {
     const newBirthday = document.getElementById('pc-birthday').value;
     
     try {
-        // 1. 更新 Auth 資料 (信箱與生日)
         const updates = { data: { birthday: newBirthday } };
         if (newEmail) updates.email = newEmail;
         const { error: authErr } = await window.supabaseClient.auth.updateUser(updates);
         if (authErr) throw authErr;
 
-        // 2. 更新 Profile 資料 (性別)
         const userId = localStorage.getItem('userId');
         const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', userId);
         if (profErr) throw profErr;
@@ -73,7 +69,6 @@ window.savePersonalCenter = async function() {
         btn.innerText = "儲存"; btn.disabled = false;
     }
 }
-
 
 // ==========================================
 // 2. 個人專頁與編輯資料 (顯示名稱、頭像、Banner、簡介)
@@ -98,7 +93,6 @@ window.renderProfile = async function() {
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
         const bannerUrl = profile.banner_url || '';
 
-        // 預填編輯表單
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
         document.getElementById('edit-social-ig').value = profile.social_ig || '';
@@ -238,4 +232,75 @@ window.closeOtherProfile = function() {
     const modal = document.getElementById('other-profile-modal');
     modal.classList.add('translate-x-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+// ==========================================
+// 4. 粉絲與訂閱用戶面板邏輯
+// ==========================================
+window.openFansSubsModal = function() {
+    toggleSettings(); // 開啟前面先自動關閉左側選單
+    const modal = document.getElementById('fans-subs-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+    switchFansTab('subs'); // 預設打開「我的訂閱」
+}
+
+window.closeFansSubsModal = function() {
+    const modal = document.getElementById('fans-subs-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+window.switchFansTab = function(tab) {
+    const btnFans = document.getElementById('tab-fans');
+    const btnSubs = document.getElementById('tab-subs');
+    const list = document.getElementById('fans-subs-list');
+
+    if (tab === 'fans') {
+        btnFans.classList.replace('text-gray-400', 'text-sexify');
+        btnFans.classList.replace('border-transparent', 'border-sexify');
+        btnSubs.classList.replace('text-sexify', 'text-gray-400');
+        btnSubs.classList.replace('border-sexify', 'border-transparent');
+
+        // 目前資料庫未建立粉絲關聯表，以空狀態顯示
+        list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
+    } else {
+        btnSubs.classList.replace('text-gray-400', 'text-sexify');
+        btnSubs.classList.replace('border-transparent', 'border-sexify');
+        btnFans.classList.replace('text-sexify', 'text-gray-400');
+        btnFans.classList.replace('border-sexify', 'border-transparent');
+
+        // 撈取本地紀錄的追蹤名單
+        const subs = JSON.parse(localStorage.getItem('mySubscriptions')) || [];
+        if (subs.length === 0) {
+            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
+        } else {
+            list.innerHTML = subs.map(user => `
+                <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
+                    <img src="${user.avatar}" class="w-12 h-12 rounded-full object-cover">
+                    <div class="flex-1 overflow-hidden">
+                        <div class="font-bold text-gray-800 text-sm truncate">${user.name}</div>
+                    </div>
+                    <button onclick="event.stopPropagation(); unfollowUser('${user.id}', this)" class="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-full font-bold active:scale-90 transition">取消追蹤</button>
+                </div>
+            `).join('');
+        }
+    }
+}
+
+window.unfollowUser = function(userId, btn) {
+    if (!confirm("確定要取消追蹤此用戶嗎？")) return;
+    let subs = JSON.parse(localStorage.getItem('mySubscriptions')) || [];
+    subs = subs.filter(s => s.id !== userId);
+    localStorage.setItem('mySubscriptions', JSON.stringify(subs));
+    
+    // 動畫移除元素
+    btn.parentElement.classList.add('opacity-0', 'scale-95');
+    setTimeout(() => {
+        btn.parentElement.remove();
+        if (subs.length === 0) {
+            document.getElementById('fans-subs-list').innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
+        }
+    }, 200);
 }
