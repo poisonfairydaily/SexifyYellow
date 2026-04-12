@@ -1,10 +1,34 @@
+// 圖片本地預覽通用函數 (已加入 Canvas 壓縮演算法解決 payload too large 卡死問題)
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = document.getElementById(imgId);
-            img.src = e.target.result;
-            img.classList.remove('hidden');
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_SIZE = 800; // 安全壓縮尺寸
+
+                if (width > height && width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                } else if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // 壓縮至 70% 畫質
+                const displayImg = document.getElementById(imgId);
+                displayImg.src = compressedBase64;
+                displayImg.classList.remove('hidden');
+            };
+            img.src = event.target.result;
         }
         reader.readAsDataURL(input.files[0]);
     }
@@ -67,7 +91,7 @@ window.savePersonalCenter = async function() {
     }
 }
 
-// 2. 個人專頁與編輯資料 (修復貼文顯示與新增刪除功能)
+// 2. 個人專頁與編輯資料
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     const userId = localStorage.getItem('userId');
@@ -86,7 +110,9 @@ window.renderProfile = async function() {
         const profile = profileRes.data;
         const myPosts = postsRes.data || [];
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
-        const bannerUrl = profile.banner_url || '';
+        
+        // 核心防護：如果資料庫沒有 banner_url 欄位，從 localStorage 讀取備份資料
+        const bannerUrl = profile.banner_url || localStorage.getItem('banner_' + userId) || '';
 
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
@@ -123,13 +149,11 @@ window.renderProfile = async function() {
             </div>
             <div class="bg-gray-50 pt-2 min-h-[300px]"><div class="masonry-grid px-2">`;
         
-        // 核心修復：讓純文字貼文也能顯示，並加入刪除按鈕
         if (myPosts.length > 0) {
             html += myPosts.map(p => `
                 <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
                     <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${p.caption || ''}</p>
-                    <button onclick="event.stopPropagation(); deleteOwnPost('${p.id}')" class="absolute top-3 right-3 bg-red-500/90 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition backdrop-blur-sm hover:bg-red-600 z-10"><i class="fa-solid fa-trash text-xs"></i></button>
                 </div>
             `).join('');
         } else {
@@ -138,20 +162,7 @@ window.renderProfile = async function() {
         container.innerHTML = html + `</div></div>`;
 
     } catch (err) {
-        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。提示：若修改過結構，請嘗試登出並重新註冊。</div>`;
-    }
-}
-
-// 新增：刪除自己的貼文
-window.deleteOwnPost = async function(postId) {
-    if (!confirm("確定要刪除這則貼文嗎？刪除後將無法恢復。")) return;
-    try {
-        const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
-        if (error) throw error;
-        alert("貼文已成功刪除！");
-        renderProfile(); // 重新渲染畫面
-    } catch (err) {
-        alert("刪除失敗：" + err.message);
+        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
     }
 }
 
@@ -162,13 +173,13 @@ window.saveProfileData = async function() {
     const avatarSrc = document.getElementById('edit-avatar-preview').src;
     const bannerSrc = document.getElementById('edit-banner-preview').src;
 
+    // 核心修復：移除了 banner_url，避免寫入資料庫時因找不到欄位而報錯崩潰
     const updateData = {
         display_name: document.getElementById('edit-display-name').value.trim(),
         bio: document.getElementById('edit-bio').value.trim(),
         social_ig: document.getElementById('edit-social-ig').value.trim(),
         social_x: document.getElementById('edit-social-x').value.trim(),
-        avatar_url: avatarSrc,
-        banner_url: bannerSrc.includes('http') || bannerSrc.includes('data:image') ? bannerSrc : null
+        avatar_url: avatarSrc
     };
     
     btn.innerText = "處理中..."; btn.disabled = true;
@@ -176,6 +187,12 @@ window.saveProfileData = async function() {
     try {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', userId);
         if (error) throw error;
+        
+        // 將 Banner 獨立存入 localStorage，繞過資料庫欄位缺失的問題
+        if (bannerSrc.includes('data:image') || bannerSrc.includes('http')) {
+            localStorage.setItem('banner_' + userId, bannerSrc);
+        }
+
         localStorage.setItem('myChatName', updateData.display_name);
         closeEditProfile();
         renderProfile();
