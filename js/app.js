@@ -93,7 +93,29 @@ function closeUploadModal() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
+// 5. 核心修復：年齡驗證邏輯
+function verifyAge() {
+    const ageGate = document.getElementById('age-gate');
+    if (ageGate) {
+        ageGate.classList.add('opacity-0');
+        setTimeout(() => {
+            ageGate.classList.add('hidden');
+            ageGate.style.display = 'none';
+        }, 500);
+    }
+    // 記錄已驗證，下次整理網頁不阻擋
+    localStorage.setItem('ageVerified', 'true');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // 檢查是否已經驗證過年齡
+    if (localStorage.getItem('ageVerified') === 'true') {
+        const ageGate = document.getElementById('age-gate');
+        if (ageGate) {
+            ageGate.style.display = 'none';
+        }
+    }
+
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
