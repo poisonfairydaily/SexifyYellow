@@ -1,5 +1,5 @@
 // ==========================================
-// js/create.js - 真實資料庫版 (加強防呆)
+// js/create.js - 解決卡頓壓縮版
 // ==========================================
 
 function openUploadModal() {
@@ -28,12 +28,47 @@ function handleFileSelect(e) {
     document.getElementById('media-placeholder').classList.add('hidden');
     
     const reader = new FileReader();
-    reader.onload = function(event) {
-        preview.src = event.target.result;
-        preview.classList.remove('hidden');
-        document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
-    };
-    reader.readAsDataURL(file);
+    
+    if (isVideo) {
+        reader.onload = function(event) {
+            preview.src = event.target.result;
+            preview.classList.remove('hidden');
+            document.getElementById('media-preview-container').dataset.mediaType = 'video';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // 核心修復：相片 Canvas 壓縮，防止 Base64 過大導致 Supabase 拒絕並卡死
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_SIZE = 1000; // 限制最大寬高
+
+                if (width > height && width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                } else if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 壓縮品質為 70%
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                preview.src = compressedBase64;
+                preview.classList.remove('hidden');
+                document.getElementById('media-preview-container').dataset.mediaType = 'image';
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
 }
 
 function resetUploadForm() {
@@ -46,7 +81,6 @@ function resetUploadForm() {
     const viewFreeEl = document.getElementById('view-free');
     if (viewFreeEl) viewFreeEl.checked = true;
 
-    if(typeof setPrice === 'function') setPrice(0);
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
@@ -54,16 +88,13 @@ function resetUploadForm() {
     document.getElementById('media-preview').src = '';
 }
 
-// 🔥 真正推送到 Supabase 的發佈邏輯 (已修復缺少 UI 節點報錯的問題)
 window.publishPost = async function() {
     const captionEl = document.getElementById('post-caption');
     const caption = captionEl ? captionEl.value.trim() : '';
     
-    // 安全抓取價格，若沒這個輸入框預設為 0
     const priceEl = document.getElementById('post-price');
     const price = priceEl ? parseInt(priceEl.value) || 0 : 0;
     
-    // 安全抓取付費開關，若沒這個開關預設為免費 (false)
     const viewPaidEl = document.getElementById('view-paid');
     const isPaid = viewPaidEl ? viewPaidEl.checked : false;
 
@@ -75,7 +106,6 @@ window.publishPost = async function() {
     let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
     if (mediaType === 'text' && !caption) return alert('請輸入文字內容或上傳相片/影片！');
 
-    // 取得預覽圖片的 base64 碼 (正式產品建議串接 Storage，目前我們存進 DB)
     let mediaUrl = '';
     if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
     if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src;
@@ -97,7 +127,6 @@ window.publishPost = async function() {
         alert('✨ 發佈成功！');
         closeUploadModal();
         
-        // 自動刷新目前所在的頁面
         if (document.getElementById('profile-tab').classList.contains('active') && typeof renderProfile === 'function') {
             renderProfile();
         } else if (document.getElementById('home-tab').classList.contains('active') && typeof renderDiscovery === 'function') {
@@ -106,7 +135,7 @@ window.publishPost = async function() {
 
     } catch (err) {
         console.error("發佈失敗:", err);
-        alert('發佈失敗：' + err.message);
+        alert('發佈失敗，請檢查網路連線或檔案大小。');
     } finally {
         publishBtn.innerText = "發佈";
         publishBtn.disabled = false;
