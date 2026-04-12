@@ -1,3 +1,83 @@
+// 圖片本地預覽通用函數
+window.previewImage = function(input, imgId) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = document.getElementById(imgId);
+            img.src = e.target.result;
+            img.classList.remove('hidden');
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// ==========================================
+// 1. 個人中心 (修改性別、生日、信箱)
+// ==========================================
+window.openPersonalCenter = async function() {
+    toggleSettings(); // 關閉左側設定抽屜
+    const modal = document.getElementById('personal-center-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+
+    try {
+        // 從 Auth 抓取信箱與生日
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (user) {
+            document.getElementById('pc-email').value = user.email || '';
+            document.getElementById('pc-birthday').value = user.user_metadata?.birthday || '';
+            
+            // 從 Profiles 抓取性別
+            const { data: profile } = await window.supabaseClient.from('profiles').select('gender').eq('id', user.id).single();
+            if (profile) {
+                document.getElementById('pc-gender').value = profile.gender || 'Unspecified';
+            }
+        }
+    } catch(e) {
+        console.error("無法載入個人中心資料", e);
+    }
+}
+
+window.closePersonalCenter = function() {
+    const modal = document.getElementById('personal-center-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+window.savePersonalCenter = async function() {
+    const btn = document.getElementById('save-personal-btn');
+    btn.innerText = "處理中..."; btn.disabled = true;
+
+    const newEmail = document.getElementById('pc-email').value.trim();
+    const newGender = document.getElementById('pc-gender').value;
+    const newBirthday = document.getElementById('pc-birthday').value;
+    
+    try {
+        // 1. 更新 Auth 資料 (信箱與生日)
+        const updates = { data: { birthday: newBirthday } };
+        if (newEmail) updates.email = newEmail;
+        const { error: authErr } = await window.supabaseClient.auth.updateUser(updates);
+        if (authErr) throw authErr;
+
+        // 2. 更新 Profile 資料 (性別)
+        const userId = localStorage.getItem('userId');
+        const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', userId);
+        if (profErr) throw profErr;
+
+        alert('個人中心資料已更新！\n若修改了信箱，請至新信箱收取確認信。');
+        closePersonalCenter();
+    } catch(e) {
+        alert('更新失敗: ' + e.message);
+    } finally {
+        btn.innerText = "儲存"; btn.disabled = false;
+    }
+}
+
+
+// ==========================================
+// 2. 個人專頁與編輯資料 (顯示名稱、頭像、Banner、簡介)
+// ==========================================
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     const userId = localStorage.getItem('userId');
@@ -16,18 +96,28 @@ window.renderProfile = async function() {
         const profile = profileRes.data;
         const myPosts = postsRes.data || [];
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
+        const bannerUrl = profile.banner_url || '';
 
         // 預填編輯表單
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
-        document.getElementById('edit-gender').value = profile.gender || 'Unspecified';
         document.getElementById('edit-social-ig').value = profile.social_ig || '';
         document.getElementById('edit-social-x').value = profile.social_x || '';
         document.getElementById('edit-avatar-preview').src = avatarUrl;
+        
+        if (bannerUrl) {
+            document.getElementById('edit-banner-preview').src = bannerUrl;
+            document.getElementById('edit-banner-preview').classList.remove('hidden');
+        } else {
+            document.getElementById('edit-banner-preview').src = '';
+            document.getElementById('edit-banner-preview').classList.add('hidden');
+        }
+
+        const bannerHtml = bannerUrl ? `<img src="${bannerUrl}" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
 
         let html = `
             <div class="bg-white pb-4 shadow-sm relative">
-                <div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>
+                ${bannerHtml}
                 <div class="px-5 relative -mt-12">
                     <div class="flex justify-between items-end mb-3">
                         <img src="${avatarUrl}" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
@@ -59,13 +149,19 @@ window.renderProfile = async function() {
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const userId = localStorage.getItem('userId');
+    
+    const avatarSrc = document.getElementById('edit-avatar-preview').src;
+    const bannerSrc = document.getElementById('edit-banner-preview').src;
+
     const updateData = {
         display_name: document.getElementById('edit-display-name').value.trim(),
         bio: document.getElementById('edit-bio').value.trim(),
-        gender: document.getElementById('edit-gender').value,
         social_ig: document.getElementById('edit-social-ig').value.trim(),
-        social_x: document.getElementById('edit-social-x').value.trim()
+        social_x: document.getElementById('edit-social-x').value.trim(),
+        avatar_url: avatarSrc,
+        banner_url: bannerSrc.includes('http') || bannerSrc.includes('data:image') ? bannerSrc : null
     };
+    
     btn.innerText = "處理中..."; btn.disabled = true;
 
     try {
@@ -81,7 +177,9 @@ window.saveProfileData = async function() {
     }
 }
 
-// 🎯 他人主頁控制與追蹤/訊息按鈕邏輯
+// ==========================================
+// 3. 他人主頁控制與追蹤/訊息按鈕邏輯
+// ==========================================
 window.viewOtherProfile = async function(userId) {
     if (userId === localStorage.getItem('userId')) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
 
@@ -101,13 +199,11 @@ window.viewOtherProfile = async function(userId) {
         document.getElementById('other-bio').innerText = user.bio || '這名創作者很神秘，尚未寫下簡介。';
         document.getElementById('other-avatar').src = avatar;
 
-        // 綁定「發訊息」按鈕
         document.getElementById('other-msg-btn').onclick = () => {
             closeOtherProfile();
             if(typeof openChat === 'function') openChat(userId, false, user.display_name, avatar);
         };
 
-        // 綁定「追蹤」按鈕
         const followBtn = document.getElementById('other-follow-btn');
         let subs = JSON.parse(localStorage.getItem('mySubscriptions')) || [];
         if (subs.find(s => s.id === userId)) {
@@ -128,7 +224,6 @@ window.viewOtherProfile = async function(userId) {
             };
         }
 
-        // 抓取貼文
         const { data: posts } = await window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
         const grid = document.getElementById('other-posts-grid');
         if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
