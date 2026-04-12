@@ -1,10 +1,9 @@
 // ==========================================
-// js/discovery.js - 真實資料庫版
+// js/discovery.js - 留言與收藏擴充版
 // ==========================================
 
 let clickTimer = null;
 
-// --- 渲染首頁動態 (真實撈取 Supabase) ---
 window.renderDiscovery = async function(filterKeyword = '') {
     const grid = document.getElementById('discovery-grid');
     if (!grid) return;
@@ -12,7 +11,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
     grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-3xl"></i></div>`;
 
     try {
-        // 從 posts 撈取資料，並嘗試 join profiles 表以取得頭像與名稱
         let query = window.supabaseClient
             .from('posts')
             .select('*, profiles(display_name, avatar_url, username)')
@@ -23,7 +21,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
         }
 
         const { data: posts, error } = await query;
-        
         if (error) throw error;
 
         if (!posts || posts.length === 0) {
@@ -36,15 +33,31 @@ window.renderDiscovery = async function(filterKeyword = '') {
             return;
         }
 
+        // 讀取本地收藏狀態
+        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
+
         grid.innerHTML = posts.map(post => {
             const authorName = post.profiles?.display_name || '未知創作者';
             const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
-            // 處理內容鎖定
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
             
+            // 檢查是否已收藏
+            const isBookmarked = bookmarks.some(b => b.id === post.id);
+            const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
+            
+            // 將物件轉成字串以供收藏功能寫入
+            const safePost = {
+                id: post.id,
+                caption: post.caption,
+                media_url: post.media_url,
+                authorName: authorName,
+                authorAvatar: authorAvatar
+            };
+            const postStr = encodeURIComponent(JSON.stringify(safePost));
+
             return `
-            <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2" ondblclick="handleDoubleTap(this, '${post.id}')">
+            <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 cursor-pointer" onclick="viewPost('${post.id}')">
                 
                 ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
                 
@@ -61,10 +74,10 @@ window.renderDiscovery = async function(filterKeyword = '') {
                     <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${post.caption || ''}</p>
                     <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
                         <div class="flex gap-4">
-                            <button class="text-gray-400 text-xs hover:text-sexify transition flex items-center gap-1" onclick="toggleLike(this, '${post.id}')"><i class="fa-regular fa-heart text-base"></i> <span class="font-bold">${post.likes || 0}</span></button>
-                            <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="openComments('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
+                            <button class="text-gray-400 text-xs hover:text-sexify transition flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this, '${post.id}')"><i class="fa-regular fa-heart text-base"></i> <span class="font-bold">${post.likes || 0}</span></button>
+                            <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="event.stopPropagation(); viewPost('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
                         </div>
-                        <button class="text-gray-300 text-xs hover:text-gray-600 transition"><i class="fa-solid fa-bookmark text-base"></i></button>
+                        <button class="text-xs hover:text-gray-600 transition" onclick="event.stopPropagation(); toggleBookmark(this, '${post.id}', '${postStr}')"><i class="${bmIcon} fa-bookmark text-base"></i></button>
                     </div>
                 </div>
             </div>`;
@@ -76,30 +89,28 @@ window.renderDiscovery = async function(filterKeyword = '') {
     }
 }
 
-// --- 雙擊愛心與留言邏輯 ---
-window.handleDoubleTap = function(element, postId) {
-    if (clickTimer) {
-        clearTimeout(clickTimer);
-        clickTimer = null;
-        triggerBigHeart(element);
-        const likeBtn = element.querySelector('.fa-heart').parentElement;
-        if (!likeBtn.querySelector('.fa-solid')) {
-            toggleLike(likeBtn, postId);
-        }
+// 收藏功能
+window.toggleBookmark = function(btn, postId, postStr) {
+    let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
+    const index = bookmarks.findIndex(b => b.id === postId);
+    const icon = btn.querySelector('i');
+    
+    if (index > -1) {
+        bookmarks.splice(index, 1);
+        icon.classList.replace('fa-solid', 'fa-regular');
+        icon.classList.remove('text-yellow-500');
+        icon.classList.add('text-gray-300');
     } else {
-        clickTimer = setTimeout(() => { clickTimer = null; }, 300);
+        const postObj = JSON.parse(decodeURIComponent(postStr));
+        bookmarks.push(postObj);
+        icon.classList.replace('fa-regular', 'fa-solid');
+        icon.classList.remove('text-gray-300');
+        icon.classList.add('text-yellow-500');
     }
+    localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
 }
 
-window.triggerBigHeart = function(container) {
-    const heart = document.createElement('i');
-    heart.className = 'fa-solid fa-heart big-heart-anim';
-    heart.style.left = '50%';
-    heart.style.top = '40%';
-    container.appendChild(heart);
-    setTimeout(() => heart.remove(), 800);
-}
-
+// 點讚功能
 window.toggleLike = function(btn, postId) {
     const icon = btn.querySelector('i');
     const countSpan = btn.querySelector('span');
@@ -116,42 +127,100 @@ window.toggleLike = function(btn, postId) {
     }
     countSpan.innerText = count;
     setTimeout(() => icon.classList.remove('scale-125'), 200);
-    
-    // (未來可擴充：將 Like 數寫回 Supabase)
 }
 
-window.openComments = function(postId) { 
-    document.getElementById('comment-sheet').classList.remove('hidden'); 
-    setTimeout(() => document.getElementById('comment-panel').classList.remove('translate-y-full'), 10); 
+// 查看貼文詳情與留言
+window.currentViewedPostId = null;
+window.viewPost = async function(postId) {
+    window.currentViewedPostId = postId;
+    const modal = document.getElementById('post-detail-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
-    // 簡單模擬載入留言
-    const list = document.getElementById('comment-list');
-    list.innerHTML = `<div class="p-10 text-center text-gray-400 text-sm">目前沒有留言，搶頭香！</div>`;
-}
+    const contentDiv = document.getElementById('post-detail-content');
+    contentDiv.innerHTML = `<div class="p-10 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
+    
+    try {
+        const { data: post, error } = await window.supabaseClient
+            .from('posts')
+            .select('*, profiles(display_name, avatar_url, username)')
+            .eq('id', postId)
+            .single();
+            
+        if (error) throw error;
+        
+        const authorName = post.profiles?.display_name || '未知創作者';
+        const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
+        const isLocked = post.is_paid;
+        const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
 
-window.closeComments = function() { 
-    document.getElementById('comment-panel').classList.add('translate-y-full'); 
-    setTimeout(() => document.getElementById('comment-sheet').classList.add('hidden'), 300); 
-}
-
-window.sendComment = function() {
-    const input = document.getElementById('comment-input');
-    if(!input.value.trim()) return;
-    
-    const list = document.getElementById('comment-list');
-    if(list.innerText.includes('沒有留言')) list.innerHTML = '';
-    
-    const myName = localStorage.getItem('myChatName') || '我';
-    
-    list.innerHTML += `
-        <div class="flex gap-3 mb-4">
-            <img src="https://ui-avatars.com/api/?name=${myName}&background=random" class="w-8 h-8 rounded-full shadow-sm">
-            <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm">
-                <p class="text-[11px] font-bold text-sexify">${myName}</p>
-                <p class="text-sm mt-1 text-gray-800">${input.value}</p>
+        contentDiv.innerHTML = `
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50">
+                <img src="${authorAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm">
+                <div class="flex-1">
+                    <div class="font-bold text-sm text-gray-900">${authorName}</div>
+                    <div class="text-[10px] text-gray-400">${new Date(post.created_at).toLocaleString()}</div>
+                </div>
             </div>
-        </div>`;
+            ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}">` : `<div class="p-10 text-center text-gray-400 italic bg-gray-50 ${blurClass}">純文字內容</div>`}
+            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed">${post.caption || ''}</div>
+        `;
+        
+        renderComments();
+    } catch(e) {
+        contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容</div>`;
+    }
+}
+
+window.closePostDetail = function() {
+    const modal = document.getElementById('post-detail-modal');
+    modal.classList.add('translate-x-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+window.renderComments = function() {
+    const list = document.getElementById('post-comments-list');
+    const comments = JSON.parse(localStorage.getItem('comments_' + window.currentViewedPostId)) || [];
     
+    if (comments.length === 0) {
+        list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
+        return;
+    }
+    
+    list.innerHTML = comments.map(c => `
+        <div class="flex gap-3 mb-4">
+            <img src="${c.avatar}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100">
+            <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm shadow-sm">
+                <p class="text-[11px] font-bold text-sexify mb-1">${c.name}</p>
+                <p class="text-sm text-gray-800">${c.text}</p>
+                <p class="text-[9px] text-gray-400 mt-1.5">${c.time}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.submitComment = function() {
+    const input = document.getElementById('comment-input');
+    const text = input.value.trim();
+    if(!text) return;
+    
+    let comments = JSON.parse(localStorage.getItem('comments_' + window.currentViewedPostId)) || [];
+    
+    const myName = localStorage.getItem('myChatName') || '使用者';
+    const avatar = `https://ui-avatars.com/api/?name=${myName}&background=random`;
+    
+    comments.push({
+        name: myName,
+        avatar: avatar,
+        text: text,
+        time: new Date().toLocaleString([], {hour: '2-digit', minute:'2-digit'})
+    });
+    
+    localStorage.setItem('comments_' + window.currentViewedPostId, JSON.stringify(comments));
     input.value = '';
-    list.scrollTop = list.scrollHeight;
+    renderComments();
+    
+    const list = document.getElementById('post-comments-list');
+    setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
 }
