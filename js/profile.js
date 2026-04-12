@@ -1,4 +1,3 @@
-// 圖片本地預覽通用函數
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -11,11 +10,9 @@ window.previewImage = function(input, imgId) {
     }
 }
 
-// ==========================================
-// 1. 個人中心 (修改性別、生日、信箱)
-// ==========================================
+// 1. 個人中心 
 window.openPersonalCenter = async function() {
-    toggleSettings(); // 關閉左側設定抽屜
+    toggleSettings(); 
     const modal = document.getElementById('personal-center-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -70,9 +67,7 @@ window.savePersonalCenter = async function() {
     }
 }
 
-// ==========================================
-// 2. 個人專頁與編輯資料 (顯示名稱、頭像、Banner、簡介)
-// ==========================================
+// 2. 個人專頁與編輯資料 (修復貼文顯示與新增刪除功能)
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     const userId = localStorage.getItem('userId');
@@ -115,7 +110,7 @@ window.renderProfile = async function() {
                 <div class="px-5 relative -mt-12">
                     <div class="flex justify-between items-end mb-3">
                         <img src="${avatarUrl}" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
-                        <button onclick="openEditProfile()" class="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm mb-2">
+                        <button onclick="openEditProfile()" data-i18n="edit_profile" class="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm mb-2">
                             編輯資料
                         </button>
                     </div>
@@ -128,15 +123,35 @@ window.renderProfile = async function() {
             </div>
             <div class="bg-gray-50 pt-2 min-h-[300px]"><div class="masonry-grid px-2">`;
         
+        // 核心修復：讓純文字貼文也能顯示，並加入刪除按鈕
         if (myPosts.length > 0) {
-            html += myPosts.map(p => `<div class="masonry-item"><img src="${p.media_url}" class="w-full rounded-xl"></div>`).join('');
+            html += myPosts.map(p => `
+                <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl" onclick="viewPost('${p.id}')">
+                    ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${p.caption || ''}</p>
+                    <button onclick="event.stopPropagation(); deleteOwnPost('${p.id}')" class="absolute top-3 right-3 bg-red-500/90 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition backdrop-blur-sm hover:bg-red-600 z-10"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
+            `).join('');
         } else {
-            html += `<div class="col-span-2 text-center py-20 text-gray-400">尚無發佈貼文</div>`;
+            html += `<div class="col-span-2 text-center py-20 text-gray-400" data-i18n="no_content">尚無發佈貼文</div>`;
         }
         container.innerHTML = html + `</div></div>`;
 
     } catch (err) {
         container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。提示：若修改過結構，請嘗試登出並重新註冊。</div>`;
+    }
+}
+
+// 新增：刪除自己的貼文
+window.deleteOwnPost = async function(postId) {
+    if (!confirm("確定要刪除這則貼文嗎？刪除後將無法恢復。")) return;
+    try {
+        const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
+        if (error) throw error;
+        alert("貼文已成功刪除！");
+        renderProfile(); // 重新渲染畫面
+    } catch (err) {
+        alert("刪除失敗：" + err.message);
     }
 }
 
@@ -171,9 +186,7 @@ window.saveProfileData = async function() {
     }
 }
 
-// ==========================================
 // 3. 他人主頁控制與追蹤/訊息按鈕邏輯
-// ==========================================
 window.viewOtherProfile = async function(userId) {
     if (userId === localStorage.getItem('userId')) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
 
@@ -220,8 +233,16 @@ window.viewOtherProfile = async function(userId) {
 
         const { data: posts } = await window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
         const grid = document.getElementById('other-posts-grid');
-        if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
-        else grid.innerHTML = posts.map(p => `<div class="masonry-item"><img src="${p.media_url}" class="w-full rounded-xl"></div>`).join('');
+        if (!posts || posts.length === 0) {
+            grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
+        } else {
+            grid.innerHTML = posts.map(p => `
+                <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="viewPost('${p.id}')">
+                    ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${p.caption || ''}</p>
+                </div>
+            `).join('');
+        }
 
     } catch (err) {
         console.error("讀取他人主頁失敗", err);
@@ -234,16 +255,14 @@ window.closeOtherProfile = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// ==========================================
 // 4. 粉絲與訂閱用戶面板邏輯
-// ==========================================
 window.openFansSubsModal = function() {
-    toggleSettings(); // 開啟前面先自動關閉左側選單
+    toggleSettings(); 
     const modal = document.getElementById('fans-subs-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
-    switchFansTab('subs'); // 預設打開「我的訂閱」
+    switchFansTab('subs'); 
 }
 
 window.closeFansSubsModal = function() {
@@ -262,8 +281,6 @@ window.switchFansTab = function(tab) {
         btnFans.classList.replace('border-transparent', 'border-sexify');
         btnSubs.classList.replace('text-sexify', 'text-gray-400');
         btnSubs.classList.replace('border-sexify', 'border-transparent');
-
-        // 目前資料庫未建立粉絲關聯表，以空狀態顯示
         list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
     } else {
         btnSubs.classList.replace('text-gray-400', 'text-sexify');
@@ -271,7 +288,6 @@ window.switchFansTab = function(tab) {
         btnFans.classList.replace('text-sexify', 'text-gray-400');
         btnFans.classList.replace('border-sexify', 'border-transparent');
 
-        // 撈取本地紀錄的追蹤名單
         const subs = JSON.parse(localStorage.getItem('mySubscriptions')) || [];
         if (subs.length === 0) {
             list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
@@ -295,7 +311,6 @@ window.unfollowUser = function(userId, btn) {
     subs = subs.filter(s => s.id !== userId);
     localStorage.setItem('mySubscriptions', JSON.stringify(subs));
     
-    // 動畫移除元素
     btn.parentElement.classList.add('opacity-0', 'scale-95');
     setTimeout(() => {
         btn.parentElement.remove();
