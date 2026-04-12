@@ -1,5 +1,5 @@
 // ==========================================
-// js/create.js - 真實資料庫版
+// js/create.js - 真實資料庫版 (加強防呆)
 // ==========================================
 
 function openUploadModal() {
@@ -37,9 +37,15 @@ function handleFileSelect(e) {
 }
 
 function resetUploadForm() {
-    document.getElementById('post-price').value = '';
-    document.getElementById('post-caption').value = '';
-    document.getElementById('view-free').checked = true;
+    const priceEl = document.getElementById('post-price');
+    if (priceEl) priceEl.value = '';
+    
+    const captionEl = document.getElementById('post-caption');
+    if (captionEl) captionEl.value = '';
+    
+    const viewFreeEl = document.getElementById('view-free');
+    if (viewFreeEl) viewFreeEl.checked = true;
+
     if(typeof setPrice === 'function') setPrice(0);
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
@@ -48,11 +54,19 @@ function resetUploadForm() {
     document.getElementById('media-preview').src = '';
 }
 
-// 🔥 真正推送到 Supabase 的發佈邏輯
+// 🔥 真正推送到 Supabase 的發佈邏輯 (已修復缺少 UI 節點報錯的問題)
 window.publishPost = async function() {
-    const caption = document.getElementById('post-caption').value.trim();
-    const price = parseInt(document.getElementById('post-price').value) || 0;
-    const isPaid = document.getElementById('view-paid').checked;
+    const captionEl = document.getElementById('post-caption');
+    const caption = captionEl ? captionEl.value.trim() : '';
+    
+    // 安全抓取價格，若沒這個輸入框預設為 0
+    const priceEl = document.getElementById('post-price');
+    const price = priceEl ? parseInt(priceEl.value) || 0 : 0;
+    
+    // 安全抓取付費開關，若沒這個開關預設為免費 (false)
+    const viewPaidEl = document.getElementById('view-paid');
+    const isPaid = viewPaidEl ? viewPaidEl.checked : false;
+
     const userId = localStorage.getItem('userId');
     const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
 
@@ -64,7 +78,7 @@ window.publishPost = async function() {
     // 取得預覽圖片的 base64 碼 (正式產品建議串接 Storage，目前我們存進 DB)
     let mediaUrl = '';
     if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
-    if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src; // 注意：大影片轉 base64 可能會卡頓
+    if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src;
 
     publishBtn.innerText = "發佈中...";
     publishBtn.disabled = true;
