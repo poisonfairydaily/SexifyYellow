@@ -191,11 +191,18 @@
     </div>
 
     <div id="post-detail-modal" class="fixed inset-0 bg-gray-50 z-[400] hidden flex-col transform translate-x-full transition-transform duration-300">
-        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm">
-            <button onclick="closePostDetail()" class="text-gray-700 w-10 h-10 flex items-center justify-center -ml-2 active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
-            <h2 class="font-black text-lg ml-2 flex-1 text-center pr-8" data-i18n="post_detail">貼文詳情</h2>
+        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm justify-between">
+            <div class="flex items-center gap-2">
+                <button onclick="closePostDetail()" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+                <h2 class="font-black text-lg" data-i18n="post_detail">貼文詳情</h2>
+            </div>
+            <div class="relative">
+                <button onclick="document.getElementById('post-options-menu').classList.toggle('hidden'); event.stopPropagation();" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-ellipsis-vertical text-xl"></i></button>
+                <div id="post-options-menu" class="hidden absolute right-0 top-full mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
+                    </div>
+            </div>
         </header>
-        <div class="flex-1 overflow-y-auto pb-20 bg-gray-100 flex flex-col">
+        <div class="flex-1 overflow-y-auto pb-20 bg-gray-100 flex flex-col" onclick="document.getElementById('post-options-menu').classList.add('hidden')">
             <div id="post-detail-content" class="bg-white pb-4 mb-2 shadow-sm"></div>
             <div class="px-4 py-2 text-xs font-bold text-gray-500" data-i18n="comments">留言</div>
             <div id="post-comments-list" class="flex-1 bg-white p-4 space-y-4"></div>
