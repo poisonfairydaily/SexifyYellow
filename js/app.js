@@ -65,9 +65,21 @@ function toggleNotifications() {
     }
 }
 
-// 4. Modal 控制
+// 4. Modal 控制 (新增搜尋攔與個人中心)
+function toggleSearch(show) {
+    const overlay = document.getElementById('search-overlay');
+    if (!overlay) return;
+    if (show) {
+        overlay.classList.add('active');
+        setTimeout(() => document.getElementById('searchInput').focus(), 100);
+    } else {
+        overlay.classList.remove('active');
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
+    }
+}
+
 function openEditProfile() {
-    toggleSettings(); // 關閉左側設定
     const modal = document.getElementById('edit-profile-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -93,7 +105,7 @@ function closeUploadModal() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 5. 核心修復：年齡驗證邏輯
+// 核心修復：年齡驗證邏輯
 function verifyAge() {
     const ageGate = document.getElementById('age-gate');
     if (ageGate) {
@@ -103,17 +115,13 @@ function verifyAge() {
             ageGate.style.display = 'none';
         }, 500);
     }
-    // 記錄已驗證，下次整理網頁不阻擋
     localStorage.setItem('ageVerified', 'true');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 檢查是否已經驗證過年齡
     if (localStorage.getItem('ageVerified') === 'true') {
         const ageGate = document.getElementById('age-gate');
-        if (ageGate) {
-            ageGate.style.display = 'none';
-        }
+        if (ageGate) ageGate.style.display = 'none';
     }
 
     const logoutBtn = document.getElementById('logout-btn');
