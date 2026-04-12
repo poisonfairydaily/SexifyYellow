@@ -20,16 +20,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function performSearch(query) {
         try {
+            // 防止查詢字串包含逗號導致 Supabase 的 .or() 語法解析錯誤
+            const safeQuery = query.replace(/,/g, ''); 
+
             const { data: users, error } = await window.supabaseClient
                 .from("profiles")
-                .select("id, username, display_name, avatar_url, bio")
-                .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+                .select("*") // 改為選取所有欄位，防止某些舊帳號結構不完整導致報錯崩潰
+                .or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`)
                 .limit(20);
 
-            if (error) throw error;
+            if (error) {
+                console.error("Supabase 搜尋 API 錯誤:", error);
+                throw error;
+            }
 
             if (!users || users.length === 0) {
-                searchResults.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-bold flex flex-col items-center"><i class="fa-solid fa-user-slash text-3xl mb-2 opacity-50"></i>沒有該用戶</div>`;
+                searchResults.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-bold flex flex-col items-center"><i class="fa-solid fa-user-slash text-3xl mb-2 opacity-50"></i>找不到該用戶</div>`;
                 return;
             }
 
@@ -48,7 +54,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }).join('');
 
         } catch (err) {
-            searchResults.innerHTML = `<div class="text-center text-red-500 mt-10 text-sm">搜尋發生錯誤</div>`;
+            console.error("搜尋例外錯誤:", err);
+            searchResults.innerHTML = `<div class="text-center text-red-500 mt-10 text-sm">搜尋發生錯誤，請確認網路連線或資料庫狀態。</div>`;
         }
     }
 });
