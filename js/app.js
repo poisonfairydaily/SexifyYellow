@@ -22,7 +22,6 @@ function switchTab(tabId, btn) {
         btn.classList.remove('text-gray-400'); 
     }
 
-    // 控制搜尋按鈕只在首頁與訊息出現
     const searchBtn = document.getElementById('global-search-btn');
     if(searchBtn) {
         if(tabId === 'home-tab' || tabId === 'messages-tab') {
@@ -65,7 +64,7 @@ function toggleNotifications() {
     }
 }
 
-// 4. Modal 控制 (新增搜尋攔與個人中心)
+// 4. Modal 控制與搜尋列
 function toggleSearch(show) {
     const overlay = document.getElementById('search-overlay');
     if (!overlay) return;
@@ -91,17 +90,61 @@ function closeEditProfile() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-function openUploadModal() { 
-    const modal = document.getElementById('upload-modal');
-    const panel = document.getElementById('upload-panel');
+// ===== 新增：收藏、訂單、聯絡我們 =====
+function openBookmarksModal() {
+    toggleSettings();
+    const modal = document.getElementById('bookmarks-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    setTimeout(() => panel.classList.remove('translate-y-full'), 10);
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+    
+    // 渲染收藏內容
+    const list = document.getElementById('bookmarks-list');
+    let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
+    if(bookmarks.length === 0) {
+        list.innerHTML = `<div class="text-center py-20 text-gray-400">目前沒有收藏貼文</div>`;
+        return;
+    }
+    list.innerHTML = bookmarks.map(b => `
+        <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="closeBookmarksModal(); viewPost('${b.id}')">
+            <div class="flex items-center gap-2 mb-2">
+                <img src="${b.authorAvatar}" class="w-5 h-5 rounded-full object-cover">
+                <span class="text-[10px] font-bold text-gray-700">${b.authorName}</span>
+            </div>
+            ${b.media_url ? `<img src="${b.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
+            <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${b.caption || ''}</p>
+        </div>
+    `).join('');
 }
-function closeUploadModal() { 
-    const modal = document.getElementById('upload-modal');
-    const panel = document.getElementById('upload-panel');
-    panel.classList.add('translate-y-full');
+function closeBookmarksModal() {
+    const modal = document.getElementById('bookmarks-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+function openOrdersModal() {
+    toggleSettings();
+    const modal = document.getElementById('orders-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+}
+function closeOrdersModal() {
+    const modal = document.getElementById('orders-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+function openContactModal() {
+    toggleSettings();
+    const modal = document.getElementById('contact-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+}
+function closeContactModal() {
+    const modal = document.getElementById('contact-modal');
+    modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
