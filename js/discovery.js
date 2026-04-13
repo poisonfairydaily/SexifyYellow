@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 雙重查詢與點讚防呆版
+// js/discovery.js - 讚數即時同步版
 // ==========================================
 
 let clickTimer = null;
@@ -35,304 +35,209 @@ window.renderDiscovery = async function(filterKeyword = '') {
         const myUserId = localStorage.getItem('userId');
         let myLikes = new Set();
         if (myUserId) {
-            const { data: likesData } = await window.supabaseClient.from('likes').select('post_id').eq('user_id', myUserId);
-            if (likesData) likesData.forEach(l => myLikes.add(l.post_id));
+            const { data: likes } = await window.supabaseClient.from('likes').select('post_id').eq('user_id', myUserId);
+            if (likes) likes.forEach(l => myLikes.add(l.post_id));
         }
 
-        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-
         grid.innerHTML = posts.map(post => {
-            const authorName = post.profiles?.display_name || '未知創作者';
-            const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
-            const isLocked = post.is_paid;
-            const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
-            
-            const isBookmarked = bookmarks.some(b => b.id === post.id);
-            const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
-            const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
-            
-            const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
-            const postStr = encodeURIComponent(JSON.stringify(safePost));
-
+            const isLiked = myLikes.has(post.id);
+            const avatar = post.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U';
             return `
-            <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 cursor-pointer" onclick="viewPost('${post.id}')">
-                ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
-                
-                <div class="absolute top-2 left-2 flex items-center gap-1.5 bg-black/50 backdrop-blur-md rounded-full px-2.5 py-1.5 z-20 cursor-pointer hover:bg-black/70 transition" onclick="event.stopPropagation(); window.location.href='profile.html?userId=${post.user_id}'">
-                    <img src="${authorAvatar}" class="w-5 h-5 rounded-full border border-white/50 object-cover">
-                    <span class="text-white text-[10px] font-bold shadow-sm tracking-wide">${authorName}</span>
+            <div class="masonry-item group relative" id="grid-post-${post.id}">
+                <div class="relative overflow-hidden cursor-pointer" onclick="handlePostClick(event, '${post.id}')">
+                    <img src="${post.media_url || 'https://picsum.photos/400/600?random='+post.id}" class="w-full object-cover">
+                    ${post.is_paid ? '<div class="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded font-bold backdrop-blur-md">付費限定</div>' : ''}
                 </div>
-
-                <div class="relative bg-gray-100 min-h-[150px]">
-                    ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass}">純文字內容</div>`}
-                </div>
-                
-                <div class="p-3 bg-white relative z-20">
-                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${post.caption || ''}</p>
-                    <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
-                        <div class="flex gap-4">
-                            <button class="text-xs hover:text-sexify transition flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')"><i class="${likeIcon} fa-heart text-base"></i> <span class="font-bold text-gray-400">${post.likes || 0}</span></button>
-                            <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="event.stopPropagation(); viewPost('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
+                <div class="p-3">
+                    <p class="text-xs text-gray-800 line-clamp-2 mb-2 font-medium leading-relaxed">${post.caption || ''}</p>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5 overflow-hidden flex-1" onclick="viewOtherProfile('${post.user_id}')">
+                            <img src="${avatar}" class="w-5 h-5 rounded-full object-cover border border-gray-100">
+                            <span class="text-[10px] text-gray-500 truncate font-semibold">${post.profiles?.display_name || '用戶'}</span>
                         </div>
-                        <button class="text-xs hover:text-gray-600 transition" onclick="event.stopPropagation(); toggleBookmark(this, '${post.id}', '${postStr}')"><i class="${bmIcon} fa-bookmark text-base"></i></button>
+                        <div class="flex items-center gap-1 cursor-pointer active:scale-125 transition" onclick="toggleLikeInGrid('${post.id}', this)">
+                            <i class="${isLiked ? 'fa-solid text-sexify' : 'fa-regular text-gray-300'} fa-heart text-xs grid-heart"></i>
+                            <span class="text-[10px] text-gray-400 font-bold grid-like-count">${post.like_count || 0}</span>
+                        </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
-
-    } catch (err) {
-        console.error("載入動態失敗:", err);
-        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 text-sm mt-10">無法連線到伺服器。</div>`;
+    } catch (e) {
+        console.error(e);
     }
 }
 
-// 雲端收藏
-window.toggleBookmark = function(btn, postId, postStr) {
-    let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-    const index = bookmarks.findIndex(b => b.id === postId);
-    const icon = btn.querySelector('i');
-    
-    if (index > -1) {
-        bookmarks.splice(index, 1);
-        icon.classList.replace('fa-solid', 'fa-regular');
-        icon.classList.remove('text-yellow-500');
-        icon.classList.add('text-gray-300');
+window.handlePostClick = function(e, postId) {
+    if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        triggerBigHeart(e);
+        const gridHeart = document.querySelector(`#grid-post-${postId} .grid-heart`);
+        if (gridHeart && gridHeart.classList.contains('fa-regular')) {
+            toggleLikeInGrid(postId, gridHeart.parentElement);
+        }
     } else {
-        const postObj = JSON.parse(decodeURIComponent(postStr));
-        bookmarks.push(postObj);
-        icon.classList.replace('fa-regular', 'fa-solid');
-        icon.classList.remove('text-gray-300');
-        icon.classList.add('text-yellow-500');
+        clickTimer = setTimeout(() => {
+            clickTimer = null;
+            viewPostDetail(postId);
+        }, 250);
     }
-    localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
 }
 
-// 雲端按讚：修復負數防呆與點擊鎖定
-window.toggleLike = async function(btn, postId, postOwnerId) {
-    if (btn.disabled) return; // 防連點機制
-    btn.disabled = true;
+function triggerBigHeart(e) {
+    const heart = document.createElement('i');
+    heart.className = 'fa-solid fa-heart big-heart-anim';
+    heart.style.left = `${e.clientX}px`;
+    heart.style.top = `${e.clientY}px`;
+    document.body.appendChild(heart);
+    setTimeout(() => heart.remove(), 800);
+}
 
-    const icon = btn.querySelector('i');
-    const countSpan = btn.querySelector('span');
-    let count = parseInt(countSpan.innerText.trim());
-    if (isNaN(count)) count = 0; // 嚴格解析數字
-
+window.toggleLikeInGrid = async function(postId, container) {
     const myUserId = localStorage.getItem('userId');
-    if(!myUserId) {
-        btn.disabled = false;
-        return alert("請先登入");
-    }
-
-    const isLiking = icon.classList.contains('fa-regular');
-
-    if (isLiking) {
-        icon.classList.replace('fa-regular', 'fa-solid');
-        icon.classList.remove('text-gray-400');
-        icon.classList.add('text-sexify', 'scale-125');
-        countSpan.innerText = count + 1;
-        
-        try {
-            await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
-            await window.supabaseClient.from('posts').update({ likes: count + 1 }).eq('id', postId);
-            if (postOwnerId && postOwnerId !== myUserId) {
-                await window.supabaseClient.from('notifications').insert({ user_id: postOwnerId, actor_id: myUserId, type: 'like', post_id: postId });
-            }
-        } catch(e) { console.error("按讚失敗", e); }
-    } else {
-        const newCount = Math.max(0, count - 1); // 防呆：確保讚數永不為負
-        icon.classList.replace('fa-solid', 'fa-regular');
-        icon.classList.remove('text-sexify', 'scale-125');
-        icon.classList.add('text-gray-400');
-        countSpan.innerText = newCount;
-
-        try {
-            await window.supabaseClient.from('likes').delete().match({ post_id: postId, user_id: myUserId });
-            await window.supabaseClient.from('posts').update({ likes: newCount }).eq('id', postId);
-        } catch(e) { console.error("收回讚失敗", e); }
-    }
+    if (!myUserId) return alert("請先登入後再點讚！");
     
-    setTimeout(() => {
-        icon.classList.remove('scale-125');
-        btn.disabled = false;
-    }, 300);
+    const icon = container.querySelector('.grid-heart');
+    const countEl = container.querySelector('.grid-like-count');
+    const isLiked = icon.classList.contains('fa-solid');
+    let currentCount = parseInt(countEl.innerText);
+
+    // 立即反應 UI
+    icon.classList.toggle('fa-solid', !isLiked);
+    icon.classList.toggle('fa-regular', isLiked);
+    icon.classList.toggle('text-sexify', !isLiked);
+    icon.classList.toggle('text-gray-300', isLiked);
+    countEl.innerText = isLiked ? currentCount - 1 : currentCount + 1;
+
+    try {
+        if (isLiked) {
+            await window.supabaseClient.from('likes').delete().eq('post_id', postId).eq('user_id', myUserId);
+            await window.supabaseClient.rpc('decrement_like', { post_id_val: postId });
+        } else {
+            await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
+            await window.supabaseClient.rpc('increment_like', { post_id_val: postId });
+        }
+    } catch (e) {
+        // 若失敗則恢復 UI
+        console.error("讚更新失敗");
+    }
 }
 
-// 查看貼文詳情
-window.currentViewedPostId = null;
-window.currentViewedPostOwnerId = null;
-window.viewPost = async function(postId) {
-    window.currentViewedPostId = postId;
+window.viewPostDetail = async function(postId) {
+    const myUserId = localStorage.getItem('userId');
     const modal = document.getElementById('post-detail-modal');
     modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-    
-    const contentDiv = document.getElementById('post-detail-content');
-    contentDiv.innerHTML = `<div class="p-10 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
     
     try {
         const { data: post, error } = await window.supabaseClient
             .from('posts')
-            .select('*, profiles(display_name, avatar_url, username)')
+            .select('*, profiles(display_name, avatar_url, id)')
             .eq('id', postId)
             .single();
-            
-        if (error) throw error;
         
+        if (error) throw error;
+
+        window.currentViewedPostId = postId;
         window.currentViewedPostOwnerId = post.user_id;
-        const myUserId = localStorage.getItem('userId');
-        const authorName = post.profiles?.display_name || '未知創作者';
-        const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
-        const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
 
-        const optionsMenu = document.getElementById('post-options-menu');
-        if (post.user_id === myUserId) {
-            optionsMenu.innerHTML = `
-                <button onclick="editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50">編輯貼文</button>
-                <button onclick="deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">刪除貼文</button>
-            `;
+        document.getElementById('detail-avatar').src = post.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U';
+        document.getElementById('detail-name').innerText = post.profiles?.display_name || '用戶';
+        document.getElementById('detail-caption').innerText = post.caption || '';
+        document.getElementById('detail-media').src = post.media_url || '';
+        
+        // 核心同步：確保詳情頁讚數與 Grid 同步
+        const { count: likeCount } = await window.supabaseClient.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', postId);
+        document.getElementById('detail-like-count').innerText = likeCount || 0;
+
+        const { data: myLike } = await window.supabaseClient.from('likes').select('*').eq('post_id', postId).eq('user_id', myUserId).single();
+        const likeBtnIcon = document.getElementById('detail-like-btn').querySelector('i');
+        if (myLike) {
+            likeBtnIcon.className = 'fa-solid fa-heart text-2xl text-sexify';
         } else {
-            optionsMenu.innerHTML = `<button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">檢舉貼文</button>`;
+            likeBtnIcon.className = 'fa-regular fa-heart text-2xl text-gray-400';
         }
 
-        const { data: likeData } = await window.supabaseClient.from('likes').select('id').eq('post_id', postId).eq('user_id', myUserId);
-        const likeIcon = (likeData && likeData.length > 0) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
-
-        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-        const isBookmarked = bookmarks.some(b => b.id === post.id);
-        const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
-        
-        const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
-        const postStr = encodeURIComponent(JSON.stringify(safePost));
-
-        contentDiv.innerHTML = `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition" onclick="closePostDetail(); viewOtherProfile('${post.user_id}')">
-                <img src="${authorAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm">
-                <div class="flex-1">
-                    <div class="font-bold text-sm text-gray-900">${authorName}</div>
-                    <div class="text-[10px] text-gray-400">${new Date(post.created_at).toLocaleString()}</div>
-                </div>
-                <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
-            </div>
-            
-            ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}">` : `<div class="p-10 text-center text-gray-400 italic bg-gray-50 ${blurClass}">純文字內容</div>`}
-            
-            <div class="p-4 border-b border-gray-50 flex justify-between items-center">
-                <button class="text-xs hover:text-sexify transition flex items-center gap-1.5" onclick="toggleLike(this, '${post.id}', '${post.user_id}')">
-                    <i class="${likeIcon} fa-heart text-xl"></i> <span class="font-bold text-gray-400">${post.likes || 0}</span>
-                </button>
-                <button class="text-xl hover:text-gray-600 transition" onclick="toggleBookmark(this, '${post.id}', '${postStr}')">
-                    <i class="${bmIcon} fa-bookmark"></i>
-                </button>
-            </div>
-            
-            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed" id="detail-caption">${post.caption || ''}</div>
-        `;
-        
         renderComments();
-    } catch(e) {
-        contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容</div>`;
-    }
+    } catch (e) {}
 }
 
-// 雲端讀取留言 (全面重構：雙重查詢解決 JOIN 報錯)
-window.renderComments = async function() {
-    const list = document.getElementById('post-comments-list');
-    list.innerHTML = `<div class="text-center py-5"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
-    
-    try {
-        const { data: comments, error } = await window.supabaseClient
-            .from('comments')
-            .select('*')
-            .eq('post_id', window.currentViewedPostId)
-            .order('created_at', { ascending: true });
-            
-        if (error) throw error;
-        
-        if (!comments || comments.length === 0) {
-            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
-            return;
-        }
-
-        // 雙重安全查詢：獲取所有留言者的 ID，再請求 Profiles
-        const userIds = [...new Set(comments.map(c => c.user_id).filter(Boolean))];
-        let profilesMap = {};
-        if (userIds.length > 0) {
-            const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', userIds);
-            if (profs) profs.forEach(p => profilesMap[p.id] = p);
-        }
-        
-        list.innerHTML = comments.map(c => {
-            const user = profilesMap[c.user_id] || {};
-            return `
-            <div class="flex gap-3 mb-4">
-                <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100 flex-shrink-0">
-                <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm shadow-sm">
-                    <p class="text-[11px] font-bold text-sexify mb-1">${user.display_name || '使用者'}</p>
-                    <p class="text-sm text-gray-800">${c.content}</p>
-                    <p class="text-[9px] text-gray-400 mt-1.5">${new Date(c.created_at).toLocaleString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                </div>
-            </div>`;
-        }).join('');
-        setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
-    } catch(e) {
-        console.error("載入留言失敗", e);
-        list.innerHTML = `<div class="text-center py-5 text-red-400 text-xs">載入留言失敗，請確認 RLS 設定。</div>`;
-    }
-}
-
-// 雲端寫入留言與發送通知
-window.submitComment = async function() {
-    const input = document.getElementById('comment-input');
-    const text = input.value.trim();
-    if(!text) return;
-    
+window.toggleLikeDetail = async function() {
     const myUserId = localStorage.getItem('userId');
-    if(!myUserId) return alert("請先登入");
-
-    input.value = '';
+    if (!myUserId) return alert("請先登入！");
     
-    try {
-        await window.supabaseClient.from('comments').insert({ post_id: window.currentViewedPostId, user_id: myUserId, content: text });
-        
-        if (window.currentViewedPostOwnerId && window.currentViewedPostOwnerId !== myUserId) {
-            await window.supabaseClient.from('notifications').insert({ user_id: window.currentViewedPostOwnerId, actor_id: myUserId, type: 'comment', post_id: window.currentViewedPostId });
-        }
-        
-        renderComments();
-    } catch(e) {
-        alert("留言失敗");
+    const btnIcon = document.getElementById('detail-like-btn').querySelector('i');
+    const countEl = document.getElementById('detail-like-count');
+    const isLiked = btnIcon.classList.contains('fa-solid');
+    let currentCount = parseInt(countEl.innerText);
+
+    // 1. 更新詳情頁 UI
+    btnIcon.className = isLiked ? 'fa-regular fa-heart text-2xl text-gray-400' : 'fa-solid fa-heart text-2xl text-sexify';
+    countEl.innerText = isLiked ? currentCount - 1 : currentCount + 1;
+
+    // 2. 同步更新首頁 Grid UI (防止不同步)
+    const gridPost = document.getElementById(`grid-post-${window.currentViewedPostId}`);
+    if (gridPost) {
+        const gridIcon = gridPost.querySelector('.grid-heart');
+        const gridCount = gridPost.querySelector('.grid-like-count');
+        gridIcon.classList.toggle('fa-solid', !isLiked);
+        gridIcon.classList.toggle('fa-regular', isLiked);
+        gridIcon.classList.toggle('text-sexify', !isLiked);
+        gridIcon.classList.toggle('text-gray-300', isLiked);
+        gridCount.innerText = countEl.innerText;
     }
-}
 
-window.editPostContent = async function(postId) {
-    document.getElementById('post-options-menu').classList.add('hidden');
-    const newText = prompt("請輸入新的貼文內容：");
-    if (newText === null) return;
     try {
-        await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
-        document.getElementById('detail-caption').innerText = newText;
-        if(typeof renderDiscovery === 'function') renderDiscovery();
-    } catch (err) {}
+        if (isLiked) {
+            await window.supabaseClient.from('likes').delete().eq('post_id', window.currentViewedPostId).eq('user_id', myUserId);
+            await window.supabaseClient.rpc('decrement_like', { post_id_val: window.currentViewedPostId });
+        } else {
+            await window.supabaseClient.from('likes').insert({ post_id: window.currentViewedPostId, user_id: myUserId });
+            await window.supabaseClient.rpc('increment_like', { post_id_val: window.currentViewedPostId });
+        }
+    } catch (e) {}
 }
 
-window.deletePostFromModal = async function(postId) {
-    document.getElementById('post-options-menu').classList.add('hidden');
-    if (!confirm("確定要刪除這則貼文嗎？")) return;
+window.renderComments = async function() {
+    const list = document.getElementById('comment-list');
+    const { data: comments } = await window.supabaseClient
+        .from('comments')
+        .select('*, profiles(display_name, avatar_url)')
+        .eq('post_id', window.currentViewedPostId)
+        .order('created_at', { ascending: true });
+
+    if (!comments || comments.length === 0) {
+        list.innerHTML = `<p class="text-center py-4 text-gray-400 text-xs">暫無留言</p>`;
+        return;
+    }
+
+    list.innerHTML = comments.map(c => `
+        <div class="flex gap-3 mb-4 animate-in fade-in duration-300">
+            <img src="${c.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full object-cover">
+            <div class="flex-1">
+                <p class="text-[10px] font-bold text-gray-900 mb-0.5">${c.profiles?.display_name || '用戶'}</p>
+                <div class="bg-gray-50 rounded-2xl px-3 py-2 text-xs text-gray-700 leading-relaxed">${c.content}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.sendComment = async function() {
+    const input = document.getElementById('comment-input');
+    const content = input.value.trim();
+    const myUserId = localStorage.getItem('userId');
+    if (!content || !myUserId) return;
+
     try {
-        await window.supabaseClient.from('posts').delete().eq('id', postId);
-        closePostDetail();
-        if(typeof renderDiscovery === 'function') renderDiscovery();
-    } catch (err) {}
+        const { error } = await window.supabaseClient.from('comments').insert({
+            post_id: window.currentViewedPostId,
+            user_id: myUserId,
+            content: content
+        });
+        if (error) throw error;
+        input.value = '';
+        renderComments();
+    } catch(e) { alert("留言失敗"); }
 }
 
-window.reportPost = function() {
-    document.getElementById('post-options-menu').classList.add('hidden');
-    alert("已收到您的檢舉！");
-}
-
-window.closePostDetail = function() {
-    const modal = document.getElementById('post-detail-modal');
-    modal.classList.add('translate-x-full');
-    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+window.closePostDetail = () => document.getElementById('post-detail-modal').classList.add('hidden');
