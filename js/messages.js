@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 聊天與未讀訊息徽章修復版
+// js/messages.js - Storage 上傳版
 // ==========================================
 
 window.activeRoomId = null;
@@ -28,7 +28,6 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_'); 
 }
 
-// 搜尋發起對話
 window.searchUsersToChat = async function() {
     const keyword = document.getElementById('inbox-search-input').value.trim();
     const container = document.getElementById('chat-list');
@@ -38,265 +37,235 @@ window.searchUsersToChat = async function() {
     container.innerHTML = `<div class="p-6 text-center text-gray-400 mt-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
 
     try {
-        const { data, error } = await window.supabaseClient.from('profiles').select('id, display_name, username, avatar_url')
-            .or(`display_name.ilike.%${keyword}%,username.ilike.%${keyword}%`).neq('id', localStorage.getItem('userId')).limit(10);
-
-        if (error) throw error;
-        if (data.length === 0) return container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm mt-10">找不到相關用戶</div>`;
-
-        container.innerHTML = data.map(user => `
-            <div onclick="openChat('${user.id}', false, '${user.display_name}', '${user.avatar_url}')" class="flex items-center gap-3 p-4 bg-white border-b border-gray-50 active:bg-gray-50 cursor-pointer">
-                <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
-                <div class="flex-1"><h4 class="font-bold text-gray-900 text-sm">${user.display_name}</h4></div>
-                <button class="bg-sexify text-white text-xs px-4 py-2 rounded-full font-bold">發訊息</button>
-            </div>`).join('');
-    } catch (err) { container.innerHTML = `<div class="p-6 text-center text-red-400 text-sm mt-10">搜尋發生錯誤</div>`; }
-}
-
-// 收件匣列表
-window.renderMessages = async function() {
-    refreshMyUser();
-    const container = document.getElementById('chat-list');
-    if (!container || !myUserId) return;
-
-    if (document.getElementById('inbox-search-input').value) return; 
-
-    container.innerHTML = `<div class="text-center py-10 mt-10"><i class="fa-solid fa-circle-notch fa-spin text-gray-300 text-2xl"></i></div>`;
-
-    try {
-        const { data: inboxData, error } = await window.supabaseClient.from('messages')
-            .select('*').ilike('room_id', `%${myUserId}%`).order('created_at', { ascending: false }); 
-
+        const { data, error } = await window.supabaseClient.from('profiles').select('id, display_name, username, avatar_url').or(`display_name.ilike.%${keyword}%,username.ilike.%${keyword}%`).limit(10);
         if (error) throw error;
 
-        let roomsMap = {};
-        let targetIds = new Set();
-        
-        (inboxData || []).forEach(msg => {
-            if (!roomsMap[msg.room_id]) {
-                const ids = msg.room_id.split('_');
-                const targetId = ids[0] === myUserId ? ids[1] : ids[0];
-                
-                if (targetId && targetId.length > 20) { 
-                    roomsMap[msg.room_id] = { msg: msg, targetId: targetId, unreadCount: 0 };
-                    targetIds.add(targetId);
-                }
-            }
-            if (msg.receiver === myUserId && msg.is_read === false && roomsMap[msg.room_id]) {
-                roomsMap[msg.room_id].unreadCount++;
-            }
-        });
-
-        if(targetIds.size === 0) return container.innerHTML = `<div class="text-center py-10 mt-10 text-gray-400 text-sm flex flex-col items-center"><i class="fa-solid fa-inbox text-3xl mb-3 opacity-50"></i>尚無對話記錄</div>`;
-
-        const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url, username').in('id', Array.from(targetIds));
-
-        let profileMap = {};
-        if (profiles) profiles.forEach(p => profileMap[p.id] = p);
-
-        let inboxArray = Object.values(roomsMap).map(room => {
-            const p = profileMap[room.targetId];
-            if (!p) return null; 
-
-            let lastMsgText = room.msg.content;
-            if (room.msg.content && room.msg.content.startsWith('[VOICE]:')) lastMsgText = '語音訊息 🎤';
-            else if (room.msg.image_url) lastMsgText = '傳送了媒體檔案 📁';
-
-            return {
-                id: p.id,
-                displayName: p.display_name || p.username,
-                avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${p.display_name || 'U'}&background=random`,
-                lastMsg: lastMsgText || '新訊息',
-                time: new Date(room.msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}),
-                timestamp: new Date(room.msg.created_at).getTime(),
-                unreadCount: room.unreadCount
-            };
-        }).filter(Boolean).sort((a, b) => b.timestamp - a.timestamp);
-
-        container.innerHTML = inboxArray.map(chat => `
-            <div class="flex items-center gap-4 p-4 bg-white border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${chat.id}', false, '${chat.displayName}', '${chat.avatar}')">
-                <img src="${chat.avatar}" class="w-14 h-14 rounded-full border border-gray-100 object-cover flex-shrink-0">
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-center mb-1">
-                        <h3 class="font-bold text-gray-900 truncate pr-2">${chat.displayName}</h3>
-                        <span class="text-[10px] text-gray-400 font-medium whitespace-nowrap">${chat.time}</span>
-                    </div>
-                    <p class="text-sm truncate ${chat.unreadCount > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}">${chat.lastMsg}</p>
-                </div>
-                ${chat.unreadCount > 0 ? `<div class="bg-sexify text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${chat.unreadCount}</div>` : ''}
-            </div>
-        `).join('');
-
-    } catch (err) { container.innerHTML = `<div class="text-center text-red-400 py-10 text-sm mt-10">資料庫讀取異常</div>`; }
-};
-
-// 打開聊天室並標記已讀，消除未讀紅點
-window.openChat = async function(targetId, isGroup = false, displayName = targetId, avatarUrl = '') {
-    refreshMyUser();
-    window.activeChatTarget = targetId;
-    window.activeRoomId = generateRoomId(myUserId, targetId);
-
-    const modal = document.getElementById('chat-modal');
-    document.getElementById('chat-name').innerText = displayName;
-    document.getElementById('chat-target-avatar').src = avatarUrl;
-    
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-    const chatMessages = document.getElementById('chat-messages');
-    chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i></div>`;
-
-    try {
-        // 1. 將該房間所有給我的未讀訊息標記為已讀
-        await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myUserId).eq('is_read', false);
-
-        // 2. 重新計算全域的未讀訊息數量，如果歸零就隱藏導航列的紅點
-        const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', myUserId).eq('is_read', false);
-        const msgBadge = document.getElementById('nav-msg-badge');
-        if (msgBadge) {
-            if (msgCount > 0) msgBadge.classList.remove('hidden');
-            else msgBadge.classList.add('hidden');
+        if (data.length === 0) {
+            container.innerHTML = `<div class="p-10 text-center text-gray-400">找不到用戶</div>`;
+            return;
         }
 
-        // 3. 載入對話歷史
-        const { data, error } = await window.supabaseClient.from('messages').select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: false });
-        if (error) throw error;
-        
-        window.currentRoomMessages = data || [];
-        drawMessages(window.currentRoomMessages);
-        setupRoomRealtime();
-    } catch (err) { chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-red-400">無法載入訊息</div>`; }
-};
+        container.innerHTML = data.map(u => `
+            <div class="flex items-center gap-4 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${u.display_name}')">
+                <img src="${u.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
+                <div class="flex-1">
+                    <div class="font-bold text-gray-800">${u.display_name}</div>
+                    <div class="text-xs text-gray-400">@${u.username}</div>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) { container.innerHTML = `<div class="p-10 text-center text-red-400">搜尋出錯</div>`; }
+}
 
-function drawMessages(messages) {
-    const container = document.getElementById('chat-messages');
-    if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-gray-300 py-10 w-full text-xs absolute inset-0 flex items-center justify-center">開始你們的第一句話吧！</div>`;
-        return;
+window.renderMessages = async function() {
+    const container = document.getElementById('chat-list');
+    if (!container) return;
+    refreshMyUser();
+    if(!myUserId) return;
+
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*, profiles!messages_sender_fkey(display_name, avatar_url), receiver_prof:profiles!messages_receiver_fkey(display_name, avatar_url)')
+            .or(`sender.eq.${myUserId},receiver.eq.${myUserId}`)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const lastMsgs = {};
+        data.forEach(m => {
+            if (!lastMsgs[m.room_id]) lastMsgs[m.room_id] = m;
+        });
+
+        const sortedRooms = Object.values(lastMsgs);
+        if (sortedRooms.length === 0) {
+            container.innerHTML = `<div class="p-20 text-center text-gray-300 flex flex-col items-center"><i class="fa-solid fa-comments text-4xl mb-4 opacity-20"></i>尚無對話記錄</div>`;
+            return;
+        }
+
+        container.innerHTML = sortedRooms.map(m => {
+            const isMeSender = m.sender === myUserId;
+            const targetProf = isMeSender ? m.receiver_prof : m.profiles;
+            const targetId = isMeSender ? m.receiver : m.sender;
+            const unread = !isMeSender && !m.is_read;
+
+            return `
+                <div class="flex items-center gap-4 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${unread ? 'bg-blue-50/30' : ''}" onclick="openChat('${targetId}', '${targetProf.display_name}')">
+                    <div class="relative">
+                        <img src="${targetProf.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-14 h-14 rounded-full object-cover border border-gray-100">
+                        ${unread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-sexify rounded-full border-2 border-white"></div>' : ''}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-gray-800 truncate text-sm">${targetProf.display_name}</span>
+                            <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div class="text-xs ${unread ? 'text-gray-900 font-bold' : 'text-gray-400'} truncate">
+                            ${m.media_url ? '[媒體檔案]' : m.content}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+// 修改點：聊天媒體上傳至 messages 桶
+async function uploadChatMedia(fileBlob, extension) {
+    const fileName = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${extension}`;
+    const { data, error } = await window.supabaseClient.storage
+        .from('messages')
+        .upload(fileName, fileBlob, { upsert: true });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = window.supabaseClient.storage
+        .from('messages')
+        .getPublicUrl(fileName);
+
+    return publicUrl;
+}
+
+window.handleSendAction = async function() {
+    const input = document.getElementById('chat-input');
+    const content = input.value.trim();
+    if (!content && !selectedMediaFile) return;
+
+    const senderId = localStorage.getItem('userId');
+    const receiverId = window.activeChatTarget;
+    if (!senderId || !receiverId) return;
+
+    const tempId = 'temp_' + Date.now();
+    const tempMsg = { id: tempId, sender: senderId, content: content || '發送中...', created_at: new Date().toISOString() };
+    window.currentRoomMessages.unshift(tempMsg);
+    drawMessages(window.currentRoomMessages);
+
+    input.value = '';
+    
+    try {
+        let mediaUrl = null;
+        if (selectedMediaFile) {
+            const ext = selectedMediaFile.name.split('.').pop();
+            mediaUrl = await uploadChatMedia(selectedMediaFile, ext);
+            selectedMediaFile = null;
+            document.getElementById('chat-image-input').value = '';
+        }
+
+        const { error } = await window.supabaseClient.from('messages').insert([{
+            room_id: window.activeRoomId,
+            sender: senderId,
+            receiver: receiverId,
+            content: content,
+            media_url: mediaUrl
+        }]);
+        if (error) throw error;
+    } catch(e) {
+        alert("發送失敗");
+        window.currentRoomMessages = window.currentRoomMessages.filter(m => m.id !== tempId);
+        drawMessages(window.currentRoomMessages);
     }
-    container.innerHTML = messages.map(msg => {
-        const isMe = msg.receiver !== myUserId; 
-        const align = isMe ? 'justify-end' : 'justify-start';
-        const bg = isMe ? 'bg-sexify text-white' : 'bg-white border border-gray-100 text-gray-900';
-        const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-        
-        let contentHtml = '';
-        if (msg.content) {
-            if (msg.content.startsWith('[VOICE]:')) contentHtml = `<audio controls src="${msg.content.replace('[VOICE]:', '')}" class="max-w-[220px] h-10 mt-1"></audio>`;
-            else contentHtml = `<span>${msg.content}</span>`;
+}
+
+window.handleImageSelection = function(input) {
+    if (input.files && input.files[0]) {
+        selectedMediaFile = input.files[0];
+        // 直接觸發發送流程
+        window.handleSendAction();
+    }
+}
+
+window.toggleVoiceRecord = async function() {
+    if (!window.isRecording) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const audioUrl = await uploadChatMedia(audioBlob, 'webm');
+                
+                await window.supabaseClient.from('messages').insert([{
+                    room_id: window.activeRoomId,
+                    sender: myUserId,
+                    receiver: window.activeChatTarget,
+                    content: '[語音訊息]',
+                    media_url: audioUrl
+                }]);
+            };
+            mediaRecorder.start();
+            window.isRecording = true;
+            document.querySelector('.fa-microphone').classList.add('text-sexify', 'animate-pulse');
+        } catch(e) { alert("無法使用麥克風"); }
+    } else {
+        mediaRecorder.stop();
+        window.isRecording = false;
+        document.querySelector('.fa-microphone').classList.remove('text-sexify', 'animate-pulse');
+    }
+}
+
+window.openChat = async function(targetId, targetName) {
+    window.activeChatTarget = targetId;
+    window.activeRoomId = generateRoomId(myUserId, targetId);
+    
+    const modal = document.getElementById('chat-modal');
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+    document.getElementById('chat-target-name').innerText = targetName;
+    document.getElementById('chat-messages').innerHTML = '';
+
+    await fetchMessages();
+    setupRoomSubscription();
+}
+
+async function fetchMessages() {
+    const { data, error } = await window.supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('room_id', window.activeRoomId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+    if (!error) {
+        window.currentRoomMessages = data;
+        drawMessages(data);
+        // 標記為已讀
+        await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myUserId);
+    }
+}
+
+function drawMessages(msgs) {
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = msgs.slice().reverse().map(m => {
+        const isMe = m.sender === myUserId;
+        let mediaHtml = '';
+        if (m.media_url) {
+            if (m.media_url.includes('.webm')) {
+                mediaHtml = `<audio src="${m.media_url}" controls class="max-w-full mt-2"></audio>`;
+            } else {
+                mediaHtml = `<img src="${m.media_url}" class="max-w-[200px] rounded-lg mt-2 cursor-pointer" onclick="window.open('${m.media_url}')">`;
+            }
         }
 
         return `
-            <div id="msg-${msg.id}" class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-2 msg-container">
-                <div class="flex items-end gap-2 w-full ${align}">
-                    ${isMe ? `<div class="flex flex-col items-end gap-1"><button onclick="deleteMessage('${msg.id}')" class="text-[10px] text-red-500 bg-red-50 px-2 py-1.5 rounded-md shadow-sm border border-red-100 active:scale-95 transition">回收</button><span class="text-[9px] text-gray-400 whitespace-nowrap">${timeStr}</span></div>` : ''}
-                    <div class="${bg} px-4 py-2.5 ${isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm'} shadow-sm max-w-[75%] break-words text-sm flex flex-col">
-                        ${msg.image_url ? `<img src="${msg.image_url}" loading="lazy" class="max-w-full rounded-lg mb-1 object-cover">` : ''}
-                        ${contentHtml}
+            <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4">
+                <div class="max-w-[80%] ${isMe ? 'bg-sexify text-white rounded-l-2xl rounded-tr-2xl' : 'bg-gray-100 text-gray-800 rounded-r-2xl rounded-tl-2xl'} px-4 py-2 shadow-sm">
+                    ${m.content ? `<div class="text-sm leading-relaxed">${m.content}</div>` : ''}
+                    ${mediaHtml}
+                    <div class="text-[9px] mt-1 opacity-60 text-right">
+                        ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    ${!isMe ? `<span class="text-[9px] text-gray-400 whitespace-nowrap">${timeStr}</span>` : ''}
                 </div>
             </div>
         `;
     }).join('');
+    container.scrollTop = container.scrollHeight;
 }
 
-window.deleteMessage = async function(msgId) {
-    if (!confirm("確定要回收這條訊息嗎？")) return;
-    window.currentRoomMessages = window.currentRoomMessages.filter(m => String(m.id) !== String(msgId));
-    drawMessages(window.currentRoomMessages);
-    try { await window.supabaseClient.from('messages').delete().eq('id', msgId); } catch (err) {}
-};
-
-window.handleSendAction = async function() {
-    refreshMyUser();
-    const input = document.getElementById('chat-input');
-    const text = input.value.trim();
-    if (!text && !selectedMediaFile) return;
-
-    input.value = '';
-    const tempMsg = { id: 'temp_' + Date.now(), receiver: window.activeChatTarget, content: text || null, created_at: new Date().toISOString() };
-    window.currentRoomMessages.unshift(tempMsg);
-    drawMessages(window.currentRoomMessages);
-
-    let uploadedUrl = null;
-    if (selectedMediaFile) { uploadedUrl = document.getElementById('chat-image-preview').src; cancelImageSelection(); }
-
-    try {
-        await window.supabaseClient.from('messages').insert([{
-            room_id: window.activeRoomId, 
-            receiver: window.activeChatTarget,
-            content: tempMsg.content,
-            image_url: uploadedUrl,
-            is_read: false
-        }]);
-    } catch (err) {
-        window.currentRoomMessages = window.currentRoomMessages.filter(m => String(m.id) !== String(tempMsg.id));
-        drawMessages(window.currentRoomMessages);
-    }
-};
-
-window.toggleVoiceRecord = async function() {
-    refreshMyUser();
-    const micBtn = document.getElementById('mic-btn');
-
-    if (window.isRecording) {
-        mediaRecorder.stop();
-        window.isRecording = false;
-        micBtn.classList.remove('text-red-500', 'animate-pulse');
-        micBtn.classList.add('text-gray-400');
-        return;
-    }
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-        mediaRecorder.onstop = () => {
-            const reader = new FileReader();
-            reader.readAsDataURL(new Blob(audioChunks, { type: 'audio/webm' }));
-            reader.onloadend = async () => {
-                const base64Audio = reader.result;
-                const tempMsg = { id: 'temp_' + Date.now(), receiver: window.activeChatTarget, content: '[VOICE]:' + base64Audio, created_at: new Date().toISOString() };
-                window.currentRoomMessages.unshift(tempMsg);
-                drawMessages(window.currentRoomMessages);
-                try {
-                    await window.supabaseClient.from('messages').insert([{ room_id: window.activeRoomId, receiver: window.activeChatTarget, content: '[VOICE]:' + base64Audio }]);
-                } catch (err) { drawMessages(window.currentRoomMessages); }
-            };
-            stream.getTracks().forEach(track => track.stop());
-        };
-
-        mediaRecorder.start();
-        window.isRecording = true;
-        micBtn.classList.remove('text-gray-400');
-        micBtn.classList.add('text-red-500', 'animate-pulse');
-    } catch (err) { alert('無法存取麥克風設備'); }
-};
-
-window.handleImageSelection = function(input) {
-    if(!input.files[0]) return;
-    selectedMediaFile = input.files[0];
-    const reader = new FileReader();
-    reader.onload = e => {
-        document.getElementById('chat-image-preview').src = e.target.result;
-        document.getElementById('chat-image-preview-container').classList.remove('hidden');
-        document.getElementById('chat-image-preview-container').classList.add('inline-block');
-    };
-    reader.readAsDataURL(selectedMediaFile);
-};
-
-window.cancelImageSelection = function() {
-    selectedMediaFile = null;
-    document.getElementById('chat-image-input').value = '';
-    document.getElementById('chat-image-preview-container').classList.remove('inline-block');
-    document.getElementById('chat-image-preview-container').classList.add('hidden');
-};
-
-function setupRoomRealtime() {
+function setupRoomSubscription() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, { config: { broadcast: { ack: false } } })
+
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, async payload => {
         if (payload.new.receiver === myUserId) {
             await window.supabaseClient.from('messages').update({ is_read: true }).eq('id', payload.new.id);
@@ -318,9 +287,7 @@ window.closeChat = function() {
     document.getElementById('chat-modal').classList.add('translate-x-full');
     setTimeout(() => {
         document.getElementById('chat-modal').classList.add('hidden');
-        document.getElementById('chat-messages').innerHTML = ''; 
-        cancelImageSelection();
-        if(window.isRecording && mediaRecorder) toggleVoiceRecord();
+        document.getElementById('chat-messages').innerHTML = '';
+        renderMessages();
     }, 300);
-    renderMessages(); 
-};
+}
