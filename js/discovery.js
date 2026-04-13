@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 讚數即時同步版
+// js/discovery.js - 貼文互動與詳情完整版
 // ==========================================
 
 let clickTimer = null;
@@ -51,7 +51,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
                 <div class="p-3">
                     <p class="text-xs text-gray-800 line-clamp-2 mb-2 font-medium leading-relaxed">${post.caption || ''}</p>
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-1.5 overflow-hidden flex-1" onclick="viewOtherProfile('${post.user_id}')">
+                        <div class="flex items-center gap-1.5 overflow-hidden flex-1 cursor-pointer" onclick="viewOtherProfile('${post.user_id}')">
                             <img src="${avatar}" class="w-5 h-5 rounded-full object-cover border border-gray-100">
                             <span class="text-[10px] text-gray-500 truncate font-semibold">${post.profiles?.display_name || '用戶'}</span>
                         </div>
@@ -101,14 +101,13 @@ window.toggleLikeInGrid = async function(postId, container) {
     const icon = container.querySelector('.grid-heart');
     const countEl = container.querySelector('.grid-like-count');
     const isLiked = icon.classList.contains('fa-solid');
-    let currentCount = parseInt(countEl.innerText);
+    let currentCount = parseInt(countEl.innerText) || 0;
 
-    // 立即反應 UI
     icon.classList.toggle('fa-solid', !isLiked);
     icon.classList.toggle('fa-regular', isLiked);
     icon.classList.toggle('text-sexify', !isLiked);
     icon.classList.toggle('text-gray-300', isLiked);
-    countEl.innerText = isLiked ? currentCount - 1 : currentCount + 1;
+    countEl.innerText = isLiked ? Math.max(0, currentCount - 1) : currentCount + 1;
 
     try {
         if (isLiked) {
@@ -118,16 +117,16 @@ window.toggleLikeInGrid = async function(postId, container) {
             await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
             await window.supabaseClient.rpc('increment_like', { post_id_val: postId });
         }
-    } catch (e) {
-        // 若失敗則恢復 UI
-        console.error("讚更新失敗");
-    }
+    } catch (e) { console.error("讚更新失敗"); }
 }
 
 window.viewPostDetail = async function(postId) {
     const myUserId = localStorage.getItem('userId');
     const modal = document.getElementById('post-detail-modal');
+    if(!modal) return;
+    
     modal.classList.remove('hidden');
+    document.getElementById('detail-caption').innerText = "載入中...";
     
     try {
         const { data: post, error } = await window.supabaseClient
@@ -141,25 +140,29 @@ window.viewPostDetail = async function(postId) {
         window.currentViewedPostId = postId;
         window.currentViewedPostOwnerId = post.user_id;
 
-        document.getElementById('detail-avatar').src = post.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U';
+        const avatarImg = document.getElementById('detail-avatar');
+        avatarImg.src = post.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U';
+        avatarImg.onclick = () => viewOtherProfile(post.user_id);
+
         document.getElementById('detail-name').innerText = post.profiles?.display_name || '用戶';
         document.getElementById('detail-caption').innerText = post.caption || '';
         document.getElementById('detail-media').src = post.media_url || '';
         
-        // 核心同步：確保詳情頁讚數與 Grid 同步
         const { count: likeCount } = await window.supabaseClient.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', postId);
         document.getElementById('detail-like-count').innerText = likeCount || 0;
 
-        const { data: myLike } = await window.supabaseClient.from('likes').select('*').eq('post_id', postId).eq('user_id', myUserId).single();
         const likeBtnIcon = document.getElementById('detail-like-btn').querySelector('i');
-        if (myLike) {
-            likeBtnIcon.className = 'fa-solid fa-heart text-2xl text-sexify';
-        } else {
-            likeBtnIcon.className = 'fa-regular fa-heart text-2xl text-gray-400';
+        if (myUserId) {
+            const { data: myLike } = await window.supabaseClient.from('likes').select('*').eq('post_id', postId).eq('user_id', myUserId).single();
+            if (myLike) {
+                likeBtnIcon.className = 'fa-solid fa-heart text-2xl text-sexify';
+            } else {
+                likeBtnIcon.className = 'fa-regular fa-heart text-2xl text-gray-400';
+            }
         }
 
         renderComments();
-    } catch (e) {}
+    } catch (e) { console.error("詳情載入失敗:", e); }
 }
 
 window.toggleLikeDetail = async function() {
@@ -169,13 +172,11 @@ window.toggleLikeDetail = async function() {
     const btnIcon = document.getElementById('detail-like-btn').querySelector('i');
     const countEl = document.getElementById('detail-like-count');
     const isLiked = btnIcon.classList.contains('fa-solid');
-    let currentCount = parseInt(countEl.innerText);
+    let currentCount = parseInt(countEl.innerText) || 0;
 
-    // 1. 更新詳情頁 UI
     btnIcon.className = isLiked ? 'fa-regular fa-heart text-2xl text-gray-400' : 'fa-solid fa-heart text-2xl text-sexify';
-    countEl.innerText = isLiked ? currentCount - 1 : currentCount + 1;
+    countEl.innerText = isLiked ? Math.max(0, currentCount - 1) : currentCount + 1;
 
-    // 2. 同步更新首頁 Grid UI (防止不同步)
     const gridPost = document.getElementById(`grid-post-${window.currentViewedPostId}`);
     if (gridPost) {
         const gridIcon = gridPost.querySelector('.grid-heart');
@@ -200,6 +201,8 @@ window.toggleLikeDetail = async function() {
 
 window.renderComments = async function() {
     const list = document.getElementById('comment-list');
+    if(!list) return;
+
     const { data: comments } = await window.supabaseClient
         .from('comments')
         .select('*, profiles(display_name, avatar_url)')
@@ -213,7 +216,7 @@ window.renderComments = async function() {
 
     list.innerHTML = comments.map(c => `
         <div class="flex gap-3 mb-4 animate-in fade-in duration-300">
-            <img src="${c.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full object-cover">
+            <img src="${c.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full object-cover cursor-pointer" onclick="viewOtherProfile('${c.user_id}')">
             <div class="flex-1">
                 <p class="text-[10px] font-bold text-gray-900 mb-0.5">${c.profiles?.display_name || '用戶'}</p>
                 <div class="bg-gray-50 rounded-2xl px-3 py-2 text-xs text-gray-700 leading-relaxed">${c.content}</div>
@@ -240,4 +243,36 @@ window.sendComment = async function() {
     } catch(e) { alert("留言失敗"); }
 }
 
-window.closePostDetail = () => document.getElementById('post-detail-modal').classList.add('hidden');
+window.closePostDetail = function() {
+    const modal = document.getElementById('post-detail-modal');
+    if(modal) modal.classList.add('hidden');
+}
+
+window.editPostContent = async function(postId) {
+    const menu = document.getElementById('post-options-menu');
+    if(menu) menu.classList.add('hidden');
+    const newText = prompt("請輸入新的貼文內容：");
+    if (newText === null) return;
+    try {
+        await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
+        document.getElementById('detail-caption').innerText = newText;
+        if(typeof renderDiscovery === 'function') renderDiscovery();
+    } catch (err) { alert("更新失敗"); }
+}
+
+window.deletePostFromModal = async function(postId) {
+    const menu = document.getElementById('post-options-menu');
+    if(menu) menu.classList.add('hidden');
+    if (!confirm("確定要刪除這則貼文嗎？")) return;
+    try {
+        await window.supabaseClient.from('posts').delete().eq('id', postId);
+        closePostDetail();
+        if(typeof renderDiscovery === 'function') renderDiscovery();
+    } catch (err) { alert("刪除失敗"); }
+}
+
+window.reportPost = function() {
+    const menu = document.getElementById('post-options-menu');
+    if(menu) menu.classList.add('hidden');
+    alert("已收到您的檢舉，我們會盡快處理！");
+}
