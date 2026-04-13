@@ -50,20 +50,74 @@ function toggleSettings() {
     }
 }
 
-// 3. 右側：通知抽屜與紅點已讀邏輯
-function toggleNotifications() {
+// 3. 右側：通知抽屜與紅點已讀邏輯 (從資料庫拉取)
+async function toggleNotifications() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
-    if(!drawer || !panel) return;
-    
-    // 消除紅點 (已讀功能)
     const badge = document.getElementById('notification-badge');
-    if (badge) badge.classList.add('hidden');
+    const list = document.getElementById('notification-list');
+    if(!drawer || !panel) return;
 
     if (drawer.classList.contains('hidden')) {
+        // 打開通知面板
         drawer.classList.remove('hidden');
         setTimeout(() => panel.classList.remove('translate-x-full'), 10);
+        if (badge) badge.classList.add('hidden');
+
+        const userId = localStorage.getItem('userId');
+        if(!userId) return;
+
+        list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
+
+        try {
+            // 將所有未讀通知標為已讀
+            await window.supabaseClient.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+
+            // 撈取通知並關聯觸發者資料
+            const { data, error } = await window.supabaseClient
+                .from('notifications')
+                .select('*, actor:actor_id(display_name, avatar_url)')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                list.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-gray-400 mt-10">
+                        <i class="fa-regular fa-bell-slash text-4xl mb-3 opacity-50"></i>
+                        <p class="text-sm font-bold">目前沒有新通知</p>
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = data.map(n => {
+                const actorName = n.actor?.display_name || '某人';
+                const avatar = n.actor?.avatar_url || 'https://ui-avatars.com/api/?name=U';
+                let text = '';
+                let icon = '';
+                if (n.type === 'like') { text = '對你的貼文按了讚'; icon = '<i class="fa-solid fa-heart text-sexify"></i>'; }
+                else if (n.type === 'comment') { text = '在你的貼文留言'; icon = '<i class="fa-solid fa-comment text-blue-500"></i>'; }
+                else if (n.type === 'subscribe') { text = '成為了你的新粉絲'; icon = '<i class="fa-solid fa-user-plus text-green-500"></i>'; }
+
+                return `
+                <div class="flex items-start gap-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer" onclick="viewOtherProfile('${n.actor_id}')">
+                    <img src="${avatar}" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-800"><span class="font-bold">${actorName}</span> ${text}</p>
+                        <p class="text-[10px] text-gray-400 mt-1">${new Date(n.created_at).toLocaleString()}</p>
+                    </div>
+                    <div class="text-lg">${icon}</div>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            console.error("載入通知失敗:", err);
+            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知</div>`;
+        }
+
     } else {
+        // 關閉面板
         panel.classList.add('translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
@@ -164,13 +218,48 @@ function verifyAge() {
     localStorage.setItem('ageVerified', 'true');
 }
 
-// 核心修復：解決初始載入時，首頁貼文沒有跑出來的問題
-window.addEventListener('authReady', () => {
+// 實時推播：訂閱全局通知與訊息
+function setupGlobalRealtime(userId) {
+    // 訂閱通知
+    window.supabaseClient.channel('global-notifications')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
+        const badge = document.getElementById('notification-badge');
+        if (badge) badge.classList.remove('hidden');
+    })
+    .subscribe();
+
+    // 訂閱新訊息 (更新導航列紅點)
+    window.supabaseClient.channel('global-messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver=eq.${userId}` }, payload => {
+        const msgBadge = document.getElementById('nav-msg-badge');
+        if (msgBadge && window.activeRoomId !== payload.new.room_id) {
+            msgBadge.classList.remove('hidden');
+            // 如果剛好在訊息列表，自動重整
+            if (document.getElementById('messages-tab') && !document.getElementById('messages-tab').classList.contains('hidden')) {
+                if (typeof window.renderMessages === 'function') window.renderMessages();
+            }
+        }
+    })
+    .subscribe();
+}
+
+window.addEventListener('authReady', async () => {
     const homeTab = document.getElementById('home-tab');
     if (homeTab && !homeTab.classList.contains('hidden')) {
-        if (typeof window.renderDiscovery === 'function') {
-            window.renderDiscovery();
-        }
+        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
+    }
+
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+        // 檢查是否有未讀通知
+        const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
+        if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
+        
+        // 檢查是否有未讀訊息
+        const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
+        if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
+
+        setupGlobalRealtime(userId);
     }
 });
 
