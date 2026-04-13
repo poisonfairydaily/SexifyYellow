@@ -50,7 +50,7 @@ function toggleSettings() {
     }
 }
 
-// 3. 右側：通知抽屜與紅點已讀邏輯 (從資料庫拉取)
+// 3. 右側：通知抽屜 (全面重構：雙重查詢解決 JOIN 報錯)
 async function toggleNotifications() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
@@ -59,7 +59,6 @@ async function toggleNotifications() {
     if(!drawer || !panel) return;
 
     if (drawer.classList.contains('hidden')) {
-        // 打開通知面板
         drawer.classList.remove('hidden');
         setTimeout(() => panel.classList.remove('translate-x-full'), 10);
         if (badge) badge.classList.add('hidden');
@@ -70,20 +69,18 @@ async function toggleNotifications() {
         list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
 
         try {
-            // 將所有未讀通知標為已讀
             await window.supabaseClient.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
 
-            // 撈取通知並關聯觸發者資料
-            const { data, error } = await window.supabaseClient
+            const { data: notifs, error } = await window.supabaseClient
                 .from('notifications')
-                .select('*, actor:actor_id(display_name, avatar_url)')
+                .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(20);
 
             if (error) throw error;
 
-            if (!data || data.length === 0) {
+            if (!notifs || notifs.length === 0) {
                 list.innerHTML = `
                     <div class="flex flex-col items-center justify-center text-gray-400 mt-10">
                         <i class="fa-regular fa-bell-slash text-4xl mb-3 opacity-50"></i>
@@ -92,9 +89,18 @@ async function toggleNotifications() {
                 return;
             }
 
-            list.innerHTML = data.map(n => {
-                const actorName = n.actor?.display_name || '某人';
-                const avatar = n.actor?.avatar_url || 'https://ui-avatars.com/api/?name=U';
+            // 雙重安全查詢：避免資料庫未設定 Foreign Key 時崩潰
+            const actorIds = [...new Set(notifs.map(n => n.actor_id).filter(Boolean))];
+            let profilesMap = {};
+            if (actorIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', actorIds);
+                if (profs) profs.forEach(p => profilesMap[p.id] = p);
+            }
+
+            list.innerHTML = notifs.map(n => {
+                const actor = profilesMap[n.actor_id] || {};
+                const actorName = actor.display_name || '某人';
+                const avatar = actor.avatar_url || 'https://ui-avatars.com/api/?name=U';
                 let text = '';
                 let icon = '';
                 if (n.type === 'like') { text = '對你的貼文按了讚'; icon = '<i class="fa-solid fa-heart text-sexify"></i>'; }
@@ -113,11 +119,10 @@ async function toggleNotifications() {
             }).join('');
         } catch (err) {
             console.error("載入通知失敗:", err);
-            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知</div>`;
+            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知，請確認資料庫 RLS 已關閉。</div>`;
         }
 
     } else {
-        // 關閉面板
         panel.classList.add('translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
@@ -220,27 +225,22 @@ function verifyAge() {
 
 // 實時推播：訂閱全局通知與訊息
 function setupGlobalRealtime(userId) {
-    // 訂閱通知
     window.supabaseClient.channel('global-notifications')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
         const badge = document.getElementById('notification-badge');
         if (badge) badge.classList.remove('hidden');
-    })
-    .subscribe();
+    }).subscribe();
 
-    // 訂閱新訊息 (更新導航列紅點)
     window.supabaseClient.channel('global-messages')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver=eq.${userId}` }, payload => {
         const msgBadge = document.getElementById('nav-msg-badge');
         if (msgBadge && window.activeRoomId !== payload.new.room_id) {
             msgBadge.classList.remove('hidden');
-            // 如果剛好在訊息列表，自動重整
             if (document.getElementById('messages-tab') && !document.getElementById('messages-tab').classList.contains('hidden')) {
                 if (typeof window.renderMessages === 'function') window.renderMessages();
             }
         }
-    })
-    .subscribe();
+    }).subscribe();
 }
 
 window.addEventListener('authReady', async () => {
@@ -251,14 +251,13 @@ window.addEventListener('authReady', async () => {
 
     const userId = localStorage.getItem('userId');
     if (userId) {
-        // 檢查是否有未讀通知
-        const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
-        if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
-        
-        // 檢查是否有未讀訊息
-        const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
-        if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
-
+        try {
+            const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
+            if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
+            
+            const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
+            if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
+        } catch(e) {}
         setupGlobalRealtime(userId);
     }
 });
