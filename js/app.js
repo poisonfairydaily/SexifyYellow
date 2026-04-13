@@ -50,11 +50,16 @@ function toggleSettings() {
     }
 }
 
-// 3. 右側：通知抽屜
+// 3. 右側：通知抽屜與紅點已讀邏輯
 function toggleNotifications() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
     if(!drawer || !panel) return;
+    
+    // 消除紅點 (已讀功能)
+    const badge = document.getElementById('notification-badge');
+    if (badge) badge.classList.add('hidden');
+
     if (drawer.classList.contains('hidden')) {
         drawer.classList.remove('hidden');
         setTimeout(() => panel.classList.remove('translate-x-full'), 10);
@@ -90,7 +95,7 @@ function closeEditProfile() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// ===== 新增：收藏、訂單、聯絡我們 =====
+// 收藏、訂單、聯絡我們
 function openBookmarksModal() {
     toggleSettings();
     const modal = document.getElementById('bookmarks-modal');
@@ -98,7 +103,6 @@ function openBookmarksModal() {
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
     
-    // 渲染收藏內容
     const list = document.getElementById('bookmarks-list');
     let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
     if(bookmarks.length === 0) {
@@ -148,7 +152,6 @@ function closeContactModal() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 核心修復：年齡驗證邏輯
 function verifyAge() {
     const ageGate = document.getElementById('age-gate');
     if (ageGate) {
@@ -160,6 +163,16 @@ function verifyAge() {
     }
     localStorage.setItem('ageVerified', 'true');
 }
+
+// 核心修復：解決初始載入時，首頁貼文沒有跑出來的問題
+window.addEventListener('authReady', () => {
+    const homeTab = document.getElementById('home-tab');
+    if (homeTab && !homeTab.classList.contains('hidden')) {
+        if (typeof window.renderDiscovery === 'function') {
+            window.renderDiscovery();
+        }
+    }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('ageVerified') === 'true') {
