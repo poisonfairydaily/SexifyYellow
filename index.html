@@ -126,8 +126,10 @@
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify flex-1 text-center">SEXIFY</h1>
             <div class="flex gap-4 items-center w-auto justify-end">
                 <button id="global-search-btn" onclick="toggleSearch(true)" class="text-gray-700 active:scale-90 transition hidden"><i class="fa-solid fa-magnifying-glass text-xl"></i></button>
+                
                 <button onclick="toggleNotifications()" class="text-gray-700 relative active:scale-90 transition">
-                    <i class="fa-regular fa-bell text-xl"></i><span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sexify rounded-full border border-white"></span>
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span id="notification-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sexify rounded-full border border-white hidden"></span>
                 </button>
             </div>
         </header>
