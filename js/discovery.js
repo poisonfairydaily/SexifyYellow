@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 留言、收藏、編輯檢舉擴充版
+// js/discovery.js - 雲端讚與留言持久化
 // ==========================================
 
 let clickTimer = null;
@@ -28,9 +28,16 @@ window.renderDiscovery = async function(filterKeyword = '') {
                 <div class="col-span-2 text-center py-20 mt-10 text-gray-400 flex flex-col items-center">
                     <i class="fa-solid fa-ghost text-4xl mb-4 opacity-30"></i>
                     <p class="font-bold">目前大廳空空如也</p>
-                    <p class="text-xs mt-1">成為第一個發佈貼文的人吧！</p>
                 </div>`;
             return;
+        }
+
+        // 取得自己按過的讚以顯示紅色愛心
+        const myUserId = localStorage.getItem('userId');
+        let myLikes = new Set();
+        if (myUserId) {
+            const { data: likesData } = await window.supabaseClient.from('likes').select('post_id').eq('user_id', myUserId);
+            if (likesData) likesData.forEach(l => myLikes.add(l.post_id));
         }
 
         let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
@@ -43,13 +50,13 @@ window.renderDiscovery = async function(filterKeyword = '') {
             
             const isBookmarked = bookmarks.some(b => b.id === post.id);
             const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
+            const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
             
             const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
             const postStr = encodeURIComponent(JSON.stringify(safePost));
 
             return `
             <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 cursor-pointer" onclick="viewPost('${post.id}')">
-                
                 ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
                 
                 <div class="absolute top-2 left-2 flex items-center gap-1.5 bg-black/50 backdrop-blur-md rounded-full px-2.5 py-1.5 z-20 cursor-pointer hover:bg-black/70 transition" onclick="event.stopPropagation(); window.location.href='profile.html?userId=${post.user_id}'">
@@ -65,7 +72,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
                     <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${post.caption || ''}</p>
                     <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
                         <div class="flex gap-4">
-                            <button class="text-gray-400 text-xs hover:text-sexify transition flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this, '${post.id}')"><i class="fa-regular fa-heart text-base"></i> <span class="font-bold">${post.likes || 0}</span></button>
+                            <button class="text-xs hover:text-sexify transition flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')"><i class="${likeIcon} fa-heart text-base"></i> <span class="font-bold text-gray-400">${post.likes || 0}</span></button>
                             <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="event.stopPropagation(); viewPost('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
                         </div>
                         <button class="text-xs hover:text-gray-600 transition" onclick="event.stopPropagation(); toggleBookmark(this, '${post.id}', '${postStr}')"><i class="${bmIcon} fa-bookmark text-base"></i></button>
@@ -76,11 +83,11 @@ window.renderDiscovery = async function(filterKeyword = '') {
 
     } catch (err) {
         console.error("載入動態失敗:", err);
-        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 text-sm mt-10">無法連線到伺服器，請確認資料庫設定。</div>`;
+        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 text-sm mt-10">無法連線到伺服器。</div>`;
     }
 }
 
-// 收藏功能
+// 雲端收藏
 window.toggleBookmark = function(btn, postId, postStr) {
     let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
     const index = bookmarks.findIndex(b => b.id === postId);
@@ -101,27 +108,52 @@ window.toggleBookmark = function(btn, postId, postStr) {
     localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
 }
 
-// 點讚功能
-window.toggleLike = function(btn, postId) {
+// 雲端按讚與發送通知
+window.toggleLike = async function(btn, postId, postOwnerId) {
     const icon = btn.querySelector('i');
     const countSpan = btn.querySelector('span');
     let count = parseInt(countSpan.innerText) || 0;
+    const myUserId = localStorage.getItem('userId');
+    if(!myUserId) return alert("請先登入");
 
-    if (icon.classList.contains('fa-regular')) {
+    const isLiking = icon.classList.contains('fa-regular');
+
+    // UI 先行變更
+    if (isLiking) {
         icon.classList.replace('fa-regular', 'fa-solid');
+        icon.classList.remove('text-gray-400');
         icon.classList.add('text-sexify', 'scale-125');
-        count++;
+        countSpan.innerText = count + 1;
     } else {
         icon.classList.replace('fa-solid', 'fa-regular');
         icon.classList.remove('text-sexify', 'scale-125');
-        count--;
+        icon.classList.add('text-gray-400');
+        countSpan.innerText = count - 1;
     }
-    countSpan.innerText = count;
     setTimeout(() => icon.classList.remove('scale-125'), 200);
+
+    // 寫入資料庫
+    try {
+        if (isLiking) {
+            await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
+            // 更新貼文總讚數 (簡易作法：直接更新 UI 的 count + 1 到 DB)
+            await window.supabaseClient.from('posts').update({ likes: count + 1 }).eq('id', postId);
+            // 寫入通知 (不通知自己)
+            if (postOwnerId !== myUserId) {
+                await window.supabaseClient.from('notifications').insert({ user_id: postOwnerId, actor_id: myUserId, type: 'like', post_id: postId });
+            }
+        } else {
+            await window.supabaseClient.from('likes').delete().match({ post_id: postId, user_id: myUserId });
+            await window.supabaseClient.from('posts').update({ likes: count > 0 ? count - 1 : 0 }).eq('id', postId);
+        }
+    } catch(e) {
+        console.error("按讚同步失敗", e);
+    }
 }
 
-// 查看貼文詳情與留言
+// 查看貼文詳情
 window.currentViewedPostId = null;
+window.currentViewedPostOwnerId = null;
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
     const modal = document.getElementById('post-detail-modal');
@@ -141,26 +173,26 @@ window.viewPost = async function(postId) {
             
         if (error) throw error;
         
+        window.currentViewedPostOwnerId = post.user_id;
         const myUserId = localStorage.getItem('userId');
         const authorName = post.profiles?.display_name || '未知創作者';
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
-        const isLocked = post.is_paid;
-        const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
+        const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
 
-        // 判斷是否為自己發佈的貼文，產生不同的選單內容
         const optionsMenu = document.getElementById('post-options-menu');
         if (post.user_id === myUserId) {
             optionsMenu.innerHTML = `
-                <button onclick="editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50 active:bg-gray-100">編輯貼文</button>
-                <button onclick="deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50 active:bg-gray-100">刪除貼文</button>
+                <button onclick="editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50">編輯貼文</button>
+                <button onclick="deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">刪除貼文</button>
             `;
         } else {
-            optionsMenu.innerHTML = `
-                <button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50 active:bg-gray-100">檢舉貼文</button>
-            `;
+            optionsMenu.innerHTML = `<button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">檢舉貼文</button>`;
         }
 
-        // 判斷收藏狀態以顯示正確圖示
+        // 檢查自己是否按過讚
+        const { data: likeData } = await window.supabaseClient.from('likes').select('id').eq('post_id', postId).eq('user_id', myUserId);
+        const likeIcon = (likeData && likeData.length > 0) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
+
         let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
         const isBookmarked = bookmarks.some(b => b.id === post.id);
         const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
@@ -181,8 +213,8 @@ window.viewPost = async function(postId) {
             ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}">` : `<div class="p-10 text-center text-gray-400 italic bg-gray-50 ${blurClass}">純文字內容</div>`}
             
             <div class="p-4 border-b border-gray-50 flex justify-between items-center">
-                <button class="text-gray-400 text-sm hover:text-sexify transition flex items-center gap-1.5" onclick="toggleLike(this, '${post.id}')">
-                    <i class="fa-regular fa-heart text-xl"></i> <span class="font-bold">${post.likes || 0}</span>
+                <button class="text-xs hover:text-sexify transition flex items-center gap-1.5" onclick="toggleLike(this, '${post.id}', '${post.user_id}')">
+                    <i class="${likeIcon} fa-heart text-xl"></i> <span class="font-bold text-gray-400">${post.likes || 0}</span>
                 </button>
                 <button class="text-xl hover:text-gray-600 transition" onclick="toggleBookmark(this, '${post.id}', '${postStr}')">
                     <i class="${bmIcon} fa-bookmark"></i>
@@ -198,93 +230,94 @@ window.viewPost = async function(postId) {
     }
 }
 
-// 編輯與刪除貼文功能 (在 Modal 內觸發)
+// 雲端讀取留言
+window.renderComments = async function() {
+    const list = document.getElementById('post-comments-list');
+    list.innerHTML = `<div class="text-center py-5"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
+    
+    try {
+        const { data: comments, error } = await window.supabaseClient
+            .from('comments')
+            .select('*, profiles(display_name, avatar_url)')
+            .eq('post_id', window.currentViewedPostId)
+            .order('created_at', { ascending: true });
+            
+        if (error) throw error;
+        
+        if (!comments || comments.length === 0) {
+            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
+            return;
+        }
+        
+        list.innerHTML = comments.map(c => `
+            <div class="flex gap-3 mb-4">
+                <img src="${c.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100">
+                <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm shadow-sm">
+                    <p class="text-[11px] font-bold text-sexify mb-1">${c.profiles?.display_name || '使用者'}</p>
+                    <p class="text-sm text-gray-800">${c.content}</p>
+                    <p class="text-[9px] text-gray-400 mt-1.5">${new Date(c.created_at).toLocaleString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                </div>
+            </div>
+        `).join('');
+        setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
+    } catch(e) {
+        list.innerHTML = `<div class="text-center py-5 text-red-400 text-xs">載入留言失敗</div>`;
+    }
+}
+
+// 雲端寫入留言與發送通知
+window.submitComment = async function() {
+    const input = document.getElementById('comment-input');
+    const text = input.value.trim();
+    if(!text) return;
+    
+    const myUserId = localStorage.getItem('userId');
+    if(!myUserId) return alert("請先登入");
+
+    input.value = '';
+    
+    try {
+        await window.supabaseClient.from('comments').insert({ post_id: window.currentViewedPostId, user_id: myUserId, content: text });
+        
+        // 寫入通知 (不通知自己)
+        if (window.currentViewedPostOwnerId && window.currentViewedPostOwnerId !== myUserId) {
+            await window.supabaseClient.from('notifications').insert({ user_id: window.currentViewedPostOwnerId, actor_id: myUserId, type: 'comment', post_id: window.currentViewedPostId });
+        }
+        
+        renderComments(); // 重新讀取雲端留言
+    } catch(e) {
+        alert("留言失敗");
+    }
+}
+
 window.editPostContent = async function(postId) {
     document.getElementById('post-options-menu').classList.add('hidden');
     const newText = prompt("請輸入新的貼文內容：");
     if (newText === null) return;
-    
     try {
-        const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
-        if (error) throw error;
+        await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
         document.getElementById('detail-caption').innerText = newText;
-        alert("貼文更新成功！");
         if(typeof renderDiscovery === 'function') renderDiscovery();
-        if(typeof renderProfile === 'function') renderProfile();
-    } catch (err) {
-        alert("更新失敗：" + err.message);
-    }
+    } catch (err) {}
 }
 
 window.deletePostFromModal = async function(postId) {
     document.getElementById('post-options-menu').classList.add('hidden');
-    if (!confirm("確定要刪除這則貼文嗎？刪除後將無法恢復。")) return;
-    
+    if (!confirm("確定要刪除這則貼文嗎？")) return;
     try {
-        const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
-        if (error) throw error;
-        alert("貼文已成功刪除！");
+        await window.supabaseClient.from('posts').delete().eq('id', postId);
         closePostDetail();
         if(typeof renderDiscovery === 'function') renderDiscovery();
-        if(typeof renderProfile === 'function') renderProfile();
-    } catch (err) {
-        alert("刪除失敗：" + err.message);
-    }
+    } catch (err) {}
 }
 
-window.reportPost = function(postId) {
+window.reportPost = function() {
     document.getElementById('post-options-menu').classList.add('hidden');
-    alert("已收到您的檢舉！我們的管理團隊將會盡快進行人工審查，感謝您共同維護社群環境。");
+    alert("已收到您的檢舉！");
 }
 
 window.closePostDetail = function() {
     const modal = document.getElementById('post-detail-modal');
     modal.classList.add('translate-x-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
-
-window.renderComments = function() {
-    const list = document.getElementById('post-comments-list');
-    const comments = JSON.parse(localStorage.getItem('comments_' + window.currentViewedPostId)) || [];
-    
-    if (comments.length === 0) {
-        list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
-        return;
-    }
-    
-    list.innerHTML = comments.map(c => `
-        <div class="flex gap-3 mb-4">
-            <img src="${c.avatar}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100">
-            <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm shadow-sm">
-                <p class="text-[11px] font-bold text-sexify mb-1">${c.name}</p>
-                <p class="text-sm text-gray-800">${c.text}</p>
-                <p class="text-[9px] text-gray-400 mt-1.5">${c.time}</p>
-            </div>
-        </div>
-    `).join('');
-}
-
-window.submitComment = function() {
-    const input = document.getElementById('comment-input');
-    const text = input.value.trim();
-    if(!text) return;
-    
-    let comments = JSON.parse(localStorage.getItem('comments_' + window.currentViewedPostId)) || [];
-    
-    const myName = localStorage.getItem('myChatName') || '使用者';
-    const avatar = `https://ui-avatars.com/api/?name=${myName}&background=random`;
-    
-    comments.push({
-        name: myName,
-        avatar: avatar,
-        text: text,
-        time: new Date().toLocaleString([], {hour: '2-digit', minute:'2-digit'})
-    });
-    
-    localStorage.setItem('comments_' + window.currentViewedPostId, JSON.stringify(comments));
-    input.value = '';
-    renderComments();
-    
-    const list = document.getElementById('post-comments-list');
-    setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
 }
