@@ -31,9 +31,81 @@ window.previewImage = function(input, imgId) {
     }
 }
 
-// ==========================================
-// 1. 個人專頁與編輯資料
-// ==========================================
+async function uploadBase64ToSupabase(base64Str, path) {
+    try {
+        const res = await fetch(base64Str);
+        const blob = await res.blob();
+        
+        const { data, error } = await window.supabaseClient.storage.from('media').upload(path, blob, { upsert: true, contentType: blob.type });
+        if (error) throw error;
+        
+        const { data: publicData } = window.supabaseClient.storage.from('media').getPublicUrl(path);
+        return publicData.publicUrl;
+    } catch (err) { throw err; }
+}
+
+// 1. 個人中心 (強化防呆與錯誤捕捉)
+window.openPersonalCenter = async function() {
+    try {
+        if(typeof toggleSettings === 'function') toggleSettings(); 
+        const modal = document.getElementById('personal-center-modal');
+        if(!modal) return console.error("找不到 personal-center-modal 元素");
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+
+        const { data: { user }, error: authErr } = await window.supabaseClient.auth.getUser();
+        if (authErr) throw authErr;
+
+        if (user) {
+            document.getElementById('pc-email').value = user.email || '';
+            document.getElementById('pc-birthday').value = user.user_metadata?.birthday || '';
+            
+            const { data: profile } = await window.supabaseClient.from('profiles').select('gender').eq('id', user.id).single();
+            if (profile) {
+                document.getElementById('pc-gender').value = profile.gender || 'Unspecified';
+            }
+        }
+    } catch(e) {
+        console.error("無法載入個人中心資料", e);
+    }
+}
+
+window.closePersonalCenter = function() {
+    const modal = document.getElementById('personal-center-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+window.savePersonalCenter = async function() {
+    const btn = document.getElementById('save-personal-btn');
+    btn.innerText = "處理中..."; btn.disabled = true;
+
+    const newEmail = document.getElementById('pc-email').value.trim();
+    const newGender = document.getElementById('pc-gender').value;
+    const newBirthday = document.getElementById('pc-birthday').value;
+    
+    try {
+        const updates = { data: { birthday: newBirthday } };
+        if (newEmail) updates.email = newEmail;
+        const { error: authErr } = await window.supabaseClient.auth.updateUser(updates);
+        if (authErr) throw authErr;
+
+        const userId = localStorage.getItem('userId');
+        const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', userId);
+        if (profErr) throw profErr;
+
+        alert('個人中心資料已更新！\n若修改了信箱，請至新信箱收取確認信。');
+        closePersonalCenter();
+    } catch(e) {
+        alert('更新失敗: ' + e.message);
+    } finally {
+        btn.innerText = "儲存"; btn.disabled = false;
+    }
+}
+
+// 2. 個人專頁與編輯資料
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     const userId = localStorage.getItem('userId');
@@ -56,6 +128,8 @@ window.renderProfile = async function() {
 
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
+        document.getElementById('edit-social-ig').value = profile.social_ig || '';
+        document.getElementById('edit-social-x').value = profile.social_x || '';
         document.getElementById('edit-avatar-preview').src = avatarUrl;
         
         if (bannerUrl) {
@@ -95,7 +169,7 @@ window.renderProfile = async function() {
         container.innerHTML = html + `</div></div>`;
 
     } catch (err) {
-        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗，請確認已在 Supabase 建立所有欄位。</div>`;
+        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
     }
 }
 
@@ -108,11 +182,14 @@ window.saveProfileData = async function() {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
+        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${userId}_${Date.now()}.jpg`);
+        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${userId}_${Date.now()}.jpg`);
+
         const updateData = {
             display_name: document.getElementById('edit-display-name').value.trim(),
             bio: document.getElementById('edit-bio').value.trim(),
             avatar_url: avatarSrc,
-            banner_url: bannerSrc.includes('http') || bannerSrc.startsWith('data:image') ? bannerSrc : null
+            banner_url: bannerSrc.includes('http') ? bannerSrc : null
         };
 
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', userId);
@@ -128,9 +205,7 @@ window.saveProfileData = async function() {
     }
 }
 
-// ==========================================
-// 2. 他人主頁 (新增 Banner 顯示與訂閱通知)
-// ==========================================
+// 他人主頁
 window.viewOtherProfile = async function(userId) {
     if (userId === localStorage.getItem('userId')) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
 
@@ -150,14 +225,9 @@ window.viewOtherProfile = async function(userId) {
         document.getElementById('other-bio').innerText = user.bio || '尚未寫下簡介。';
         document.getElementById('other-avatar').src = avatar;
 
-        // 渲染 Banner
         const bannerImg = document.getElementById('other-banner');
-        if (user.banner_url) {
-            bannerImg.src = user.banner_url;
-            bannerImg.classList.remove('hidden');
-        } else {
-            bannerImg.classList.add('hidden');
-        }
+        if (user.banner_url) { bannerImg.src = user.banner_url; bannerImg.classList.remove('hidden'); } 
+        else { bannerImg.classList.add('hidden'); }
 
         document.getElementById('other-msg-btn').onclick = () => {
             closeOtherProfile();
@@ -167,7 +237,6 @@ window.viewOtherProfile = async function(userId) {
         const followBtn = document.getElementById('other-follow-btn');
         const myUserId = localStorage.getItem('userId');
         
-        // 檢查是否已從雲端訂閱
         const { data: subData } = await window.supabaseClient.from('subscriptions').select('id').eq('subscriber_id', myUserId).eq('creator_id', userId);
         const isSubbed = subData && subData.length > 0;
 
@@ -183,33 +252,26 @@ window.viewOtherProfile = async function(userId) {
                 followBtn.innerText = "處理中...";
                 try {
                     await window.supabaseClient.from('subscriptions').insert({ subscriber_id: myUserId, creator_id: userId });
-                    // 推送通知給創作者
                     await window.supabaseClient.from('notifications').insert({ user_id: userId, actor_id: myUserId, type: 'subscribe' });
-                    
                     followBtn.innerText = "已追蹤";
                     followBtn.classList.replace('bg-sexify', 'bg-gray-200');
                     followBtn.classList.replace('text-white', 'text-gray-700');
-                    followBtn.onclick = null; // 取消再次點擊
-                } catch(e) {
-                    followBtn.innerText = "追蹤失敗";
-                }
+                    followBtn.onclick = null;
+                } catch(e) { followBtn.innerText = "追蹤失敗"; }
             };
         }
 
         const { data: posts } = await window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
         const grid = document.getElementById('other-posts-grid');
-        if (!posts || posts.length === 0) {
-            grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
-        } else {
+        if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
+        else {
             grid.innerHTML = posts.map(p => `
                 <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字</div>`}
                 </div>
             `).join('');
         }
-    } catch (err) {
-        console.error("讀取他人主頁失敗", err);
-    }
+    } catch (err) { console.error(err); }
 }
 
 window.closeOtherProfile = function() {
@@ -218,11 +280,9 @@ window.closeOtherProfile = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// ==========================================
-// 3. 粉絲與訂閱用戶面板 (雲端資料庫版)
-// ==========================================
+// 3. 粉絲與訂閱用戶面板 (全面重構：雙重查詢解決 JOIN 報錯)
 window.openFansSubsModal = function() {
-    toggleSettings(); 
+    if(typeof toggleSettings === 'function') toggleSettings(); 
     const modal = document.getElementById('fans-subs-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -242,7 +302,7 @@ window.switchFansTab = async function(tab) {
     const list = document.getElementById('fans-subs-list');
     const myUserId = localStorage.getItem('userId');
 
-    list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
+    list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-2xl"></i></div>`;
 
     if (tab === 'fans') {
         btnFans.classList.replace('text-gray-400', 'text-sexify');
@@ -250,14 +310,24 @@ window.switchFansTab = async function(tab) {
         btnSubs.classList.replace('text-sexify', 'text-gray-400');
         btnSubs.classList.replace('border-sexify', 'border-transparent');
 
-        // 查詢粉絲：creator_id 是我的人 (關聯查出他們的 profile)
-        const { data } = await window.supabaseClient.from('subscriptions').select('*, subscriber:subscriber_id(id, display_name, avatar_url)').eq('creator_id', myUserId);
-        
-        if (!data || data.length === 0) {
-            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
-        } else {
-            list.innerHTML = data.map(sub => {
-                const user = sub.subscriber;
+        try {
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myUserId);
+            if (error) throw error;
+
+            if (!subs || subs.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
+                return;
+            }
+
+            const subIds = [...new Set(subs.map(s => s.subscriber_id).filter(Boolean))];
+            let profMap = {};
+            if (subIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', subIds);
+                if (profs) profs.forEach(p => profMap[p.id] = p);
+            }
+
+            list.innerHTML = subs.map(sub => {
+                const user = profMap[sub.subscriber_id];
                 if(!user) return '';
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
@@ -265,21 +335,34 @@ window.switchFansTab = async function(tab) {
                     <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${user.display_name}</div>
                 </div>`;
             }).join('');
+        } catch(e) {
+            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗，請確認 RLS 權限。</div>`;
         }
+
     } else {
         btnSubs.classList.replace('text-gray-400', 'text-sexify');
         btnSubs.classList.replace('border-transparent', 'border-sexify');
         btnFans.classList.replace('text-sexify', 'text-gray-400');
         btnFans.classList.replace('border-sexify', 'border-transparent');
 
-        // 查詢訂閱：subscriber_id 是我的人
-        const { data } = await window.supabaseClient.from('subscriptions').select('*, creator:creator_id(id, display_name, avatar_url)').eq('subscriber_id', myUserId);
+        try {
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myUserId);
+            if (error) throw error;
 
-        if (!data || data.length === 0) {
-            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
-        } else {
-            list.innerHTML = data.map(sub => {
-                const user = sub.creator;
+            if (!subs || subs.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
+                return;
+            }
+
+            const creatorIds = [...new Set(subs.map(s => s.creator_id).filter(Boolean))];
+            let profMap = {};
+            if (creatorIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', creatorIds);
+                if (profs) profs.forEach(p => profMap[p.id] = p);
+            }
+
+            list.innerHTML = subs.map(sub => {
+                const user = profMap[sub.creator_id];
                 if(!user) return '';
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
@@ -288,6 +371,8 @@ window.switchFansTab = async function(tab) {
                     <button onclick="event.stopPropagation(); unfollowUserFromList('${sub.id}', this)" class="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-full font-bold active:scale-90 transition">取消追蹤</button>
                 </div>`;
             }).join('');
+        } catch(e) {
+            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗，請確認 RLS 權限。</div>`;
         }
     }
 }
