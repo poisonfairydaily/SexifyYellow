@@ -1,4 +1,3 @@
-// 圖片本地預覽通用函數 (已加入 Canvas 壓縮演算法解決 payload too large 卡死問題)
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -8,7 +7,7 @@ window.previewImage = function(input, imgId) {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                const MAX_SIZE = 800; // 安全壓縮尺寸
+                const MAX_SIZE = 800;
 
                 if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
@@ -23,7 +22,7 @@ window.previewImage = function(input, imgId) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // 壓縮至 70% 畫質
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                 const displayImg = document.getElementById(imgId);
                 displayImg.src = compressedBase64;
                 displayImg.classList.remove('hidden');
@@ -31,6 +30,29 @@ window.previewImage = function(input, imgId) {
             img.src = event.target.result;
         }
         reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// 核心功能：將 Base64 圖片上傳至 Supabase Storage (media 儲存桶)
+async function uploadBase64ToSupabase(base64Str, path) {
+    try {
+        const res = await fetch(base64Str);
+        const blob = await res.blob();
+        
+        const { data, error } = await window.supabaseClient.storage
+            .from('media')
+            .upload(path, blob, { upsert: true, contentType: blob.type });
+            
+        if (error) throw error;
+        
+        const { data: publicData } = window.supabaseClient.storage
+            .from('media')
+            .getPublicUrl(path);
+            
+        return publicData.publicUrl;
+    } catch (err) {
+        console.error("上傳圖片至 Supabase 失敗:", err);
+        throw err;
     }
 }
 
@@ -111,8 +133,7 @@ window.renderProfile = async function() {
         const myPosts = postsRes.data || [];
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
         
-        // 核心防護：如果資料庫沒有 banner_url 欄位，從 localStorage 讀取備份資料
-        const bannerUrl = profile.banner_url || localStorage.getItem('banner_' + userId) || '';
+        const bannerUrl = profile.banner_url || '';
 
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
@@ -162,37 +183,40 @@ window.renderProfile = async function() {
         container.innerHTML = html + `</div></div>`;
 
     } catch (err) {
-        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
+        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。提示：若發生欄位錯誤，請確保已在 Supabase 建立對應欄位。</div>`;
     }
 }
 
+// 核心修復：正確將頭像與 Banner 圖片上傳至 Supabase Storage
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const userId = localStorage.getItem('userId');
-    
-    const avatarSrc = document.getElementById('edit-avatar-preview').src;
-    const bannerSrc = document.getElementById('edit-banner-preview').src;
-
-    // 核心修復：移除了 banner_url，避免寫入資料庫時因找不到欄位而報錯崩潰
-    const updateData = {
-        display_name: document.getElementById('edit-display-name').value.trim(),
-        bio: document.getElementById('edit-bio').value.trim(),
-        social_ig: document.getElementById('edit-social-ig').value.trim(),
-        social_x: document.getElementById('edit-social-x').value.trim(),
-        avatar_url: avatarSrc
-    };
-    
     btn.innerText = "處理中..."; btn.disabled = true;
-
+    
     try {
+        let avatarSrc = document.getElementById('edit-avatar-preview').src;
+        let bannerSrc = document.getElementById('edit-banner-preview').src;
+
+        // 如果圖片是新選取的 (Base64 格式)，則上傳到 Supabase Storage
+        if (avatarSrc.startsWith('data:image')) {
+            avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${userId}_${Date.now()}.jpg`);
+        }
+        if (bannerSrc.startsWith('data:image')) {
+            bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${userId}_${Date.now()}.jpg`);
+        }
+
+        const updateData = {
+            display_name: document.getElementById('edit-display-name').value.trim(),
+            bio: document.getElementById('edit-bio').value.trim(),
+            social_ig: document.getElementById('edit-social-ig').value.trim(),
+            social_x: document.getElementById('edit-social-x').value.trim(),
+            avatar_url: avatarSrc,
+            banner_url: bannerSrc.includes('http') ? bannerSrc : null
+        };
+
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', userId);
         if (error) throw error;
         
-        // 將 Banner 獨立存入 localStorage，繞過資料庫欄位缺失的問題
-        if (bannerSrc.includes('data:image') || bannerSrc.includes('http')) {
-            localStorage.setItem('banner_' + userId, bannerSrc);
-        }
-
         localStorage.setItem('myChatName', updateData.display_name);
         closeEditProfile();
         renderProfile();
