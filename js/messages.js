@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 聊天與未讀訊息徽章加強版
+// js/messages.js - 聊天與未讀訊息徽章修復版
 // ==========================================
 
 window.activeRoomId = null;
@@ -53,7 +53,7 @@ window.searchUsersToChat = async function() {
     } catch (err) { container.innerHTML = `<div class="p-6 text-center text-red-400 text-sm mt-10">搜尋發生錯誤</div>`; }
 }
 
-// 核心修復：收件匣列表、未讀訊息計數與未知用戶防呆
+// 收件匣列表
 window.renderMessages = async function() {
     refreshMyUser();
     const container = document.getElementById('chat-list');
@@ -64,7 +64,6 @@ window.renderMessages = async function() {
     container.innerHTML = `<div class="text-center py-10 mt-10"><i class="fa-solid fa-circle-notch fa-spin text-gray-300 text-2xl"></i></div>`;
 
     try {
-        // 抓取所有和自己相關的訊息，不論發送或接收
         const { data: inboxData, error } = await window.supabaseClient.from('messages')
             .select('*').ilike('room_id', `%${myUserId}%`).order('created_at', { ascending: false }); 
 
@@ -75,7 +74,6 @@ window.renderMessages = async function() {
         
         (inboxData || []).forEach(msg => {
             if (!roomsMap[msg.room_id]) {
-                // 嚴謹拆解 room_id (UUID長度固定，這能過濾掉舊版錯誤的名字格式)
                 const ids = msg.room_id.split('_');
                 const targetId = ids[0] === myUserId ? ids[1] : ids[0];
                 
@@ -84,7 +82,6 @@ window.renderMessages = async function() {
                     targetIds.add(targetId);
                 }
             }
-            // 累加未讀數 (接收者是自己，且 is_read 為 false)
             if (msg.receiver === myUserId && msg.is_read === false && roomsMap[msg.room_id]) {
                 roomsMap[msg.room_id].unreadCount++;
             }
@@ -92,7 +89,6 @@ window.renderMessages = async function() {
 
         if(targetIds.size === 0) return container.innerHTML = `<div class="text-center py-10 mt-10 text-gray-400 text-sm flex flex-col items-center"><i class="fa-solid fa-inbox text-3xl mb-3 opacity-50"></i>尚無對話記錄</div>`;
 
-        // 一次向 Profile 表要所有對象的最新資料 (消滅未知用戶)
         const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url, username').in('id', Array.from(targetIds));
 
         let profileMap = {};
@@ -100,7 +96,7 @@ window.renderMessages = async function() {
 
         let inboxArray = Object.values(roomsMap).map(room => {
             const p = profileMap[room.targetId];
-            if (!p) return null; // 對方帳號已刪除
+            if (!p) return null; 
 
             let lastMsgText = room.msg.content;
             if (room.msg.content && room.msg.content.startsWith('[VOICE]:')) lastMsgText = '語音訊息 🎤';
@@ -134,7 +130,7 @@ window.renderMessages = async function() {
     } catch (err) { container.innerHTML = `<div class="text-center text-red-400 py-10 text-sm mt-10">資料庫讀取異常</div>`; }
 };
 
-// 打開聊天室並標記已讀
+// 打開聊天室並標記已讀，消除未讀紅點
 window.openChat = async function(targetId, isGroup = false, displayName = targetId, avatarUrl = '') {
     refreshMyUser();
     window.activeChatTarget = targetId;
@@ -150,9 +146,18 @@ window.openChat = async function(targetId, isGroup = false, displayName = target
     chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i></div>`;
 
     try {
-        // 將該房間所有給我的未讀訊息標記為已讀
+        // 1. 將該房間所有給我的未讀訊息標記為已讀
         await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myUserId).eq('is_read', false);
 
+        // 2. 重新計算全域的未讀訊息數量，如果歸零就隱藏導航列的紅點
+        const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', myUserId).eq('is_read', false);
+        const msgBadge = document.getElementById('nav-msg-badge');
+        if (msgBadge) {
+            if (msgCount > 0) msgBadge.classList.remove('hidden');
+            else msgBadge.classList.add('hidden');
+        }
+
+        // 3. 載入對話歷史
         const { data, error } = await window.supabaseClient.from('messages').select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: false });
         if (error) throw error;
         
@@ -169,7 +174,7 @@ function drawMessages(messages) {
         return;
     }
     container.innerHTML = messages.map(msg => {
-        const isMe = msg.receiver !== myUserId; // 因為舊有欄位混亂，發送者一定不是接收者
+        const isMe = msg.receiver !== myUserId; 
         const align = isMe ? 'justify-end' : 'justify-start';
         const bg = isMe ? 'bg-sexify text-white' : 'bg-white border border-gray-100 text-gray-900';
         const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
@@ -293,7 +298,6 @@ function setupRoomRealtime() {
     if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
     window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, { config: { broadcast: { ack: false } } })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, async payload => {
-        // 即時接收新訊息，若是我收到的，立即標記為已讀
         if (payload.new.receiver === myUserId) {
             await window.supabaseClient.from('messages').update({ is_read: true }).eq('id', payload.new.id);
         } else {
