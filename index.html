@@ -111,10 +111,8 @@
                 <button onclick="toggleNotifications()" class="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full text-gray-600 active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
                 <h2 class="font-black text-lg">系統通知</h2>
             </header>
-            <div class="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-gray-400">
-                <i class="fa-regular fa-bell-slash text-4xl mb-3 opacity-50"></i>
-                <p class="text-sm font-bold">目前沒有新通知</p>
-            </div>
+            <div id="notification-list" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3">
+                </div>
         </div>
     </div>
 
@@ -126,7 +124,6 @@
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify flex-1 text-center">SEXIFY</h1>
             <div class="flex gap-4 items-center w-auto justify-end">
                 <button id="global-search-btn" onclick="toggleSearch(true)" class="text-gray-700 active:scale-90 transition hidden"><i class="fa-solid fa-magnifying-glass text-xl"></i></button>
-                
                 <button onclick="toggleNotifications()" class="text-gray-700 relative active:scale-90 transition">
                     <i class="fa-regular fa-bell text-xl"></i>
                     <span id="notification-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sexify rounded-full border border-white hidden"></span>
@@ -186,7 +183,13 @@
                     </button>
                 </div>
 
-                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative"><i class="fa-solid fa-comment-dots mb-1 text-xl"></i><span class="text-[10px] font-bold" data-i18n="nav_msg">訊息</span></button>
+                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative">
+                    <i class="fa-solid fa-comment-dots mb-1 text-xl relative">
+                        <span id="nav-msg-badge" class="absolute -top-1 -right-1 w-2 h-2 bg-sexify rounded-full hidden"></span>
+                    </i>
+                    <span class="text-[10px] font-bold" data-i18n="nav_msg">訊息</span>
+                </button>
+                
                 <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1"><i class="fa-regular fa-user mb-1 text-xl"></i><span class="text-[10px] font-bold" data-i18n="nav_me">我</span></button>
             </div>
         </nav>
@@ -200,8 +203,7 @@
             </div>
             <div class="relative">
                 <button onclick="document.getElementById('post-options-menu').classList.toggle('hidden'); event.stopPropagation();" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-ellipsis-vertical text-xl"></i></button>
-                <div id="post-options-menu" class="hidden absolute right-0 top-full mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
-                    </div>
+                <div id="post-options-menu" class="hidden absolute right-0 top-full mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50"></div>
             </div>
         </header>
         <div class="flex-1 overflow-y-auto pb-20 bg-gray-100 flex flex-col" onclick="document.getElementById('post-options-menu').classList.add('hidden')">
@@ -214,6 +216,36 @@
                 <input type="text" id="comment-input" placeholder="新增留言..." class="bg-transparent border-none outline-none w-full text-sm">
             </div>
             <button onclick="submitComment()" class="bg-sexify text-white w-9 h-9 rounded-full flex items-center justify-center shadow-md active:scale-90 transition"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+        </div>
+    </div>
+
+    <div id="other-profile-modal" class="fixed inset-0 bg-gray-50 z-[250] hidden flex-col transform translate-x-full transition-transform duration-300">
+        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm">
+            <button onclick="closeOtherProfile()" class="text-gray-700 w-10 h-10 flex items-center justify-center -ml-2 active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+            <h2 id="other-header-name" class="font-black text-lg ml-2 flex-1">載入中...</h2>
+        </header>
+        <div class="flex-1 overflow-y-auto pb-20">
+             <div id="other-banner-container" class="w-full h-32 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400 relative">
+                 <img id="other-banner" src="" class="w-full h-full object-cover hidden">
+             </div>
+             
+             <div class="bg-white p-5 border-b shadow-sm relative -mt-8 pt-10 rounded-t-2xl">
+                 <div class="flex justify-between items-start">
+                     <div class="flex items-center gap-4">
+                         <img id="other-avatar" src="" class="w-20 h-20 rounded-full object-cover shadow-sm border-4 border-white absolute -top-10">
+                         <div class="ml-24">
+                             <h2 id="other-display-name" class="text-xl font-black text-gray-900">...</h2>
+                             <p id="other-username" class="text-xs text-sexify font-bold mt-1">@...</p>
+                         </div>
+                     </div>
+                     <div class="flex flex-col gap-2">
+                         <button id="other-follow-btn" class="bg-sexify text-white px-5 py-1.5 rounded-full font-bold text-sm shadow-md active:scale-95 transition">追蹤</button>
+                         <button id="other-msg-btn" class="bg-gray-900 text-white px-5 py-1.5 rounded-full font-bold text-sm shadow-md active:scale-95 transition">發訊息</button>
+                     </div>
+                 </div>
+                 <p id="other-bio" class="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-line">...</p>
+             </div>
+             <div id="other-posts-grid" class="masonry-grid p-2 bg-gray-100 min-h-[300px]"></div>
         </div>
     </div>
 
@@ -259,32 +291,6 @@
         </div>
     </div>
 
-    <div id="other-profile-modal" class="fixed inset-0 bg-gray-50 z-[250] hidden flex-col transform translate-x-full transition-transform duration-300">
-        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm">
-            <button onclick="closeOtherProfile()" class="text-gray-700 w-10 h-10 flex items-center justify-center -ml-2 active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
-            <h2 id="other-header-name" class="font-black text-lg ml-2 flex-1">載入中...</h2>
-        </header>
-        <div class="flex-1 overflow-y-auto pb-20">
-             <div class="bg-white p-5 border-b shadow-sm relative">
-                 <div class="flex justify-between items-start">
-                     <div class="flex items-center gap-4">
-                         <img id="other-avatar" src="" class="w-20 h-20 rounded-full object-cover shadow-sm border border-gray-100">
-                         <div>
-                             <h2 id="other-display-name" class="text-xl font-black text-gray-900">...</h2>
-                             <p id="other-username" class="text-xs text-sexify font-bold mt-1">@...</p>
-                         </div>
-                     </div>
-                     <div class="flex flex-col gap-2">
-                         <button id="other-follow-btn" class="bg-sexify text-white px-5 py-1.5 rounded-full font-bold text-sm shadow-md active:scale-95 transition">追蹤</button>
-                         <button id="other-msg-btn" class="bg-gray-900 text-white px-5 py-1.5 rounded-full font-bold text-sm shadow-md active:scale-95 transition">發訊息</button>
-                     </div>
-                 </div>
-                 <p id="other-bio" class="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-line">...</p>
-             </div>
-             <div id="other-posts-grid" class="masonry-grid p-2 bg-gray-100 min-h-[300px]"></div>
-        </div>
-    </div>
-
     <div id="personal-center-modal" class="fixed inset-0 z-[300] bg-gray-50 hidden flex-col transform translate-y-full transition-transform duration-300">
         <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
             <button onclick="closePersonalCenter()" class="text-gray-500 font-bold px-2 py-1"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -292,7 +298,7 @@
             <button onclick="savePersonalCenter()" id="save-personal-btn" class="text-white bg-sexify px-4 py-1.5 rounded-full font-bold active:scale-95 transition shadow-sm">儲存</button>
         </header>
         <div class="flex-1 overflow-y-auto pb-20 p-6 space-y-4">
-            <div><label class="block text-xs font-bold text-gray-700 mb-1">電子郵件 (修改後需重新驗證)</label><input type="email" id="pc-email" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
+            <div><label class="block text-xs font-bold text-gray-700 mb-1">電子郵件</label><input type="email" id="pc-email" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
             <div><label class="block text-xs font-bold text-gray-700 mb-1">性別</label><select id="pc-gender" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"><option value="Male">男性</option><option value="Female">女性</option><option value="Unspecified">不透露</option></select></div>
             <div><label class="block text-xs font-bold text-gray-700 mb-1">出生日期</label><input type="date" id="pc-birthday" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none"></div>
         </div>
