@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 雲端讚與留言持久化
+// js/discovery.js - 雙重查詢與點讚防呆版
 // ==========================================
 
 let clickTimer = null;
@@ -32,7 +32,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
             return;
         }
 
-        // 取得自己按過的讚以顯示紅色愛心
         const myUserId = localStorage.getItem('userId');
         let myLikes = new Set();
         if (myUserId) {
@@ -108,47 +107,54 @@ window.toggleBookmark = function(btn, postId, postStr) {
     localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
 }
 
-// 雲端按讚與發送通知
+// 雲端按讚：修復負數防呆與點擊鎖定
 window.toggleLike = async function(btn, postId, postOwnerId) {
+    if (btn.disabled) return; // 防連點機制
+    btn.disabled = true;
+
     const icon = btn.querySelector('i');
     const countSpan = btn.querySelector('span');
-    let count = parseInt(countSpan.innerText) || 0;
+    let count = parseInt(countSpan.innerText.trim());
+    if (isNaN(count)) count = 0; // 嚴格解析數字
+
     const myUserId = localStorage.getItem('userId');
-    if(!myUserId) return alert("請先登入");
+    if(!myUserId) {
+        btn.disabled = false;
+        return alert("請先登入");
+    }
 
     const isLiking = icon.classList.contains('fa-regular');
 
-    // UI 先行變更
     if (isLiking) {
         icon.classList.replace('fa-regular', 'fa-solid');
         icon.classList.remove('text-gray-400');
         icon.classList.add('text-sexify', 'scale-125');
         countSpan.innerText = count + 1;
+        
+        try {
+            await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
+            await window.supabaseClient.from('posts').update({ likes: count + 1 }).eq('id', postId);
+            if (postOwnerId && postOwnerId !== myUserId) {
+                await window.supabaseClient.from('notifications').insert({ user_id: postOwnerId, actor_id: myUserId, type: 'like', post_id: postId });
+            }
+        } catch(e) { console.error("按讚失敗", e); }
     } else {
+        const newCount = Math.max(0, count - 1); // 防呆：確保讚數永不為負
         icon.classList.replace('fa-solid', 'fa-regular');
         icon.classList.remove('text-sexify', 'scale-125');
         icon.classList.add('text-gray-400');
-        countSpan.innerText = count - 1;
-    }
-    setTimeout(() => icon.classList.remove('scale-125'), 200);
+        countSpan.innerText = newCount;
 
-    // 寫入資料庫
-    try {
-        if (isLiking) {
-            await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myUserId });
-            // 更新貼文總讚數 (簡易作法：直接更新 UI 的 count + 1 到 DB)
-            await window.supabaseClient.from('posts').update({ likes: count + 1 }).eq('id', postId);
-            // 寫入通知 (不通知自己)
-            if (postOwnerId !== myUserId) {
-                await window.supabaseClient.from('notifications').insert({ user_id: postOwnerId, actor_id: myUserId, type: 'like', post_id: postId });
-            }
-        } else {
+        try {
             await window.supabaseClient.from('likes').delete().match({ post_id: postId, user_id: myUserId });
-            await window.supabaseClient.from('posts').update({ likes: count > 0 ? count - 1 : 0 }).eq('id', postId);
-        }
-    } catch(e) {
-        console.error("按讚同步失敗", e);
+            await window.supabaseClient.from('posts').update({ likes: newCount }).eq('id', postId);
+        } catch(e) { console.error("收回讚失敗", e); }
     }
+    
+    setTimeout(() => {
+        icon.classList.remove('scale-125');
+        btn.disabled = false;
+    }, 300);
 }
 
 // 查看貼文詳情
@@ -189,7 +195,6 @@ window.viewPost = async function(postId) {
             optionsMenu.innerHTML = `<button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">檢舉貼文</button>`;
         }
 
-        // 檢查自己是否按過讚
         const { data: likeData } = await window.supabaseClient.from('likes').select('id').eq('post_id', postId).eq('user_id', myUserId);
         const likeIcon = (likeData && likeData.length > 0) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
 
@@ -230,7 +235,7 @@ window.viewPost = async function(postId) {
     }
 }
 
-// 雲端讀取留言
+// 雲端讀取留言 (全面重構：雙重查詢解決 JOIN 報錯)
 window.renderComments = async function() {
     const list = document.getElementById('post-comments-list');
     list.innerHTML = `<div class="text-center py-5"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
@@ -238,7 +243,7 @@ window.renderComments = async function() {
     try {
         const { data: comments, error } = await window.supabaseClient
             .from('comments')
-            .select('*, profiles(display_name, avatar_url)')
+            .select('*')
             .eq('post_id', window.currentViewedPostId)
             .order('created_at', { ascending: true });
             
@@ -248,20 +253,31 @@ window.renderComments = async function() {
             list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
             return;
         }
+
+        // 雙重安全查詢：獲取所有留言者的 ID，再請求 Profiles
+        const userIds = [...new Set(comments.map(c => c.user_id).filter(Boolean))];
+        let profilesMap = {};
+        if (userIds.length > 0) {
+            const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', userIds);
+            if (profs) profs.forEach(p => profilesMap[p.id] = p);
+        }
         
-        list.innerHTML = comments.map(c => `
+        list.innerHTML = comments.map(c => {
+            const user = profilesMap[c.user_id] || {};
+            return `
             <div class="flex gap-3 mb-4">
-                <img src="${c.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100">
+                <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-8 h-8 rounded-full shadow-sm object-cover border border-gray-100 flex-shrink-0">
                 <div class="flex-1 bg-gray-50 border border-gray-100 p-3 rounded-2xl rounded-tl-sm shadow-sm">
-                    <p class="text-[11px] font-bold text-sexify mb-1">${c.profiles?.display_name || '使用者'}</p>
+                    <p class="text-[11px] font-bold text-sexify mb-1">${user.display_name || '使用者'}</p>
                     <p class="text-sm text-gray-800">${c.content}</p>
                     <p class="text-[9px] text-gray-400 mt-1.5">${new Date(c.created_at).toLocaleString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
         setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
     } catch(e) {
-        list.innerHTML = `<div class="text-center py-5 text-red-400 text-xs">載入留言失敗</div>`;
+        console.error("載入留言失敗", e);
+        list.innerHTML = `<div class="text-center py-5 text-red-400 text-xs">載入留言失敗，請確認 RLS 設定。</div>`;
     }
 }
 
@@ -279,12 +295,11 @@ window.submitComment = async function() {
     try {
         await window.supabaseClient.from('comments').insert({ post_id: window.currentViewedPostId, user_id: myUserId, content: text });
         
-        // 寫入通知 (不通知自己)
         if (window.currentViewedPostOwnerId && window.currentViewedPostOwnerId !== myUserId) {
             await window.supabaseClient.from('notifications').insert({ user_id: window.currentViewedPostOwnerId, actor_id: myUserId, type: 'comment', post_id: window.currentViewedPostId });
         }
         
-        renderComments(); // 重新讀取雲端留言
+        renderComments();
     } catch(e) {
         alert("留言失敗");
     }
