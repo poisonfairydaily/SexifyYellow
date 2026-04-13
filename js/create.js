@@ -1,5 +1,5 @@
 // ==========================================
-// js/create.js - 效能優化版 (Storage 上傳)
+// js/create.js - 解決卡頓壓縮版
 // ==========================================
 
 function openUploadModal() {
@@ -34,19 +34,17 @@ function handleFileSelect(e) {
             preview.src = event.target.result;
             preview.classList.remove('hidden');
             document.getElementById('media-preview-container').dataset.mediaType = 'video';
-            // 存儲原始 File 物件供上傳使用
-            window.pendingUploadFile = file;
         };
         reader.readAsDataURL(file);
     } else {
-        // 相片 Canvas 壓縮處理
+        // 核心修復：相片 Canvas 壓縮，防止 Base64 過大導致 Supabase 拒絕並卡死
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                const MAX_SIZE = 1200; 
+                const MAX_SIZE = 1000; // 限制最大寬高
 
                 if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
@@ -61,15 +59,11 @@ function handleFileSelect(e) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                // 壓縮品質為 70%
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                 preview.src = compressedBase64;
                 preview.classList.remove('hidden');
                 document.getElementById('media-preview-container').dataset.mediaType = 'image';
-                
-                // 將 Base64 轉換為 Blob 以便 Storage 上傳
-                fetch(compressedBase64).then(res => res.blob()).then(blob => {
-                    window.pendingUploadFile = blob;
-                });
             };
             img.src = event.target.result;
         };
@@ -78,29 +72,32 @@ function handleFileSelect(e) {
 }
 
 function resetUploadForm() {
-    document.getElementById('post-caption').value = '';
-    document.getElementById('media-preview').src = '';
-    document.getElementById('video-preview').src = '';
+    const priceEl = document.getElementById('post-price');
+    if (priceEl) priceEl.value = '';
+    
+    const captionEl = document.getElementById('post-caption');
+    if (captionEl) captionEl.value = '';
+    
+    const viewFreeEl = document.getElementById('view-free');
+    if (viewFreeEl) viewFreeEl.checked = true;
+
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
-    document.getElementById('media-preview-container').dataset.mediaType = 'text';
-    document.getElementById('post-is-paid').checked = false;
-    document.getElementById('post-price-input').value = '10';
-    document.getElementById('post-price-container').classList.add('hidden');
-    window.pendingUploadFile = null;
+    document.getElementById('media-preview-container').dataset.mediaType = ''; 
+    document.getElementById('media-preview').src = '';
 }
 
-function togglePriceInput(checked) {
-    const container = document.getElementById('post-price-container');
-    if (checked) container.classList.remove('hidden');
-    else container.classList.add('hidden');
-}
+window.publishPost = async function() {
+    const captionEl = document.getElementById('post-caption');
+    const caption = captionEl ? captionEl.value.trim() : '';
+    
+    const priceEl = document.getElementById('post-price');
+    const price = priceEl ? parseInt(priceEl.value) || 0 : 0;
+    
+    const viewPaidEl = document.getElementById('view-paid');
+    const isPaid = viewPaidEl ? viewPaidEl.checked : false;
 
-async function handlePublish() {
-    const caption = document.getElementById('post-caption').value.trim();
-    const isPaid = document.getElementById('post-is-paid').checked;
-    const price = isPaid ? parseFloat(document.getElementById('post-price-input').value) || 0 : 0;
     const userId = localStorage.getItem('userId');
     const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
 
@@ -109,36 +106,18 @@ async function handlePublish() {
     let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
     if (mediaType === 'text' && !caption) return alert('請輸入文字內容或上傳相片/影片！');
 
-    publishBtn.innerText = "上傳媒體中...";
+    let mediaUrl = '';
+    if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
+    if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src;
+
+    publishBtn.innerText = "發佈中...";
     publishBtn.disabled = true;
 
     try {
-        let finalMediaUrl = '';
-
-        // 如果有媒體檔案，先上傳到 Supabase Storage
-        if (window.pendingUploadFile) {
-            const fileName = `${userId}_${Date.now()}`;
-            const fileExt = mediaType === 'video' ? 'mp4' : 'jpg';
-            const filePath = `${fileName}.${fileExt}`;
-
-            const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
-                .from('posts')
-                .upload(filePath, window.pendingUploadFile);
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = window.supabaseClient.storage
-                .from('posts')
-                .getPublicUrl(filePath);
-            
-            finalMediaUrl = publicUrl;
-        }
-
-        publishBtn.innerText = "發佈貼文中...";
         const { error } = await window.supabaseClient.from('posts').insert([{
             user_id: userId,
             caption: caption,
-            media_url: finalMediaUrl,
+            media_url: mediaUrl,
             is_paid: isPaid,
             price: price
         }]);
@@ -148,14 +127,17 @@ async function handlePublish() {
         alert('✨ 發佈成功！');
         closeUploadModal();
         
-        if (typeof renderDiscovery === 'function') renderDiscovery();
-        if (typeof renderProfile === 'function') renderProfile();
+        if (document.getElementById('profile-tab').classList.contains('active') && typeof renderProfile === 'function') {
+            renderProfile();
+        } else if (document.getElementById('home-tab').classList.contains('active') && typeof renderDiscovery === 'function') {
+            renderDiscovery();
+        }
 
     } catch (err) {
         console.error("發佈失敗:", err);
-        alert('發佈失敗，請檢查網路連線或儲存桶權限。');
+        alert('發佈失敗，請檢查網路連線或檔案大小。');
     } finally {
-        publishBtn.innerText = "立即發佈";
+        publishBtn.innerText = "發佈";
         publishBtn.disabled = false;
     }
 }
