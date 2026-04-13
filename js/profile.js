@@ -1,5 +1,5 @@
 // ==========================================
-// js/profile.js - 個人資料與 Storage 優化版
+// js/profile.js - 個人資料完整版
 // ==========================================
 
 window.previewImage = function(input, imgId) {
@@ -40,16 +40,11 @@ async function uploadBase64ToStorage(base64Str, bucket, fileName) {
     try {
         const res = await fetch(base64Str);
         const blob = await res.blob();
-        const { data, error } = await window.supabaseClient.storage
-            .from(bucket)
-            .upload(fileName, blob, { upsert: true });
+        const { error } = await window.supabaseClient.storage.from(bucket).upload(fileName, blob, { upsert: true });
         if (error) throw error;
         const { data: { publicUrl } } = window.supabaseClient.storage.from(bucket).getPublicUrl(fileName);
         return publicUrl;
-    } catch (e) {
-        console.error("Storage 上傳失敗:", e);
-        return base64Str;
-    }
+    } catch (e) { return base64Str; }
 }
 
 window.saveProfile = async function() {
@@ -109,14 +104,12 @@ window.renderProfile = async function() {
         document.getElementById('profile-avatar').src = profile.avatar_url || 'https://ui-avatars.com/api/?name=U';
         document.getElementById('profile-banner').src = profile.banner_url || '';
 
-        // 更新編輯彈窗預設值
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-username').value = profile.username || '';
         document.getElementById('edit-bio').value = profile.bio || '';
         document.getElementById('edit-avatar-preview').src = profile.avatar_url || 'https://ui-avatars.com/api/?name=U';
         document.getElementById('edit-banner-preview').src = profile.banner_url || '';
 
-        // 載入貼文
         renderMyPosts(userId);
     } catch (e) {}
 }
@@ -141,12 +134,17 @@ async function renderMyPosts(uid) {
 window.openEditProfile = () => document.getElementById('edit-profile-modal').classList.remove('hidden');
 window.closeEditProfile = () => document.getElementById('edit-profile-modal').classList.add('hidden');
 
+// 核心修復：確保此函數在全域可被 menu 點擊呼叫
 window.openFansSubsModal = async function(type) {
+    // 若有設定選單，先將其關閉
+    if(typeof closeSettingsMenu === 'function') closeSettingsMenu();
+    
     const modal = document.getElementById('fans-subs-modal');
     const title = document.getElementById('fans-subs-title');
     const list = document.getElementById('fans-subs-list');
     const myUserId = localStorage.getItem('userId');
-    
+    if(!modal || !list) return;
+
     modal.classList.remove('hidden');
     list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-300"></i></div>`;
 
@@ -158,7 +156,7 @@ window.openFansSubsModal = async function(type) {
             const ids = fans.map(f => f.subscriber_id);
             const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', ids);
             list.innerHTML = profs.map(p => `
-                <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95" onclick="viewOtherProfile('${p.id}')">
                     <img src="${p.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
                     <div class="flex-1 font-bold text-gray-800 text-sm">${p.display_name}</div>
                 </div>
@@ -195,4 +193,7 @@ window.unfollowUserFromList = async function(subscriptionId, btn) {
     } catch (e) { alert("操作失敗"); }
 }
 
-window.closeFansSubsModal = () => document.getElementById('fans-subs-modal').classList.add('hidden');
+window.closeFansSubsModal = () => {
+    const modal = document.getElementById('fans-subs-modal');
+    if(modal) modal.classList.add('hidden');
+}
