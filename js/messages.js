@@ -1,5 +1,6 @@
 // ==========================================
 // js/messages.js - 核心通訊最終安全強化版 (全替換完整版)
+// 修正說明：將 ID 從 chat-target-name 修正為 HTML 實際存在的 chat-name
 // ==========================================
 
 window.activeRoomId = null;
@@ -13,11 +14,9 @@ window.isRecording = false;
 
 // 1. 取得當前經過驗證的真實 User ID
 async function getValidUserId() {
-    // 優先從 session 獲取，這最準確
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) return session.user.id;
     
-    // 如果 session 沒拿到，再試一次 getUser
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     return user ? user.id : null;
 }
@@ -27,7 +26,7 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_'); 
 }
 
-// 2. 搜尋發起對話 (帶 XSS 防禦)
+// 2. 搜尋發起對話
 window.searchUsersToChat = async function() {
     const keyword = document.getElementById('inbox-search-input')?.value.trim();
     const container = document.getElementById('chat-list');
@@ -55,7 +54,7 @@ window.searchUsersToChat = async function() {
             const safeName = window.escapeHTML(u.display_name || '未命名');
             const safeAvatar = window.escapeHTML(u.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
             return `
-                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${safeName}')">
+                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${safeName}', '${safeAvatar}')">
                     <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover">
                     <div>
                         <div class="font-bold text-gray-800">${safeName}</div>
@@ -68,7 +67,7 @@ window.searchUsersToChat = async function() {
     }
 }
 
-// 3. 發送訊息 (配合 RLS 與身份驗證)
+// 3. 發送訊息
 async function sendMessage(content, mediaUrl) {
     const myRealId = await getValidUserId();
     if (!myRealId) return alert('請先登入');
@@ -95,8 +94,8 @@ async function sendMessage(content, mediaUrl) {
     }
 }
 
-// 修正後的開啟聊天室函數
-window.openChat = async function(targetUid, displayName) {
+// 4. 開啟聊天室 (修正 ID 並增加頭像更新)
+window.openChat = async function(targetUid, displayName, avatarUrl) {
     const myRealId = await getValidUserId();
     if (!myRealId) return alert('請先登入');
     
@@ -104,33 +103,24 @@ window.openChat = async function(targetUid, displayName) {
     window.activeRoomId = generateRoomId(myRealId, targetUid);
 
     const modal = document.getElementById('chat-modal');
-    const nameDisplay = document.getElementById('chat-target-name'); // 🚨 報錯點
+    const nameEl = document.getElementById('chat-name'); // 修正為 index.html 中的 ID
+    const avatarEl = document.getElementById('chat-target-avatar'); // 修正為 index.html 中的 ID
     
-    if (modal) {
-        // 只有當元素存在時，才設定名字，避免程式碼崩潰
-        if (nameDisplay) {
-            nameDisplay.innerText = displayName || '未知用戶';
-        } else {
-            console.warn("找不到 ID 為 'chat-target-name' 的元素，請檢查 HTML");
-        }
+    if (nameEl) nameEl.innerText = displayName || '未知用戶';
+    if (avatarEl && avatarUrl) avatarEl.src = avatarUrl;
 
+    if (modal) {
         modal.classList.remove('hidden');
         setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-    } else {
-        console.error("找不到 ID 為 'chat-modal' 的視窗元件");
-        return; 
     }
 
-    // 標記已讀
     try {
         await window.supabaseClient
             .from('messages')
             .update({ is_read: true })
             .eq('room_id', window.activeRoomId)
             .eq('receiver', myRealId);
-    } catch (e) {
-        console.error("更新已讀狀態失敗:", e);
-    }
+    } catch (e) {}
 
     loadMessages();
     setupChatRealtime();
@@ -149,7 +139,7 @@ async function loadMessages() {
             .from('messages')
             .select('*')
             .eq('room_id', window.activeRoomId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: false }); // 注意：配合 flex-col-reverse 使用 false (最新在下) 或 true 視 UI 調整
 
         if (error) throw error;
         drawMessages(data);
@@ -169,6 +159,7 @@ async function drawMessages(messages) {
         return;
     }
 
+    // 因為你的 HTML 使用了 flex-col-reverse，所以最新的訊息應該放在陣列前面
     container.innerHTML = messages.map(m => {
         const isMine = m.sender_name === myRealId;
         const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
@@ -188,8 +179,6 @@ async function drawMessages(messages) {
                 </div>
             </div>`;
     }).join('');
-    
-    container.scrollTop = container.scrollHeight;
 }
 
 // 7. 渲染訊息列表 (首頁 Inbox)
@@ -222,12 +211,13 @@ window.renderMessages = async function() {
             const targetId = m.sender_name === myRealId ? m.receiver : m.sender_name;
             const prof = profilesMap[targetId];
             const safeName = window.escapeHTML(prof?.display_name || '未知用戶');
+            const safeAvatar = window.escapeHTML(prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
             const isUnread = !m.is_read && m.receiver === myRealId;
 
             return `
                 <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
-                     onclick="openChat('${targetId}', '${safeName}')">
-                    <img src="${window.escapeHTML(prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName)}" class="w-14 h-14 rounded-full object-cover">
+                     onclick="openChat('${targetId}', '${safeName}', '${safeAvatar}')">
+                    <img src="${safeAvatar}" class="w-14 h-14 rounded-full object-cover">
                     <div class="flex-1 overflow-hidden">
                         <div class="flex justify-between items-center mb-1">
                             <span class="font-bold text-gray-800">${safeName}</span>
