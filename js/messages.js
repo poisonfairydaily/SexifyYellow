@@ -1,6 +1,5 @@
 // ==========================================
 // js/messages.js - 終極安全通訊版
-// 修復：XSS 注入漏洞、訊息發送、錄音與回收
 // ==========================================
 
 window.activeRoomId = null;
@@ -12,7 +11,7 @@ let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
 
-// 安全工具：確保字串不會觸發 HTML 解析
+// 1. 安全防禦：防止 XSS 注入
 function safeText(str) {
     if (!str) return '';
     return str
@@ -33,7 +32,7 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_');
 }
 
-// 核心：處理發送
+// 2. 處理發送動作
 window.handleSendAction = async function() {
     const input = document.getElementById('chat-input');
     const content = input.value.trim();
@@ -51,7 +50,7 @@ window.handleSendAction = async function() {
             room_id: window.activeRoomId,
             sender_name: myId,
             receiver: window.activeChatTarget,
-            content: content, // 資料庫儲存原始字串，渲染時才過濾
+            content: content, 
             image_url: window.selectedMediaUrl,
             is_read: false
         }]);
@@ -64,13 +63,14 @@ window.handleSendAction = async function() {
         renderMessages();
 
     } catch (e) {
+        console.error('發送失敗:', e);
         alert('傳送失敗');
     } finally {
         btn.disabled = false;
     }
 };
 
-// 繪製訊息 (關鍵安全修復區)
+// 3. 繪製訊息泡泡 (安全過濾版)
 function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
@@ -82,16 +82,15 @@ function drawMessages(messages) {
             const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
             const wrapperClass = isMine ? 'justify-end' : 'justify-start';
             
-            // 安全處理：針對文字內容進行轉義
             const cleanContent = safeText(m.content);
             const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            const isAudio = safeImgUrl && safeImgUrl.endsWith('.webm');
+            const isAudio = safeImgUrl && (safeImgUrl.includes('.webm') || safeImgUrl.includes('audio'));
 
             return `
                 <div class="flex ${wrapperClass} mb-4 px-4">
                     <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
                         ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
-                        ${safeImgUrl ? (isAudio ? `<audio src="${safeImgUrl}" controls class="h-8 mt-1"></audio>` : `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full" onerror="this.style.display='none'">`) : ''}
+                        ${safeImgUrl ? (isAudio ? `<audio src="${safeImgUrl}" controls class="h-8 mt-1 block"></audio>` : `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full" onclick="window.open('${safeImgUrl}')" onerror="this.style.display='none'">`) : ''}
                         <div class="text-[9px] opacity-50 mt-1 text-right">
                             ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -102,7 +101,7 @@ function drawMessages(messages) {
     });
 }
 
-// 訊息列表渲染安全過濾
+// 4. 訊息列表與同步
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
@@ -139,7 +138,6 @@ window.renderMessages = async function() {
     }).join('');
 };
 
-// 錄音、上傳、回收與即時通訊邏輯保持不變...
 window.openChat = async function(targetUid, displayName, avatarUrl) {
     const myId = await getValidUserId();
     if (!myId) return;
@@ -148,9 +146,8 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
     document.getElementById('chat-name').innerText = displayName;
     const avatarEl = document.getElementById('chat-target-avatar');
     if (avatarEl) avatarEl.src = avatarUrl || `https://ui-avatars.com/api/?name=${displayName}`;
-    const modal = document.getElementById('chat-modal');
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+    document.getElementById('chat-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('chat-modal').classList.remove('translate-x-full'), 10);
     await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
     loadMessages();
     setupChatRealtime();
@@ -170,23 +167,7 @@ function setupChatRealtime() {
         .subscribe();
 }
 
-window.deleteMessage = async function(msgId, senderId) {
-    const myId = await getValidUserId();
-    if (myId !== senderId) return; 
-    if (!confirm('回收這條訊息？')) return;
-    try {
-        await window.supabaseClient.from('messages').delete().eq('id', msgId);
-        loadMessages();
-    } catch (e) { alert('回收失敗'); }
-};
-
-window.closeChat = function() {
-    window.activeRoomId = null;
-    const modal = document.getElementById('chat-modal');
-    modal.classList.add('translate-x-full');
-    setTimeout(() => modal.classList.add('hidden'), 300);
-};
-
+// 5. 錄音與媒體處理
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
     if (!window.isRecording) {
@@ -230,4 +211,20 @@ window.handleImageSelection = async function(input) {
         window.selectedMediaUrl = publicUrl;
         await window.handleSendAction();
     } catch (e) { alert('上傳失敗'); }
+};
+
+window.deleteMessage = async function(msgId, senderId) {
+    const myId = await getValidUserId();
+    if (myId !== senderId) return; 
+    if (!confirm('回收這條訊息？')) return;
+    try {
+        await window.supabaseClient.from('messages').delete().eq('id', msgId);
+        loadMessages();
+    } catch (e) { alert('回收失敗'); }
+};
+
+window.closeChat = function() {
+    window.activeRoomId = null;
+    document.getElementById('chat-modal').classList.add('translate-x-full');
+    setTimeout(() => document.getElementById('chat-modal').classList.add('hidden'), 300);
 };
