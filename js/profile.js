@@ -79,12 +79,15 @@ window.openPersonalCenter = async function() {
         ]);
 
         if (privRes.data) {
-            document.getElementById('pc-email').value = privRes.data.contact_email || '';
-            document.getElementById('pc-birthday').value = privRes.data.birthday || '';
+            const emailInput = document.getElementById('pc-email');
+            const bdayInput = document.getElementById('pc-birthday');
+            if(emailInput) emailInput.value = privRes.data.contact_email || '';
+            if(bdayInput) bdayInput.value = privRes.data.birthday || '';
         }
         
         if (profRes.data) {
-            document.getElementById('pc-gender').value = profRes.data.gender || 'Unspecified';
+            const genderInput = document.getElementById('pc-gender');
+            if(genderInput) genderInput.value = profRes.data.gender || 'Unspecified';
         }
     } catch(e) {
         console.error("無法載入個人中心資料", e);
@@ -287,6 +290,7 @@ window.viewOtherProfile = async function(userId) {
             followBtn.innerText = "已追蹤";
             followBtn.classList.add('bg-gray-200', 'text-gray-700');
             followBtn.classList.remove('bg-sexify', 'text-white');
+            followBtn.onclick = null;
         } else {
             followBtn.innerText = "追蹤";
             followBtn.classList.add('bg-sexify', 'text-white');
