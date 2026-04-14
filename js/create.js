@@ -88,35 +88,47 @@ function resetUploadForm() {
     document.getElementById('media-preview').src = '';
 }
 
+// 原本：const userId = localStorage.getItem('userId');
+// 修改如下：
+
 window.publishPost = async function() {
+    const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
+    publishBtn.innerText = "驗證身分中...";
+    publishBtn.disabled = true;
+
+    // 安全修復：從 Supabase 取得真實 Session，不信任 LocalStorage
+    const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
+    if (authError || !user) {
+        publishBtn.innerText = "發佈";
+        publishBtn.disabled = false;
+        return alert('請先登入後再發佈！或登入已過期。');
+    }
+    const realUserId = user.id; // 這才是安全的 ID
+
     const captionEl = document.getElementById('post-caption');
     const caption = captionEl ? captionEl.value.trim() : '';
-    
     const priceEl = document.getElementById('post-price');
     const price = priceEl ? parseInt(priceEl.value) || 0 : 0;
-    
     const viewPaidEl = document.getElementById('view-paid');
     const isPaid = viewPaidEl ? viewPaidEl.checked : false;
 
-    const userId = localStorage.getItem('userId');
-    const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
-
-    if (!userId) return alert('請先登入後再發佈！');
-
     let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
-    if (mediaType === 'text' && !caption) return alert('請輸入文字內容或上傳相片/影片！');
+    if (mediaType === 'text' && !caption) {
+        publishBtn.innerText = "發佈";
+        publishBtn.disabled = false;
+        return alert('請輸入文字內容或上傳相片/影片！');
+    }
 
     let mediaUrl = '';
     if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
     if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src;
 
     publishBtn.innerText = "發佈中...";
-    publishBtn.disabled = true;
 
     try {
         const { error } = await window.supabaseClient.from('posts').insert([{
-            user_id: userId,
-            caption: caption,
+            user_id: realUserId, // 使用真實 ID
+            caption: escapeHTML(caption), // 順便防 XSS
             media_url: mediaUrl,
             is_paid: isPaid,
             price: price
@@ -127,15 +139,10 @@ window.publishPost = async function() {
         alert('✨ 發佈成功！');
         closeUploadModal();
         
-        if (document.getElementById('profile-tab').classList.contains('active') && typeof renderProfile === 'function') {
-            renderProfile();
-        } else if (document.getElementById('home-tab').classList.contains('active') && typeof renderDiscovery === 'function') {
-            renderDiscovery();
-        }
-
+        if (typeof renderDiscovery === 'function') renderDiscovery();
     } catch (err) {
         console.error("發佈失敗:", err);
-        alert('發佈失敗，請檢查網路連線或檔案大小。');
+        alert('發佈失敗，請檢查網路連線。');
     } finally {
         publishBtn.innerText = "發佈";
         publishBtn.disabled = false;
