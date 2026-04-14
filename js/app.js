@@ -28,7 +28,11 @@ function switchTab(tabId, btn) {
 
     const searchBtn = document.getElementById('global-search-btn');
     if(searchBtn) {
-        searchBtn.classList.toggle('hidden', !(tabId === 'home-tab' || tabId === 'messages-tab'));
+        if(tabId === 'home-tab' || tabId === 'messages-tab') {
+            searchBtn.classList.remove('hidden');
+        } else {
+            searchBtn.classList.add('hidden');
+        }
     }
     
     if(tabId === 'home-tab' && typeof window.renderDiscovery === 'function') window.renderDiscovery();
@@ -36,36 +40,7 @@ function switchTab(tabId, btn) {
     if(tabId === 'profile-tab' && typeof window.renderProfile === 'function') window.renderProfile();
 }
 
-// 2. 年齡驗證核心 (安全加固：同步資料庫)
-window.confirmAge = async function() {
-    try {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (!user) return alert("請先登入帳號後再進行驗證");
-
-        // 強制更新後端狀態，這會觸發 RLS 權限開啟
-        const { error } = await window.supabaseClient
-            .from('profiles')
-            .update({ is_adult: true })
-            .eq('id', user.id);
-
-        if (error) throw error;
-
-        const ageGate = document.getElementById('age-gate');
-        if (ageGate) {
-            ageGate.classList.add('opacity-0');
-            setTimeout(() => ageGate.remove(), 500);
-        }
-
-        localStorage.setItem('ageVerified', 'true');
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
-
-    } catch (e) {
-        console.error("驗證失敗:", e);
-        alert("驗證寫入失敗，請確認資料庫 profile 表已有 is_adult (bool) 欄位。");
-    }
-};
-
-// 3. 抽屜控制 (設定、通知)
+// 2. 左側：設定抽屜
 function toggleSettings() {
     const drawer = document.getElementById('settings-drawer');
     const panel = document.getElementById('settings-panel');
@@ -79,6 +54,7 @@ function toggleSettings() {
     }
 }
 
+// 3. 右側：通知抽屜 (全面重構：雙重查詢解決 JOIN 報錯)
 async function toggleNotifications() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
@@ -97,138 +73,230 @@ async function toggleNotifications() {
         list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
 
         try {
-            await window.supabaseClient.from('notifications').update({ is_read: true }).eq('user_id', userId);
-            const { data: notifs } = await window.supabaseClient.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20);
+            await window.supabaseClient.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+
+            const { data: notifs, error } = await window.supabaseClient
+                .from('notifications')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (error) throw error;
 
             if (!notifs || notifs.length === 0) {
-                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有新通知</div>`;
+                list.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-gray-400 mt-10">
+                        <i class="fa-regular fa-bell-slash text-4xl mb-3 opacity-50"></i>
+                        <p class="text-sm font-bold">目前沒有新通知</p>
+                    </div>`;
                 return;
             }
 
+            // 雙重安全查詢：避免資料庫未設定 Foreign Key 時崩潰
             const actorIds = [...new Set(notifs.map(n => n.actor_id).filter(Boolean))];
-            const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', actorIds);
-            const profMap = Object.fromEntries(profs?.map(p => [p.id, p]) || []);
+            let profilesMap = {};
+            if (actorIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', actorIds);
+                if (profs) profs.forEach(p => profilesMap[p.id] = p);
+            }
 
             list.innerHTML = notifs.map(n => {
-                const p = profMap[n.actor_id] || {};
-                const text = n.type === 'like' ? '點讚了你的貼文' : (n.type === 'comment' ? '評論了你' : '關注了你');
+                const actor = profilesMap[n.actor_id] || {};
+                const actorName = actor.display_name || '某人';
+                const avatar = actor.avatar_url || 'https://ui-avatars.com/api/?name=U';
+                let text = '';
+                let icon = '';
+                if (n.type === 'like') { text = '對你的貼文按了讚'; icon = '<i class="fa-solid fa-heart text-sexify"></i>'; }
+                else if (n.type === 'comment') { text = '在你的貼文留言'; icon = '<i class="fa-solid fa-comment text-blue-500"></i>'; }
+                else if (n.type === 'subscribe') { text = '成為了你的新粉絲'; icon = '<i class="fa-solid fa-user-plus text-green-500"></i>'; }
+
                 return `
-                <div class="flex items-start gap-3 p-3 bg-white rounded-xl mb-2 border border-gray-50" onclick="viewOtherProfile('${n.actor_id}')">
-                    <img src="${p.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-10 h-10 rounded-full">
+                <div class="flex items-start gap-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer" onclick="viewOtherProfile('${n.actor_id}')">
+                    <img src="${avatar}" class="w-10 h-10 rounded-full object-cover">
                     <div class="flex-1">
-                        <p class="text-sm"><b>${p.display_name || '用戶'}</b> ${text}</p>
-                        <p class="text-[10px] text-gray-400">${new Date(n.created_at).toLocaleString()}</p>
+                        <p class="text-sm text-gray-800"><span class="font-bold">${actorName}</span> ${text}</p>
+                        <p class="text-[10px] text-gray-400 mt-1">${new Date(n.created_at).toLocaleString()}</p>
                     </div>
+                    <div class="text-lg">${icon}</div>
                 </div>`;
             }).join('');
-        } catch (err) { list.innerHTML = `<div class="text-center py-10 text-red-400">載入失敗</div>`; }
+        } catch (err) {
+            console.error("載入通知失敗:", err);
+            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知，請確認資料庫 RLS 已關閉。</div>`;
+        }
+
     } else {
         panel.classList.add('translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
 }
 
-// 4. Modal 控制 (編輯、收藏、訂單)
-function openEditProfile() {
-    const m = document.getElementById('edit-profile-modal');
-    m.classList.remove('hidden'); m.classList.add('flex');
-    setTimeout(() => m.classList.remove('translate-y-full'), 10);
-}
-function closeEditProfile() {
-    const m = document.getElementById('edit-profile-modal');
-    m.classList.add('translate-y-full');
-    setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
+// 4. Modal 控制與搜尋列
+function toggleSearch(show) {
+    const overlay = document.getElementById('search-overlay');
+    if (!overlay) return;
+    if (show) {
+        overlay.classList.add('active');
+        setTimeout(() => document.getElementById('searchInput').focus(), 100);
+    } else {
+        overlay.classList.remove('active');
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
+    }
 }
 
+function openEditProfile() {
+    const modal = document.getElementById('edit-profile-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+}
+function closeEditProfile() {
+    const modal = document.getElementById('edit-profile-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+// 收藏、訂單、聯絡我們
 function openBookmarksModal() {
     toggleSettings();
-    const m = document.getElementById('bookmarks-modal');
-    m.classList.remove('hidden'); m.classList.add('flex');
-    setTimeout(() => m.classList.remove('translate-y-full'), 10);
+    const modal = document.getElementById('bookmarks-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
     
     const list = document.getElementById('bookmarks-list');
-    let bks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-    if(bks.length === 0) { list.innerHTML = `<div class="text-center py-20 text-gray-400">無收藏</div>`; return; }
-    list.innerHTML = bks.map(b => `
-        <div class="bg-white p-2 rounded-xl border border-gray-100 mb-2" onclick="closeBookmarksModal(); viewPost('${b.id}')">
-            <p class="text-xs line-clamp-2">${b.caption || '無標題'}</p>
+    let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
+    if(bookmarks.length === 0) {
+        list.innerHTML = `<div class="text-center py-20 text-gray-400">目前沒有收藏貼文</div>`;
+        return;
+    }
+    list.innerHTML = bookmarks.map(b => `
+        <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="closeBookmarksModal(); viewPost('${b.id}')">
+            <div class="flex items-center gap-2 mb-2">
+                <img src="${b.authorAvatar}" class="w-5 h-5 rounded-full object-cover">
+                <span class="text-[10px] font-bold text-gray-700">${b.authorName}</span>
+            </div>
+            ${b.media_url ? `<img src="${b.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
+            <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${b.caption || ''}</p>
         </div>
     `).join('');
 }
 function closeBookmarksModal() {
-    const m = document.getElementById('bookmarks-modal');
-    m.classList.add('translate-y-full');
-    setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
+    const modal = document.getElementById('bookmarks-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
 function openOrdersModal() {
     toggleSettings();
-    const m = document.getElementById('orders-modal');
-    m.classList.remove('hidden', 'translate-y-full'); m.classList.add('flex');
+    const modal = document.getElementById('orders-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 }
 function closeOrdersModal() {
-    const m = document.getElementById('orders-modal');
-    m.classList.add('translate-y-full');
-    setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
+    const modal = document.getElementById('orders-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 5. 即時通訊監聽 (通知與訊息紅點)
+function openContactModal() {
+    toggleSettings();
+    const modal = document.getElementById('contact-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+}
+function closeContactModal() {
+    const modal = document.getElementById('contact-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+// 5. 核心修復：年齡驗證防卡死 + 背景安全同步
+window.verifyAge = async function() {
+    // A. 絕對優先：強制隱藏畫面，絕不讓手機端卡住
+    const ageGate = document.getElementById('age-gate');
+    if (ageGate) {
+        ageGate.style.display = 'none'; // 粗暴但最有效的隱藏方式
+        ageGate.classList.add('hidden', 'opacity-0');
+    }
+    localStorage.setItem('ageVerified', 'true');
+
+    // B. 載入內容
+    if (typeof window.renderDiscovery === 'function') {
+        window.renderDiscovery();
+    }
+
+    // C. 背景安全同步：嘗試通知 Supabase 解鎖 RLS
+    try {
+        if (window.supabaseClient) {
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            if (user) {
+                await window.supabaseClient.from('profiles').update({ is_adult: true }).eq('id', user.id);
+            }
+        }
+    } catch (e) {
+        console.warn("背景同步年齡狀態失敗，但已允許本地進入", e);
+    }
+};
+
+// 增加多重別名，防範 HTML 中按鈕名稱不匹配導致點擊失效
+window.confirmAge = window.verifyAge;
+window.enterSite = window.verifyAge;
+
+// 實時推播：訂閱全局通知與訊息
 function setupGlobalRealtime(userId) {
-    if (!userId) return;
-    window.supabaseClient.channel('global-sync')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => {
-        const b = document.getElementById('notification-badge');
-        if (b) b.classList.remove('hidden');
-    })
+    window.supabaseClient.channel('global-notifications')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
+        const badge = document.getElementById('notification-badge');
+        if (badge) badge.classList.remove('hidden');
+    }).subscribe();
+
+    window.supabaseClient.channel('global-messages')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver=eq.${userId}` }, payload => {
-        const mb = document.getElementById('nav-msg-badge');
-        if (mb && window.activeRoomId !== payload.new.room_id) mb.classList.remove('hidden');
-        if (document.getElementById('messages-tab') && !document.getElementById('messages-tab').classList.contains('hidden')) {
-            if (typeof window.renderMessages === 'function') window.renderMessages();
+        const msgBadge = document.getElementById('nav-msg-badge');
+        if (msgBadge && window.activeRoomId !== payload.new.room_id) {
+            msgBadge.classList.remove('hidden');
+            if (document.getElementById('messages-tab') && !document.getElementById('messages-tab').classList.contains('hidden')) {
+                if (typeof window.renderMessages === 'function') window.renderMessages();
+            }
         }
     }).subscribe();
 }
 
-// 6. 初始化與事件綁定
 window.addEventListener('authReady', async () => {
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
-
-    // 後端二次驗證年齡
-    const { data: profile } = await window.supabaseClient.from('profiles').select('is_adult').eq('id', userId).single();
-    if (profile?.is_adult) {
-        const gate = document.getElementById('age-gate');
-        if (gate) gate.remove();
-        localStorage.setItem('ageVerified', 'true');
+    const homeTab = document.getElementById('home-tab');
+    if (homeTab && !homeTab.classList.contains('hidden')) {
+        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
     }
 
-    // 初始化紅點
-    const { count: n } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
-    if (n > 0) document.getElementById('notification-badge')?.classList.remove('hidden');
-
-    const { count: m } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
-    if (m > 0) document.getElementById('nav-msg-badge')?.classList.remove('hidden');
-
-    setupGlobalRealtime(userId);
-    
-    // 首頁內容加載
-    if (!document.getElementById('home-tab').classList.contains('hidden')) {
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+        try {
+            const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
+            if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
+            
+            const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
+            if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
+        } catch(e) {}
+        setupGlobalRealtime(userId);
     }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('ageVerified') === 'true') {
-        const gate = document.getElementById('age-gate');
-        if (gate) gate.style.display = 'none';
+        const ageGate = document.getElementById('age-gate');
+        if (ageGate) ageGate.style.display = 'none';
     }
 
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            if (confirm("確定要登出嗎？")) {
-                localStorage.clear();
-                window.location.reload();
+            if (confirm("確定要登出帳號嗎？")) {
+                if (typeof logoutUser === 'function') logoutUser();
             }
         });
     }
