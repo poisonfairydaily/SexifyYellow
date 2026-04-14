@@ -16,12 +16,13 @@ window.isRecording = false;
 
 // 取得當前經過驗證的真實 User ID
 async function getValidUserId() {
-    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-    if (error || !user) {
-        console.warn("身份驗證失效:", error);
-        return null;
-    }
-    return user.id;
+    // 優先從 session 獲取，這最準確
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (session) return session.user.id;
+    
+    // 如果 session 沒拿到，再試一次 getUser
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    return user ? user.id : null;
 }
 
 function generateRoomId(id1, id2) { 
