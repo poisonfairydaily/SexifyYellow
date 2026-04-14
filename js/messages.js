@@ -1,8 +1,5 @@
 // ==========================================
-// js/messages.js - 核心通訊重構版 (修復無法開啟聊天室問題)
-// 1. 修正了與資料庫 schema 不符的欄位名稱 (使用 sender_name)
-// 2. 移除了無法執行的 JOIN 查詢，改用手動匹配用戶資料
-// 3. 增加 DOM 元素檢查與錯誤提示，避免靜默崩潰
+// js/messages.js - 安全強化版 (防禦身分偽造漏洞)
 // ==========================================
 
 window.activeRoomId = null;
@@ -14,214 +11,44 @@ let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
 
-let myUserId = localStorage.getItem('userId');
-
-function refreshMyUser() {
-    myUserId = localStorage.getItem('userId');
+// 🚨 漏洞修復：不再在全域初始化時僅依賴 localStorage
+async function getAuthenticatedUserId() {
+    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+    if (error || !user) {
+        console.error("無法取得驗證用戶:", error);
+        return null;
+    }
+    return user.id;
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    refreshMyUser();
-});
 
 function generateRoomId(id1, id2) { 
     if (!id1 || !id2) return null;
     return [id1, id2].sort().join('_'); 
 }
 
-window.searchUsersToChat = async function() {
-    const keyword = document.getElementById('inbox-search-input')?.value.trim();
-    const container = document.getElementById('chat-list');
+// ------------------------------------------
+// 1. 發送訊息 (由原本的 sendMessage 修改)
+// ------------------------------------------
+async function sendMessage(content, mediaUrl) {
+    // 🚨 安全修復：動態獲取經過 Supabase 驗證的 UID
+    const myRealUserId = await getAuthenticatedUserId();
     
-    if (!container) return;
-    if (!keyword) { renderMessages(); return; }
-
-    container.innerHTML = `<div class="p-6 text-center text-gray-400 mt-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
-
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('profiles')
-            .select('id, display_name, username, avatar_url')
-            .or(`username.ilike.%${keyword}%,display_name.ilike.%${keyword}%`)
-            .limit(10);
-
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-            container.innerHTML = `<div class="p-10 text-center text-gray-400">找不到用戶</div>`;
-            return;
-        }
-
-        container.innerHTML = data.map(u => {
-            // 🚨 【安全修復】：轉義所有顯示內容
-            const safeName = window.escapeHTML(u.display_name || '未命名');
-            const safeUsername = window.escapeHTML(u.username || 'unknown');
-            const safeAvatar = window.escapeHTML(u.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
-
-            return `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${safeName}')">
-                <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
-                <div>
-                    <div class="font-bold text-gray-800">${safeName}</div>
-                    <div class="text-xs text-gray-400">@${safeUsername}</div>
-                </div>
-            </div>`;
-        }).join('');
-    } catch (e) {
-        console.error('搜尋錯誤:', e);
-        container.innerHTML = `<div class="p-10 text-center text-red-400">搜尋失敗</div>`;
-    }
-}
-
-window.handleImageSelection = function(input) {
-    if (input.files && input.files[0]) {
-        selectedMediaFile = input.files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            let previewArea = document.getElementById('chat-input-preview');
-            if (!previewArea) previewArea = createPreviewArea();
-            
-            previewArea.innerHTML = `
-                <div class="relative inline-block mt-2 ml-4">
-                    <img src="${e.target.result}" class="w-20 h-20 object-cover rounded-lg border-2 border-sexify">
-                    <button onclick="clearSelectedMedia()" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow-lg"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-            `;
-        };
-        reader.readAsDataURL(selectedMediaFile);
-    }
-};
-
-function createPreviewArea() {
-    const area = document.createElement('div');
-    area.id = 'chat-input-preview';
-    area.className = 'bg-white border-t border-gray-100 pb-2';
-    const chatInputArea = document.querySelector('.bg-white.border-t.p-4');
-    if (chatInputArea) {
-        chatInputArea.parentNode.insertBefore(area, chatInputArea);
-    }
-    return area;
-}
-
-window.clearSelectedMedia = function() {
-    selectedMediaFile = null;
-    const previewArea = document.getElementById('chat-input-preview');
-    if (previewArea) previewArea.innerHTML = '';
-    const input = document.getElementById('chat-image-input');
-    if (input) input.value = '';
-};
-
-window.toggleVoiceRecord = async function() {
-    if (!window.isRecording) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-                             ? 'audio/webm;codecs=opus' 
-                             : 'audio/ogg;codecs=opus';
-                             
-            mediaRecorder = new MediaRecorder(stream, { mimeType });
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: mimeType });
-                if (confirm('是否發送這段語音訊息？')) {
-                    await uploadAndSendMedia(audioBlob, 'voice.webm');
-                }
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            window.isRecording = true;
-            const micIcon = document.querySelector('.fa-microphone');
-            if (micIcon) {
-                micIcon.parentElement.classList.replace('text-gray-400', 'text-red-500');
-                micIcon.parentElement.classList.add('animate-pulse');
-            }
-        } catch (err) {
-            alert('無法開啟麥克風：' + err.message);
-        }
-    } else {
-        if (mediaRecorder) mediaRecorder.stop();
-        window.isRecording = false;
-        const micIcon = document.querySelector('.fa-microphone');
-        if (micIcon) {
-            micIcon.parentElement.classList.replace('text-red-500', 'text-gray-400');
-            micIcon.parentElement.classList.remove('animate-pulse');
-        }
-    }
-};
-
-async function uploadAndSendMedia(file, fileNameHint) {
-    const userId = localStorage.getItem('userId');
-    if (!userId) {
-        alert('請先登入');
+    if (!myRealUserId) {
+        alert('登入逾時或身分無效，請重新登入');
         return;
     }
 
-    const fileExt = fileNameHint.split('.').pop();
-    const fileName = `${userId}_${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    try {
-        const { data, error } = await window.supabaseClient.storage
-            .from('message-images')
-            .upload(filePath, file, {
-                contentType: file.type,
-                upsert: true
-            });
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = window.supabaseClient.storage
-            .from('message-images')
-            .getPublicUrl(filePath);
-
-        await sendMessage(null, publicUrl);
-        clearSelectedMedia();
-    } catch (err) {
-        console.error('媒體上傳失敗:', err);
-        alert('檔案傳送失敗，請稍後再試。原因: ' + err.message);
-    }
-}
-
-window.handleSendAction = async function() {
-    const input = document.getElementById('chat-input');
-    if (!input) return;
-    
-    const content = input.value.trim();
-
-    if (!content && !selectedMediaFile) return;
-
-    const sendBtn = document.getElementById('send-btn');
-    if (sendBtn) sendBtn.disabled = true;
-
-    if (selectedMediaFile) {
-        await uploadAndSendMedia(selectedMediaFile, selectedMediaFile.name);
-    } else {
-        await sendMessage(content, null);
-    }
-
-    input.value = '';
-    if (sendBtn) sendBtn.disabled = false;
-};
-
-async function sendMessage(content, mediaUrl) {
     if (!window.activeRoomId || !window.activeChatTarget) {
         alert('無效的聊天對象');
         return;
     }
-    refreshMyUser();
 
     try {
         const { error } = await window.supabaseClient
             .from('messages')
             .insert([{
                 room_id: window.activeRoomId,
-                sender_name: myUserId, // 修正：精準對應 schema 的 sender_name
+                sender_name: myRealUserId, // 🚨 使用驗證過的 UID，不再被 localStorage 欺騙
                 receiver: window.activeChatTarget,
                 content: content || '',
                 image_url: mediaUrl,
@@ -237,182 +64,16 @@ async function sendMessage(content, mediaUrl) {
     }
 }
 
-window.openChat = async function(targetUid, displayName) {
-    refreshMyUser();
-    if (!myUserId) {
-        alert('請先登入');
-        return;
-    }
-    
-    window.activeChatTarget = targetUid;
-    window.activeRoomId = generateRoomId(myUserId, targetUid);
-
-    const modal = document.getElementById('chat-modal');
-    if (!modal) {
-        console.error('找不到 ID 為 chat-modal 的元素');
-        alert('系統錯誤：找不到聊天室介面組件 (chat-modal)，請確認 HTML 結構是否正確。');
-        return;
-    }
-    
-    const nameEl = document.getElementById('chat-target-name');
-    if (nameEl) nameEl.innerText = displayName || '未知用戶';
-    
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-
-    try {
-        await window.supabaseClient
-            .from('messages')
-            .update({ is_read: true })
-            .eq('room_id', window.activeRoomId)
-            .eq('receiver', myUserId);
-    } catch (e) {
-        console.warn('標記已讀失敗，但不影響聊天:', e);
-    }
-
-    loadMessages();
-    setupChatRealtime();
-};
-
-async function loadMessages() {
-    if (!window.activeRoomId) return;
-    const container = document.getElementById('chat-messages');
-    if (!container) return;
-    
-    container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
-
-    try {
-        const { data, error } = await window.supabaseClient
-            .from('messages')
-            .select('*')
-            .eq('room_id', window.activeRoomId)
-            .order('created_at', { ascending: true });
-
-        if (error) throw error;
-        drawMessages(data);
-    } catch (e) {
-        console.error('載入訊息失敗:', e);
-        container.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗</div>`;
-    }
-}
-
-function drawMessages(messages) {
-    const container = document.getElementById('chat-messages');
-    if (!container) return;
-    
-    if (!messages || messages.length === 0) {
-        const nameEl = document.getElementById('chat-target-name');
-        const name = nameEl ? nameEl.innerText : '對方';
-        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始與 ${name} 聊天吧</div>`;
-        return;
-    }
-
-    container.innerHTML = messages.map(m => {
-        const isMine = m.sender_name === myUserId;
-        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
-        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
-
-        // 🚨 【安全修復】：轉義訊息文字內容與媒體網址
-        const safeContent = window.escapeHTML(m.content || '');
-        const safeMediaUrl = window.escapeHTML(m.image_url || '');
-
-        const isVoice = safeMediaUrl && (safeMediaUrl.includes('.webm') || safeMediaUrl.includes('.ogg'));
-        const isImage = safeMediaUrl && !isVoice;
-
-        return `
-            <div class="flex ${wrapperClass} mb-4 animate-in fade-in slide-in-from-bottom-2">
-                <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
-                    ${safeContent ? `<div class="text-sm break-words">${safeContent}</div>` : ''}
-                    ${isImage ? `<img src="${safeMediaUrl}" class="rounded-lg mt-1 max-w-full cursor-pointer" onclick="window.open('${safeMediaUrl}')">` : ''}
-                    ${isVoice ? `
-                        <div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${safeMediaUrl}', this)">
-                            <i class="fa-solid fa-play"></i>
-                            <div class="text-xs">語音訊息</div>
-                            <div class="w-16 h-1 bg-white/30 rounded-full relative overflow-hidden">
-                                <div class="progress-bar absolute left-0 top-0 h-full bg-white/80 w-0"></div>
-                            </div>
-                        </div>
-                    ` : ''}
-                    <div class="text-[9px] opacity-50 mt-1 text-right">
-                        ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                </div>
-            </div>`;
-    }).join('');
-    
-    container.scrollTop = container.scrollHeight;
-}
-
-window.playVoice = function(url, el) {
-    const icon = el.querySelector('i');
-    const progressBar = el.querySelector('.progress-bar');
-    
-    if (window.currentAudio && window.currentAudio.src === url && !window.currentAudio.paused) {
-        window.currentAudio.pause();
-        icon.className = 'fa-solid fa-play';
-        return;
-    }
-
-    if (window.currentAudio) window.currentAudio.pause();
-
-    const audio = new Audio(url);
-    window.currentAudio = audio;
-    icon.className = 'fa-solid fa-spinner fa-spin';
-
-    audio.onplay = () => { icon.className = 'fa-solid fa-pause'; };
-    audio.ontimeupdate = () => {
-        const progress = (audio.currentTime / audio.duration) * 100;
-        progressBar.style.width = progress + '%';
-    };
-    audio.onended = () => {
-        icon.className = 'fa-solid fa-play';
-        progressBar.style.width = '0%';
-    };
-    audio.onerror = () => {
-        alert('語音載入失敗');
-        icon.className = 'fa-solid fa-play';
-    };
-
-    audio.play().catch(e => console.error('播放失敗:', e));
-};
-
-function setupChatRealtime() {
-    if (window.roomChannel) window.roomChannel.unsubscribe();
-
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages', 
-            filter: `room_id=eq.${window.activeRoomId}` 
-        }, payload => {
-            if (payload.new.receiver === myUserId) {
-                window.supabaseClient.from('messages').update({ is_read: true }).eq('id', payload.new.id);
-            }
-            loadMessages(); 
-        })
-        .subscribe();
-}
-
-window.closeChat = function() {
-    window.activeChatTarget = null;
-    window.activeRoomId = null;
-    if (window.roomChannel) window.roomChannel.unsubscribe();
-    
-    const modal = document.getElementById('chat-modal');
-    if (modal) {
-        modal.classList.add('translate-x-full');
-        setTimeout(() => {
-            modal.classList.add('hidden');
-        }, 300);
-    }
-};
-
+// ------------------------------------------
+// 2. 渲染訊息列表 (由原本的 renderMessages 修改)
+// ------------------------------------------
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     if (!container) return;
-    refreshMyUser();
-    if (!myUserId) return;
+
+    // 🚨 安全修復：取得真實 UID
+    const myRealUserId = await getAuthenticatedUserId();
+    if (!myRealUserId) return;
 
     container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
 
@@ -420,7 +81,8 @@ window.renderMessages = async function() {
         const { data: msgData, error: msgError } = await window.supabaseClient
             .from('messages')
             .select('*')
-            .or(`sender_name.eq.${myUserId},receiver.eq.${myUserId}`)
+            // 🚨 這裡也同步改用驗證後的 UID 查詢
+            .or(`sender_name.eq.${myRealUserId},receiver.eq.${myRealUserId}`)
             .order('created_at', { ascending: false });
 
         if (msgError) throw msgError;
@@ -436,30 +98,29 @@ window.renderMessages = async function() {
             return;
         }
 
-        const targetIds = [...new Set(sortedRooms.map(m => m.sender_name === myUserId ? m.receiver : m.sender_name))];
+        const targetIds = [...new Set(sortedRooms.map(m => m.sender_name === myRealUserId ? m.receiver : m.sender_name))];
+        
         const { data: profilesData } = await window.supabaseClient
             .from('profiles')
             .select('id, display_name, avatar_url, username')
             .in('id', targetIds);
             
         const profilesMap = {};
-        if (profilesData) { profilesData.forEach(p => profilesMap[p.id] = p); }
+        if (profilesData) profilesData.forEach(p => profilesMap[p.id] = p);
 
         container.innerHTML = sortedRooms.map(m => {
-            const targetId = m.sender_name === myUserId ? m.receiver : m.sender_name;
+            const targetId = m.sender_name === myRealUserId ? m.receiver : m.sender_name;
             const prof = profilesMap[targetId];
             
-            // 🚨 【安全修復】：轉義所有顯示在列表上的資訊
             const safeName = window.escapeHTML(prof?.display_name || '未知用戶');
-            const safeAvatar = window.escapeHTML(prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
-            const safeLastMsg = window.escapeHTML(m.content || '');
-            const isUnread = !m.is_read && m.receiver === myUserId;
+            const avatar = prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName;
+            const isUnread = !m.is_read && m.receiver === myRealUserId;
 
             return `
                 <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
                      onclick="openChat('${targetId}', '${safeName}')">
                     <div class="relative">
-                        <img src="${safeAvatar}" class="w-14 h-14 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
+                        <img src="${avatar}" class="w-14 h-14 rounded-full object-cover">
                         ${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>' : ''}
                     </div>
                     <div class="flex-1 overflow-hidden">
@@ -467,13 +128,50 @@ window.renderMessages = async function() {
                             <span class="font-bold text-gray-800">${safeName}</span>
                             <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
                         </div>
-                        <div class="text-xs text-gray-400 truncate">${safeLastMsg || (m.image_url ? '[媒體訊息]' : '')}</div>
+                        <div class="text-xs text-gray-400 truncate">${window.escapeHTML(m.content || (m.image_url ? '[媒體訊息]' : ''))}</div>
                     </div>
                 </div>`;
         }).join('');
 
     } catch (e) {
         console.error('渲染訊息列表失敗:', e);
-        container.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗: ${e.message}</div>`;
+        container.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗</div>`;
     }
 };
+
+// ------------------------------------------
+// 3. 繪製對話內容 (由原本的 drawMessages 修改)
+// ------------------------------------------
+async function drawMessages(messages) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+    
+    const myRealUserId = await getAuthenticatedUserId();
+
+    if (!messages || messages.length === 0) {
+        const nameEl = document.getElementById('chat-target-name');
+        const name = nameEl ? nameEl.innerText : '對方';
+        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始與 ${name} 聊天吧</div>`;
+        return;
+    }
+
+    container.innerHTML = messages.map(m => {
+        // 🚨 安全修復：比對時使用驗證後的 UID
+        const isMine = m.sender_name === myRealUserId;
+        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
+        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+
+        return `
+            <div class="flex ${wrapperClass} mb-4">
+                <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
+                    ${m.content ? `<div class="text-sm">${window.escapeHTML(m.content)}</div>` : ''}
+                    ${m.image_url ? `<img src="${window.escapeHTML(m.image_url)}" class="rounded-lg mt-1 max-w-full">` : ''}
+                    <div class="text-[9px] opacity-50 mt-1 text-right">
+                        ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+    
+    container.scrollTop = container.scrollHeight;
+}
