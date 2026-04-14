@@ -1,8 +1,8 @@
 // ==========================================
-// js/profile.js - 個人檔案與安全性強化完整版
-// 1. 修復身分偽造漏洞：使用 supabase.auth.getUser() 替代 localStorage
-// 2. 強化安全性：所有資料存取均通過驗證後的 UID
-// 3. 保持原 UI：保留 Masonry 佈局與所有彈窗動畫
+// js/profile.js - 個人檔案與安全性強化（分表相容版）
+// 1. 安全性：所有私密欄位 (Birthday, Email) 改從 user_private_data 讀寫
+// 2. 效能：合併讀取 profiles 與 user_private_data
+// 3. 原生體驗：保留 Masonry 佈局與所有彈窗動畫
 // ==========================================
 
 // 內部工具：獲取當前真實經過驗證的 User ID
@@ -58,7 +58,7 @@ async function uploadBase64ToSupabase(base64Str, path) {
     } catch (err) { throw err; }
 }
 
-// 1. 個人中心
+// 1. 個人中心 - 讀取分表資料
 window.openPersonalCenter = async function() {
     try {
         if(typeof toggleSettings === 'function') toggleSettings(); 
@@ -69,20 +69,22 @@ window.openPersonalCenter = async function() {
         modal.classList.add('flex');
         setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 
-        // 安全取得 User
         const myId = await getAuthenticatedUserId();
         if (!myId) return;
 
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        // 同時從 profiles 和 user_private_data 讀取
+        const [profRes, privRes] = await Promise.all([
+            window.supabaseClient.from('profiles').select('gender').eq('id', myId).single(),
+            window.supabaseClient.from('user_private_data').select('birthday, contact_email').eq('id', myId).maybeSingle()
+        ]);
 
-        if (user) {
-            document.getElementById('pc-email').value = user.email || '';
-            document.getElementById('pc-birthday').value = user.user_metadata?.birthday || '';
-            
-            const { data: profile } = await window.supabaseClient.from('profiles').select('gender').eq('id', user.id).single();
-            if (profile) {
-                document.getElementById('pc-gender').value = profile.gender || 'Unspecified';
-            }
+        if (privRes.data) {
+            document.getElementById('pc-email').value = privRes.data.contact_email || '';
+            document.getElementById('pc-birthday').value = privRes.data.birthday || '';
+        }
+        
+        if (profRes.data) {
+            document.getElementById('pc-gender').value = profRes.data.gender || 'Unspecified';
         }
     } catch(e) {
         console.error("無法載入個人中心資料", e);
@@ -96,6 +98,7 @@ window.closePersonalCenter = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
+// 儲存至分表
 window.savePersonalCenter = async function() {
     const btn = document.getElementById('save-personal-btn');
     const myId = await getAuthenticatedUserId();
@@ -108,15 +111,22 @@ window.savePersonalCenter = async function() {
     const newBirthday = document.getElementById('pc-birthday').value;
     
     try {
-        const updates = { data: { birthday: newBirthday } };
-        if (newEmail) updates.email = newEmail;
-        const { error: authErr } = await window.supabaseClient.auth.updateUser(updates);
-        if (authErr) throw authErr;
+        // 更新公開表 (profiles)
+        const updatePublic = window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
+        
+        // 更新私密表 (user_private_data)
+        const updatePrivate = window.supabaseClient.from('user_private_data').upsert({
+            id: myId,
+            contact_email: newEmail,
+            birthday: newBirthday,
+            updated_at: new Date()
+        });
 
-        const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
-        if (profErr) throw profErr;
+        const [res1, res2] = await Promise.all([updatePublic, updatePrivate]);
+        if (res1.error) throw res1.error;
+        if (res2.error) throw res2.error;
 
-        alert('個人中心資料已更新！\n若修改了信箱，請至新信箱收取確認信。');
+        alert('個人中心資料已更新！');
         closePersonalCenter();
     } catch(e) {
         alert('更新失敗: ' + e.message);
@@ -225,7 +235,6 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        // 更新本地存儲緩存（僅用於非安全顯示）
         localStorage.setItem('myChatName', updateData.display_name);
         
         if(typeof closeEditProfile === 'function') closeEditProfile();
