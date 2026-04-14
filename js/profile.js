@@ -160,7 +160,7 @@ window.renderProfile = async function() {
             html += myPosts.map(p => `
                 <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
-                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${p.caption || ''}</p>
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${window.escapeHTML(p.caption || '')}</p>
                 </div>
             `).join('');
         } else {
@@ -329,10 +329,15 @@ window.switchFansTab = async function(tab) {
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.subscriber_id];
                 if(!user) return '';
+
+                // 🚨 【安全修復】
+                const safeName = window.escapeHTML(user.display_name || '未命名用戶');
+                const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
-                    <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
-                    <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${user.display_name}</div>
+                    <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
+                    <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${safeName}</div>
                 </div>`;
             }).join('');
         } catch(e) {
@@ -364,10 +369,15 @@ window.switchFansTab = async function(tab) {
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.creator_id];
                 if(!user) return '';
+
+                // 🚨 【安全修復】
+                const safeName = window.escapeHTML(user.display_name || '未命名用戶');
+                const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
-                    <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
-                    <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${user.display_name}</div>
+                    <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
+                    <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${safeName}</div>
                     <button onclick="event.stopPropagation(); unfollowUserFromList('${sub.id}', this)" class="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-full font-bold active:scale-90 transition">取消追蹤</button>
                 </div>`;
             }).join('');
