@@ -1,3 +1,17 @@
+// ==========================================
+// js/profile.js - 個人檔案與安全性強化完整版
+// 1. 修復身分偽造漏洞：使用 supabase.auth.getUser() 替代 localStorage
+// 2. 強化安全性：所有資料存取均通過驗證後的 UID
+// 3. 保持原 UI：保留 Masonry 佈局與所有彈窗動畫
+// ==========================================
+
+// 內部工具：獲取當前真實經過驗證的 User ID
+async function getAuthenticatedUserId() {
+    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+    if (error || !user) return null;
+    return user.id;
+}
+
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -44,19 +58,22 @@ async function uploadBase64ToSupabase(base64Str, path) {
     } catch (err) { throw err; }
 }
 
-// 1. 個人中心 (強化防呆與錯誤捕捉)
+// 1. 個人中心
 window.openPersonalCenter = async function() {
     try {
         if(typeof toggleSettings === 'function') toggleSettings(); 
         const modal = document.getElementById('personal-center-modal');
-        if(!modal) return console.error("找不到 personal-center-modal 元素");
+        if(!modal) return;
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 
-        const { data: { user }, error: authErr } = await window.supabaseClient.auth.getUser();
-        if (authErr) throw authErr;
+        // 安全取得 User
+        const myId = await getAuthenticatedUserId();
+        if (!myId) return;
+
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
 
         if (user) {
             document.getElementById('pc-email').value = user.email || '';
@@ -74,12 +91,16 @@ window.openPersonalCenter = async function() {
 
 window.closePersonalCenter = function() {
     const modal = document.getElementById('personal-center-modal');
+    if (!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
 window.savePersonalCenter = async function() {
     const btn = document.getElementById('save-personal-btn');
+    const myId = await getAuthenticatedUserId();
+    if (!myId) return alert('請先登入');
+
     btn.innerText = "處理中..."; btn.disabled = true;
 
     const newEmail = document.getElementById('pc-email').value.trim();
@@ -92,8 +113,7 @@ window.savePersonalCenter = async function() {
         const { error: authErr } = await window.supabaseClient.auth.updateUser(updates);
         if (authErr) throw authErr;
 
-        const userId = localStorage.getItem('userId');
-        const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', userId);
+        const { error: profErr } = await window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
         if (profErr) throw profErr;
 
         alert('個人中心資料已更新！\n若修改了信箱，請至新信箱收取確認信。');
@@ -108,15 +128,18 @@ window.savePersonalCenter = async function() {
 // 2. 個人專頁與編輯資料
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
-    const userId = localStorage.getItem('userId');
-    if (!userId) { container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`; return; }
+    const myId = await getAuthenticatedUserId();
+    if (!myId) { 
+        container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`; 
+        return; 
+    }
 
     container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
 
     try {
         const [profileRes, postsRes] = await Promise.all([
-            window.supabaseClient.from('profiles').select('*').eq('id', userId).single(),
-            window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+            window.supabaseClient.from('profiles').select('*').eq('id', myId).single(),
+            window.supabaseClient.from('posts').select('*').eq('user_id', myId).order('created_at', { ascending: false })
         ]);
 
         if (profileRes.error) throw profileRes.error;
@@ -126,15 +149,19 @@ window.renderProfile = async function() {
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
         const bannerUrl = profile.banner_url || '';
 
-        document.getElementById('edit-display-name').value = profile.display_name || '';
-        document.getElementById('edit-bio').value = profile.bio || '';
-        document.getElementById('edit-social-ig').value = profile.social_ig || '';
-        document.getElementById('edit-social-x').value = profile.social_x || '';
-        document.getElementById('edit-avatar-preview').src = avatarUrl;
+        // 更新編輯欄位
+        const editName = document.getElementById('edit-display-name');
+        const editBio = document.getElementById('edit-bio');
+        if(editName) editName.value = profile.display_name || '';
+        if(editBio) editBio.value = profile.bio || '';
         
-        if (bannerUrl) {
-            document.getElementById('edit-banner-preview').src = bannerUrl;
-            document.getElementById('edit-banner-preview').classList.remove('hidden');
+        const avatarPreview = document.getElementById('edit-avatar-preview');
+        if(avatarPreview) avatarPreview.src = avatarUrl;
+        
+        const bannerPreview = document.getElementById('edit-banner-preview');
+        if (bannerPreview && bannerUrl) {
+            bannerPreview.src = bannerUrl;
+            bannerPreview.classList.remove('hidden');
         }
 
         const bannerHtml = bannerUrl ? `<img src="${bannerUrl}" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
@@ -148,9 +175,9 @@ window.renderProfile = async function() {
                         <button onclick="openEditProfile()" class="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm mb-2">編輯資料</button>
                     </div>
                     <div>
-                        <h2 class="text-xl font-black text-gray-900">${profile.display_name || '未命名'}</h2>
-                        <p class="text-xs text-sexify font-bold mt-0.5 mb-2">@${profile.username || 'unknown'}</p>
-                        <p class="text-sm text-gray-600 whitespace-pre-line">${profile.bio || '尚未填寫簡介'}</p>
+                        <h2 class="text-xl font-black text-gray-900">${window.escapeHTML(profile.display_name || '未命名')}</h2>
+                        <p class="text-xs text-sexify font-bold mt-0.5 mb-2">@${window.escapeHTML(profile.username || 'unknown')}</p>
+                        <p class="text-sm text-gray-600 whitespace-pre-line">${window.escapeHTML(profile.bio || '尚未填寫簡介')}</p>
                     </div>
                 </div>
             </div>
@@ -164,39 +191,44 @@ window.renderProfile = async function() {
                 </div>
             `).join('');
         } else {
-            html += `<div class="col-span-2 text-center py-20 text-gray-400">尚無發佈貼文</div>`;
+            html += `<div class="col-span-2 text-center py-20 text-gray-400 w-full">尚無發佈貼文</div>`;
         }
         container.innerHTML = html + `</div></div>`;
 
     } catch (err) {
+        console.error(err);
         container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
     }
 }
 
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
-    const userId = localStorage.getItem('userId');
+    const myId = await getAuthenticatedUserId();
+    if (!myId) return alert('請登入');
+
     btn.innerText = "處理中..."; btn.disabled = true;
     
     try {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
-        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${userId}_${Date.now()}.jpg`);
-        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${userId}_${Date.now()}.jpg`);
+        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${myId}_${Date.now()}.jpg`);
+        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${myId}_${Date.now()}.jpg`);
 
         const updateData = {
             display_name: document.getElementById('edit-display-name').value.trim(),
             bio: document.getElementById('edit-bio').value.trim(),
             avatar_url: avatarSrc,
-            banner_url: bannerSrc.includes('http') ? bannerSrc : null
+            banner_url: (bannerSrc && bannerSrc.includes('http')) ? bannerSrc : null
         };
 
-        const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', userId);
+        const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
+        // 更新本地存儲緩存（僅用於非安全顯示）
         localStorage.setItem('myChatName', updateData.display_name);
-        closeEditProfile();
+        
+        if(typeof closeEditProfile === 'function') closeEditProfile();
         renderProfile();
     } catch (err) {
         alert("更新失敗：" + err.message);
@@ -207,9 +239,12 @@ window.saveProfileData = async function() {
 
 // 他人主頁
 window.viewOtherProfile = async function(userId) {
-    if (userId === localStorage.getItem('userId')) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
+    const myId = await getAuthenticatedUserId();
+    if (userId === myId) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
 
     const modal = document.getElementById('other-profile-modal');
+    if(!modal) return;
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
@@ -231,28 +266,27 @@ window.viewOtherProfile = async function(userId) {
 
         document.getElementById('other-msg-btn').onclick = () => {
             closeOtherProfile();
-            if(typeof openChat === 'function') openChat(userId, false, user.display_name, avatar);
+            if(typeof openChat === 'function') openChat(userId, user.display_name, avatar);
         };
 
         const followBtn = document.getElementById('other-follow-btn');
-        const myUserId = localStorage.getItem('userId');
         
-        const { data: subData } = await window.supabaseClient.from('subscriptions').select('id').eq('subscriber_id', myUserId).eq('creator_id', userId);
+        const { data: subData } = await window.supabaseClient.from('subscriptions').select('id').eq('subscriber_id', myId).eq('creator_id', userId);
         const isSubbed = subData && subData.length > 0;
 
         if (isSubbed) {
             followBtn.innerText = "已追蹤";
-            followBtn.classList.replace('bg-sexify', 'bg-gray-200');
-            followBtn.classList.replace('text-white', 'text-gray-700');
+            followBtn.classList.add('bg-gray-200', 'text-gray-700');
+            followBtn.classList.remove('bg-sexify', 'text-white');
         } else {
             followBtn.innerText = "追蹤";
-            followBtn.classList.replace('bg-gray-200', 'bg-sexify');
-            followBtn.classList.replace('text-gray-700', 'text-white');
+            followBtn.classList.add('bg-sexify', 'text-white');
+            followBtn.classList.remove('bg-gray-200', 'text-gray-700');
             followBtn.onclick = async () => {
                 followBtn.innerText = "處理中...";
                 try {
-                    await window.supabaseClient.from('subscriptions').insert({ subscriber_id: myUserId, creator_id: userId });
-                    await window.supabaseClient.from('notifications').insert({ user_id: userId, actor_id: myUserId, type: 'subscribe' });
+                    await window.supabaseClient.from('subscriptions').insert({ subscriber_id: myId, creator_id: userId });
+                    await window.supabaseClient.from('notifications').insert({ user_id: userId, actor_id: myId, type: 'subscribe' });
                     followBtn.innerText = "已追蹤";
                     followBtn.classList.replace('bg-sexify', 'bg-gray-200');
                     followBtn.classList.replace('text-white', 'text-gray-700');
@@ -276,14 +310,16 @@ window.viewOtherProfile = async function(userId) {
 
 window.closeOtherProfile = function() {
     const modal = document.getElementById('other-profile-modal');
+    if(!modal) return;
     modal.classList.add('translate-x-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 3. 粉絲與訂閱用戶面板 (全面重構：雙重查詢解決 JOIN 報錯)
+// 3. 粉絲與訂閱面板
 window.openFansSubsModal = function() {
     if(typeof toggleSettings === 'function') toggleSettings(); 
     const modal = document.getElementById('fans-subs-modal');
+    if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
@@ -292,6 +328,7 @@ window.openFansSubsModal = function() {
 
 window.closeFansSubsModal = function() {
     const modal = document.getElementById('fans-subs-modal');
+    if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
@@ -300,8 +337,9 @@ window.switchFansTab = async function(tab) {
     const btnFans = document.getElementById('tab-fans');
     const btnSubs = document.getElementById('tab-subs');
     const list = document.getElementById('fans-subs-list');
-    const myUserId = localStorage.getItem('userId');
+    const myId = await getAuthenticatedUserId();
 
+    if(!list) return;
     list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-2xl"></i></div>`;
 
     if (tab === 'fans') {
@@ -311,7 +349,7 @@ window.switchFansTab = async function(tab) {
         btnSubs.classList.replace('border-sexify', 'border-transparent');
 
         try {
-            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myUserId);
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myId);
             if (error) throw error;
 
             if (!subs || subs.length === 0) {
@@ -329,11 +367,8 @@ window.switchFansTab = async function(tab) {
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.subscriber_id];
                 if(!user) return '';
-
-                // 🚨 【安全修復】
                 const safeName = window.escapeHTML(user.display_name || '未命名用戶');
                 const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
-
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
                     <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
@@ -341,7 +376,7 @@ window.switchFansTab = async function(tab) {
                 </div>`;
             }).join('');
         } catch(e) {
-            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗，請確認 RLS 權限。</div>`;
+            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`;
         }
 
     } else {
@@ -351,7 +386,7 @@ window.switchFansTab = async function(tab) {
         btnFans.classList.replace('border-sexify', 'border-transparent');
 
         try {
-            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myUserId);
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myId);
             if (error) throw error;
 
             if (!subs || subs.length === 0) {
@@ -369,11 +404,8 @@ window.switchFansTab = async function(tab) {
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.creator_id];
                 if(!user) return '';
-
-                // 🚨 【安全修復】
                 const safeName = window.escapeHTML(user.display_name || '未命名用戶');
                 const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
-
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
                     <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
@@ -382,7 +414,7 @@ window.switchFansTab = async function(tab) {
                 </div>`;
             }).join('');
         } catch(e) {
-            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗，請確認 RLS 權限。</div>`;
+            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`;
         }
     }
 }
@@ -390,7 +422,8 @@ window.switchFansTab = async function(tab) {
 window.unfollowUserFromList = async function(subscriptionId, btn) {
     if (!confirm("確定要取消追蹤嗎？")) return;
     try {
-        await window.supabaseClient.from('subscriptions').delete().eq('id', subscriptionId);
+        const { error } = await window.supabaseClient.from('subscriptions').delete().eq('id', subscriptionId);
+        if(error) throw error;
         btn.parentElement.classList.add('opacity-0', 'scale-95');
         setTimeout(() => btn.parentElement.remove(), 200);
     } catch(e) {
