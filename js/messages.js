@@ -52,15 +52,21 @@ window.searchUsersToChat = async function() {
             return;
         }
 
-        container.innerHTML = data.map(u => `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${u.display_name}')">
-                <img src="${u.avatar_url || 'https://ui-avatars.com/api/?name=' + u.display_name}" class="w-12 h-12 rounded-full object-cover">
+        container.innerHTML = data.map(u => {
+            // 🚨 【安全修復】：轉義所有顯示內容
+            const safeName = window.escapeHTML(u.display_name || '未命名');
+            const safeUsername = window.escapeHTML(u.username || 'unknown');
+            const safeAvatar = window.escapeHTML(u.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
+
+            return `
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${safeName}')">
+                <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
                 <div>
-                    <div class="font-bold text-gray-800">${u.display_name}</div>
-                    <div class="text-xs text-gray-400">@${u.username}</div>
+                    <div class="font-bold text-gray-800">${safeName}</div>
+                    <div class="text-xs text-gray-400">@${safeUsername}</div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     } catch (e) {
         console.error('搜尋錯誤:', e);
         container.innerHTML = `<div class="p-10 text-center text-red-400">搜尋失敗</div>`;
@@ -302,21 +308,24 @@ function drawMessages(messages) {
     }
 
     container.innerHTML = messages.map(m => {
-        // 修正：比對 sender_name 確認是否為本人發送
         const isMine = m.sender_name === myUserId;
         const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
         const wrapperClass = isMine ? 'justify-end' : 'justify-start';
 
-        const isVoice = m.image_url && (m.image_url.includes('.webm') || m.image_url.includes('.ogg'));
-        const isImage = m.image_url && !isVoice;
+        // 🚨 【安全修復】：轉義訊息文字內容與媒體網址
+        const safeContent = window.escapeHTML(m.content || '');
+        const safeMediaUrl = window.escapeHTML(m.image_url || '');
+
+        const isVoice = safeMediaUrl && (safeMediaUrl.includes('.webm') || safeMediaUrl.includes('.ogg'));
+        const isImage = safeMediaUrl && !isVoice;
 
         return `
             <div class="flex ${wrapperClass} mb-4 animate-in fade-in slide-in-from-bottom-2">
                 <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
-                    ${m.content ? `<div class="text-sm">${m.content}</div>` : ''}
-                    ${isImage ? `<img src="${m.image_url}" class="rounded-lg mt-1 max-w-full cursor-pointer" onclick="window.open('${m.image_url}')">` : ''}
+                    ${safeContent ? `<div class="text-sm break-words">${safeContent}</div>` : ''}
+                    ${isImage ? `<img src="${safeMediaUrl}" class="rounded-lg mt-1 max-w-full cursor-pointer" onclick="window.open('${safeMediaUrl}')">` : ''}
                     ${isVoice ? `
-                        <div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${m.image_url}', this)">
+                        <div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${safeMediaUrl}', this)">
                             <i class="fa-solid fa-play"></i>
                             <div class="text-xs">語音訊息</div>
                             <div class="w-16 h-1 bg-white/30 rounded-full relative overflow-hidden">
@@ -328,8 +337,7 @@ function drawMessages(messages) {
                         ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
     
     container.scrollTop = container.scrollHeight;
@@ -409,7 +417,6 @@ window.renderMessages = async function() {
     container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
 
     try {
-        // 修正：移除 JOIN 查詢，改為純粹獲取訊息，然後再手動關聯
         const { data: msgData, error: msgError } = await window.supabaseClient
             .from('messages')
             .select('*')
@@ -424,49 +431,45 @@ window.renderMessages = async function() {
         });
 
         const sortedRooms = Object.values(rooms);
-
         if (sortedRooms.length === 0) {
             container.innerHTML = `<div class="p-10 text-center text-gray-400">目前沒有訊息</div>`;
             return;
         }
 
-        // 手動批次獲取聊天對象的 Profile 資料
         const targetIds = [...new Set(sortedRooms.map(m => m.sender_name === myUserId ? m.receiver : m.sender_name))];
-        
         const { data: profilesData } = await window.supabaseClient
             .from('profiles')
             .select('id, display_name, avatar_url, username')
             .in('id', targetIds);
             
         const profilesMap = {};
-        if (profilesData) {
-            profilesData.forEach(p => profilesMap[p.id] = p);
-        }
+        if (profilesData) { profilesData.forEach(p => profilesMap[p.id] = p); }
 
         container.innerHTML = sortedRooms.map(m => {
             const targetId = m.sender_name === myUserId ? m.receiver : m.sender_name;
             const prof = profilesMap[targetId];
             
-            const name = prof?.display_name || '未知用戶';
-            const avatar = prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + name;
+            // 🚨 【安全修復】：轉義所有顯示在列表上的資訊
+            const safeName = window.escapeHTML(prof?.display_name || '未知用戶');
+            const safeAvatar = window.escapeHTML(prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
+            const safeLastMsg = window.escapeHTML(m.content || '');
             const isUnread = !m.is_read && m.receiver === myUserId;
 
             return `
                 <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
-                     onclick="openChat('${targetId}', '${name}')">
+                     onclick="openChat('${targetId}', '${safeName}')">
                     <div class="relative">
-                        <img src="${avatar}" class="w-14 h-14 rounded-full object-cover">
+                        <img src="${safeAvatar}" class="w-14 h-14 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
                         ${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>' : ''}
                     </div>
                     <div class="flex-1 overflow-hidden">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="font-bold text-gray-800">${name}</span>
+                            <span class="font-bold text-gray-800">${safeName}</span>
                             <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
                         </div>
-                        <div class="text-xs text-gray-400 truncate">${m.content || (m.image_url ? '[媒體訊息]' : '')}</div>
+                        <div class="text-xs text-gray-400 truncate">${safeLastMsg || (m.image_url ? '[媒體訊息]' : '')}</div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
 
     } catch (e) {
