@@ -1,9 +1,8 @@
 // ==========================================
-// js/profile.js - 存儲優化與分表相容版
+// js/profile.js - 個人檔案與安全性強化（分表相容版）
 // 1. 安全性：所有私密欄位 (Birthday, Email) 改從 user_private_data 讀寫
 // 2. 效能：合併讀取 profiles 與 user_private_data
-// 3. 存儲優化：更新頭像/封面前自動刪除舊檔案，防止空間浪費
-// 4. 原生體驗：保留 Masonry 佈局與所有彈窗動畫
+// 3. 原生體驗：保留 Masonry 佈局與所有彈窗動畫
 // ==========================================
 
 // 內部工具：獲取當前真實經過驗證的 User ID
@@ -13,46 +12,6 @@ async function getAuthenticatedUserId() {
     return user.id;
 }
 
-/**
- * 核心工具：從 URL 中提取 Supabase Storage 的路徑
- * 用於刪除舊檔案
- */
-function extractStoragePath(url, bucketName) {
-    if (!url || !url.includes(bucketName)) return null;
-    try {
-        // 假設 URL 格式為: https://.../storage/v1/object/public/bucketName/path/to/file.jpg
-        const parts = url.split(`${bucketName}/`);
-        if (parts.length > 1) {
-            return parts[1];
-        }
-    } catch (e) {
-        console.error("解析路徑失敗:", e);
-    }
-    return null;
-}
-
-/**
- * 核心工具：執行檔案刪除
- */
-async function deleteOldFileFromStorage(bucketName, url) {
-    const filePath = extractStoragePath(url, bucketName);
-    if (!filePath) return; // 如果不是該 bucket 的檔案或是預設圖片，則跳過
-
-    console.log(`正在清理舊檔案: ${bucketName}/${filePath}`);
-    const { error } = await window.supabaseClient.storage
-        .from(bucketName)
-        .remove([filePath]);
-
-    if (error) {
-        console.warn("舊檔案刪除失敗或已被手動刪除:", error.message);
-    } else {
-        console.log("舊檔案清理成功");
-    }
-}
-
-/**
- * 圖片壓縮與預覽邏輯 (Canvas 驅動)
- */
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -76,201 +35,388 @@ window.previewImage = function(input, imgId) {
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                
-                // 將壓縮後的 DataURL 賦值給預覽圖
-                document.getElementById(imgId).src = canvas.toDataURL('image/jpeg', 0.8);
+                const displayImg = document.getElementById(imgId);
+                displayImg.src = canvas.toDataURL('image/jpeg', 0.7);
+                displayImg.classList.remove('hidden');
             };
             img.src = event.target.result;
-        };
+        }
         reader.readAsDataURL(input.files[0]);
     }
 }
 
-/**
- * 載入個人資料邏輯
- */
-window.loadMyProfile = async function() {
-    const myId = await getAuthenticatedUserId();
-    if (!myId) return;
-
+async function uploadBase64ToSupabase(base64Str, path) {
     try {
-        // 1. 同時從兩個表讀取資料
-        const { data: profile, error: pError } = await window.supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('id', myId)
-            .single();
-
-        const { data: privateData, error: pvError } = await window.supabaseClient
-            .from('user_private_data')
-            .select('*')
-            .eq('id', myId)
-            .single();
-
-        if (pError) throw pError;
-
-        // 2. 渲染 UI
-        const avatarImg = document.getElementById('my-avatar');
-        const bannerImg = document.getElementById('my-banner');
+        const res = await fetch(base64Str);
+        const blob = await res.blob();
         
-        if (avatarImg) avatarImg.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name || 'U'}`;
-        if (bannerImg && profile.banner_url) bannerImg.src = profile.banner_url;
-
-        document.getElementById('display-name-text').innerText = profile.display_name || "未設定名稱";
-        document.getElementById('username-text').innerText = "@" + (profile.username || "user");
-        document.getElementById('bio-text').innerText = profile.bio || "這傢伙很懶，什麼都沒留下...";
+        const { data, error } = await window.supabaseClient.storage.from('media').upload(path, blob, { upsert: true, contentType: blob.type });
+        if (error) throw error;
         
-        // 填充編輯表單
-        document.getElementById('edit-display-name').value = profile.display_name || "";
-        document.getElementById('edit-bio').value = profile.bio || "";
-        
-        if (privateData) {
-            document.getElementById('edit-email').value = privateData.email || "";
-            document.getElementById('edit-birthday').value = privateData.birthday || "";
-        }
-
-    } catch (e) {
-        console.error("載入資料失敗:", e);
-    }
+        const { data: publicData } = window.supabaseClient.storage.from('media').getPublicUrl(path);
+        return publicData.publicUrl;
+    } catch (err) { throw err; }
 }
 
-/**
- * 儲存個人資料 (含 Storage 清理邏輯)
- */
-window.saveProfile = async function() {
-    const btn = document.getElementById('save-profile-btn');
-    const originalText = btn.innerText;
-    btn.innerText = "儲存中...";
-    btn.disabled = true;
-
+// 1. 個人中心 - 讀取分表資料
+window.openPersonalCenter = async function() {
     try {
+        if(typeof toggleSettings === 'function') toggleSettings(); 
+        const modal = document.getElementById('personal-center-modal');
+        if(!modal) return;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+
         const myId = await getAuthenticatedUserId();
-        if (!myId) throw new Error("未授權");
+        if (!myId) return;
 
-        // 0. 先獲取目前的舊資料，用於後續檔案清理判斷
-        const { data: oldProfile } = await window.supabaseClient
-            .from('profiles')
-            .select('avatar_url, banner_url')
-            .eq('id', myId)
-            .single();
+        // 同時從 profiles 和 user_private_data 讀取
+        const [profRes, privRes] = await Promise.all([
+            window.supabaseClient.from('profiles').select('gender').eq('id', myId).single(),
+            window.supabaseClient.from('user_private_data').select('birthday, contact_email').eq('id', myId).maybeSingle()
+        ]);
 
-        let newAvatarUrl = oldProfile?.avatar_url;
-        let newBannerUrl = oldProfile?.banner_url;
-
-        // 1. 處理頭像上傳 (如果有新選擇的頭像)
-        const avatarFile = document.getElementById('avatar-input').files[0];
-        if (avatarFile) {
-            // A. 先刪除舊檔案
-            if (oldProfile?.avatar_url) {
-                await deleteOldFileFromStorage('avatars', oldProfile.avatar_url);
-            }
-            // B. 上傳新檔案
-            const fileExt = avatarFile.name.split('.').pop();
-            const fileName = `${myId}/${Date.now()}.${fileExt}`;
-            const { error: uploadError } = await window.supabaseClient.storage
-                .from('avatars')
-                .upload(fileName, avatarFile, { upsert: true });
-            
-            if (uploadError) throw uploadError;
-            const { data: { publicUrl } } = window.supabaseClient.storage.from('avatars').getPublicUrl(fileName);
-            newAvatarUrl = publicUrl;
+        if (privRes.data) {
+            const emailInput = document.getElementById('pc-email');
+            const bdayInput = document.getElementById('pc-birthday');
+            if(emailInput) emailInput.value = privRes.data.contact_email || '';
+            if(bdayInput) bdayInput.value = privRes.data.birthday || '';
         }
-
-        // 2. 處理封面圖上傳
-        const bannerFile = document.getElementById('banner-input').files[0];
-        if (bannerFile) {
-            // A. 先刪除舊檔案
-            if (oldProfile?.banner_url) {
-                await deleteOldFileFromStorage('banners', oldProfile.banner_url);
-            }
-            // B. 上傳新檔案
-            const fileExt = bannerFile.name.split('.').pop();
-            const fileName = `${myId}/${Date.now()}.${fileExt}`;
-            const { error: uploadError } = await window.supabaseClient.storage
-                .from('banners')
-                .upload(fileName, bannerFile, { upsert: true });
-            
-            if (uploadError) throw uploadError;
-            const { data: { publicUrl } } = window.supabaseClient.storage.from('banners').getPublicUrl(fileName);
-            newBannerUrl = publicUrl;
+        
+        if (profRes.data) {
+            const genderInput = document.getElementById('pc-gender');
+            if(genderInput) genderInput.value = profRes.data.gender || 'Unspecified';
         }
-
-        // 3. 更新 profiles 表 (公有資料)
-        const displayName = document.getElementById('edit-display-name').value.trim();
-        const bio = document.getElementById('edit-bio').value.trim();
-
-        const { error: pUpdateError } = await window.supabaseClient
-            .from('profiles')
-            .update({
-                display_name: window.escapeHTML(displayName),
-                bio: window.escapeHTML(bio),
-                avatar_url: newAvatarUrl,
-                banner_url: newBannerUrl,
-                updated_at: new Date()
-            })
-            .eq('id', myId);
-
-        if (pUpdateError) throw pUpdateError;
-
-        // 4. 更新 user_private_data 表 (私有資料)
-        const email = document.getElementById('edit-email').value.trim();
-        const birthday = document.getElementById('edit-birthday').value;
-
-        const { error: pvUpdateError } = await window.supabaseClient
-            .from('user_private_data')
-            .update({
-                email: email,
-                birthday: birthday,
-                updated_at: new Date()
-            })
-            .eq('id', myId);
-
-        if (pvUpdateError) throw pvUpdateError;
-
-        alert("✨ 個人資料更新成功！");
-        window.closeEditProfile();
-        window.loadMyProfile();
-
-    } catch (e) {
-        alert("儲存失敗: " + e.message);
-        console.error(e);
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+    } catch(e) {
+        console.error("無法載入個人中心資料", e);
     }
 }
 
-/**
- * 粉絲與訂閱列表管理
- */
-window.openFansSubsModal = async function(type) {
-    const modal = document.getElementById('fans-subs-modal');
-    const title = document.getElementById('fans-subs-title');
-    const list = document.getElementById('fans-subs-list');
+window.closePersonalCenter = function() {
+    const modal = document.getElementById('personal-center-modal');
+    if (!modal) return;
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
 
-    if (modal) modal.classList.remove('hidden');
-    title.innerText = type === 'fans' ? '我的粉絲' : '我追蹤的人';
+// 儲存至分表
+window.savePersonalCenter = async function() {
+    const btn = document.getElementById('save-personal-btn');
+    const myId = await getAuthenticatedUserId();
+    if (!myId) return alert('請先登入');
+
+    btn.innerText = "處理中..."; btn.disabled = true;
+
+    const newEmail = document.getElementById('pc-email').value.trim();
+    const newGender = document.getElementById('pc-gender').value;
+    const newBirthday = document.getElementById('pc-birthday').value;
+    
+    try {
+        // 更新公開表 (profiles)
+        const updatePublic = window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
+        
+        // 更新私密表 (user_private_data)
+        const updatePrivate = window.supabaseClient.from('user_private_data').upsert({
+            id: myId,
+            contact_email: newEmail,
+            birthday: newBirthday,
+            updated_at: new Date()
+        });
+
+        const [res1, res2] = await Promise.all([updatePublic, updatePrivate]);
+        if (res1.error) throw res1.error;
+        if (res2.error) throw res2.error;
+
+        alert('個人中心資料已更新！');
+        closePersonalCenter();
+    } catch(e) {
+        alert('更新失敗: ' + e.message);
+    } finally {
+        btn.innerText = "儲存"; btn.disabled = false;
+    }
+}
+
+// 2. 個人專頁與編輯資料
+window.renderProfile = async function() {
+    const container = document.getElementById('my-profile-container');
+    const myId = await getAuthenticatedUserId();
+    if (!myId) { 
+        container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`; 
+        return; 
+    }
+
+    container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
+
+    try {
+        const [profileRes, postsRes] = await Promise.all([
+            window.supabaseClient.from('profiles').select('*').eq('id', myId).single(),
+            window.supabaseClient.from('posts').select('*').eq('user_id', myId).order('created_at', { ascending: false })
+        ]);
+
+        if (profileRes.error) throw profileRes.error;
+        
+        const profile = profileRes.data;
+        const myPosts = postsRes.data || [];
+        const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
+        const bannerUrl = profile.banner_url || '';
+
+        // 更新編輯欄位
+        const editName = document.getElementById('edit-display-name');
+        const editBio = document.getElementById('edit-bio');
+        if(editName) editName.value = profile.display_name || '';
+        if(editBio) editBio.value = profile.bio || '';
+        
+        const avatarPreview = document.getElementById('edit-avatar-preview');
+        if(avatarPreview) avatarPreview.src = avatarUrl;
+        
+        const bannerPreview = document.getElementById('edit-banner-preview');
+        if (bannerPreview && bannerUrl) {
+            bannerPreview.src = bannerUrl;
+            bannerPreview.classList.remove('hidden');
+        }
+
+        const bannerHtml = bannerUrl ? `<img src="${bannerUrl}" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
+
+        let html = `
+            <div class="bg-white pb-4 shadow-sm relative">
+                ${bannerHtml}
+                <div class="px-5 relative -mt-12">
+                    <div class="flex justify-between items-end mb-3">
+                        <img src="${avatarUrl}" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
+                        <button onclick="openEditProfile()" class="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm mb-2">編輯資料</button>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-gray-900">${window.escapeHTML(profile.display_name || '未命名')}</h2>
+                        <p class="text-xs text-sexify font-bold mt-0.5 mb-2">@${window.escapeHTML(profile.username || 'unknown')}</p>
+                        <p class="text-sm text-gray-600 whitespace-pre-line">${window.escapeHTML(profile.bio || '尚未填寫簡介')}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 pt-2 min-h-[300px]"><div class="masonry-grid px-2">`;
+        
+        if (myPosts.length > 0) {
+            html += myPosts.map(p => `
+                <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl" onclick="viewPost('${p.id}')">
+                    ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${window.escapeHTML(p.caption || '')}</p>
+                </div>
+            `).join('');
+        } else {
+            html += `<div class="col-span-2 text-center py-20 text-gray-400 w-full">尚無發佈貼文</div>`;
+        }
+        container.innerHTML = html + `</div></div>`;
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
+    }
+}
+
+window.saveProfileData = async function() {
+    const btn = document.getElementById('save-profile-btn');
+    const myId = await getAuthenticatedUserId();
+    if (!myId) return alert('請登入');
+
+    btn.innerText = "處理中..."; btn.disabled = true;
+    
+    try {
+        let avatarSrc = document.getElementById('edit-avatar-preview').src;
+        let bannerSrc = document.getElementById('edit-banner-preview').src;
+
+        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${myId}_${Date.now()}.jpg`);
+        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${myId}_${Date.now()}.jpg`);
+
+        const updateData = {
+            display_name: document.getElementById('edit-display-name').value.trim(),
+            bio: document.getElementById('edit-bio').value.trim(),
+            avatar_url: avatarSrc,
+            banner_url: (bannerSrc && bannerSrc.includes('http')) ? bannerSrc : null
+        };
+
+        const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
+        if (error) throw error;
+
+        localStorage.setItem('myChatName', updateData.display_name);
+        
+        if(typeof closeEditProfile === 'function') closeEditProfile();
+        renderProfile();
+    } catch (err) {
+        alert("更新失敗：" + err.message);
+    } finally {
+        btn.innerText = "儲存"; btn.disabled = false;
+    }
+}
+
+// 他人主頁
+window.viewOtherProfile = async function(userId) {
+    const myId = await getAuthenticatedUserId();
+    if (userId === myId) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
+
+    const modal = document.getElementById('other-profile-modal');
+    if(!modal) return;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+
+    try {
+        const { data: user, error } = await window.supabaseClient.from('profiles').select('*').eq('id', userId).single();
+        if (error) throw error;
+
+        const avatar = user.avatar_url || `https://ui-avatars.com/api/?name=${user.display_name}&background=random`;
+        document.getElementById('other-header-name').innerText = user.display_name;
+        document.getElementById('other-display-name').innerText = user.display_name;
+        document.getElementById('other-username').innerText = `@${user.username}`;
+        document.getElementById('other-bio').innerText = user.bio || '尚未寫下簡介。';
+        document.getElementById('other-avatar').src = avatar;
+
+        const bannerImg = document.getElementById('other-banner');
+        if (user.banner_url) { bannerImg.src = user.banner_url; bannerImg.classList.remove('hidden'); } 
+        else { bannerImg.classList.add('hidden'); }
+
+        document.getElementById('other-msg-btn').onclick = () => {
+            closeOtherProfile();
+            if(typeof openChat === 'function') openChat(userId, user.display_name, avatar);
+        };
+
+        const followBtn = document.getElementById('other-follow-btn');
+        
+        const { data: subData } = await window.supabaseClient.from('subscriptions').select('id').eq('subscriber_id', myId).eq('creator_id', userId);
+        const isSubbed = subData && subData.length > 0;
+
+        if (isSubbed) {
+            followBtn.innerText = "已追蹤";
+            followBtn.classList.add('bg-gray-200', 'text-gray-700');
+            followBtn.classList.remove('bg-sexify', 'text-white');
+            followBtn.onclick = null;
+        } else {
+            followBtn.innerText = "追蹤";
+            followBtn.classList.add('bg-sexify', 'text-white');
+            followBtn.classList.remove('bg-gray-200', 'text-gray-700');
+            followBtn.onclick = async () => {
+                followBtn.innerText = "處理中...";
+                try {
+                    await window.supabaseClient.from('subscriptions').insert({ subscriber_id: myId, creator_id: userId });
+                    await window.supabaseClient.from('notifications').insert({ user_id: userId, actor_id: myId, type: 'subscribe' });
+                    followBtn.innerText = "已追蹤";
+                    followBtn.classList.replace('bg-sexify', 'bg-gray-200');
+                    followBtn.classList.replace('text-white', 'text-gray-700');
+                    followBtn.onclick = null;
+                } catch(e) { followBtn.innerText = "追蹤失敗"; }
+            };
+        }
+
+        const { data: posts } = await window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        const grid = document.getElementById('other-posts-grid');
+        if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
+        else {
+            grid.innerHTML = posts.map(p => `
+                <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="viewPost('${p.id}')">
+                    ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字</div>`}
+                </div>
+            `).join('');
+        }
+    } catch (err) { console.error(err); }
+}
+
+window.closeOtherProfile = function() {
+    const modal = document.getElementById('other-profile-modal');
+    if(!modal) return;
+    modal.classList.add('translate-x-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+// 3. 粉絲與訂閱面板
+window.openFansSubsModal = function() {
+    if(typeof toggleSettings === 'function') toggleSettings(); 
+    const modal = document.getElementById('fans-subs-modal');
+    if(!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+    switchFansTab('subs'); 
+}
+
+window.closeFansSubsModal = function() {
+    const modal = document.getElementById('fans-subs-modal');
+    if(!modal) return;
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+}
+
+window.switchFansTab = async function(tab) {
+    const btnFans = document.getElementById('tab-fans');
+    const btnSubs = document.getElementById('tab-subs');
+    const list = document.getElementById('fans-subs-list');
+    const myId = await getAuthenticatedUserId();
+
+    if(!list) return;
     list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-2xl"></i></div>`;
 
-    const myId = await getAuthenticatedUserId();
-    if (!myId) return;
+    if (tab === 'fans') {
+        btnFans.classList.replace('text-gray-400', 'text-sexify');
+        btnFans.classList.replace('border-transparent', 'border-sexify');
+        btnSubs.classList.replace('text-sexify', 'text-gray-400');
+        btnSubs.classList.replace('border-sexify', 'border-transparent');
 
-    if (type === 'subs') {
         try {
-            const { data: subs, error } = await window.supabaseClient
-                .from('subscriptions')
-                .select('*, profiles!subscriptions_target_id_fkey(id, display_name, avatar_url)')
-                .eq('follower_id', myId);
-
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myId);
             if (error) throw error;
 
             if (!subs || subs.length === 0) {
-                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未追蹤任何人</div>`;
+                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
                 return;
             }
 
+            const subIds = [...new Set(subs.map(s => s.subscriber_id).filter(Boolean))];
+            let profMap = {};
+            if (subIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', subIds);
+                if (profs) profs.forEach(p => profMap[p.id] = p);
+            }
+
             list.innerHTML = subs.map(sub => {
-                const user = sub.profiles;
+                const user = profMap[sub.subscriber_id];
+                if(!user) return '';
+                const safeName = window.escapeHTML(user.display_name || '未命名用戶');
+                const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+                return `
+                <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
+                    <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
+                    <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${safeName}</div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`;
+        }
+
+    } else {
+        btnSubs.classList.replace('text-gray-400', 'text-sexify');
+        btnSubs.classList.replace('border-transparent', 'border-sexify');
+        btnFans.classList.replace('text-sexify', 'text-gray-400');
+        btnFans.classList.replace('border-sexify', 'border-transparent');
+
+        try {
+            const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myId);
+            if (error) throw error;
+
+            if (!subs || subs.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
+                return;
+            }
+
+            const creatorIds = [...new Set(subs.map(s => s.creator_id).filter(Boolean))];
+            let profMap = {};
+            if (creatorIds.length > 0) {
+                const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', creatorIds);
+                if (profs) profs.forEach(p => profMap[p.id] = p);
+            }
+
+            list.innerHTML = subs.map(sub => {
+                const user = profMap[sub.creator_id];
+                if(!user) return '';
                 const safeName = window.escapeHTML(user.display_name || '未命名用戶');
                 const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
                 return `
@@ -289,29 +435,11 @@ window.openFansSubsModal = async function(type) {
 window.unfollowUserFromList = async function(subscriptionId, btn) {
     if (!confirm("確定要取消追蹤嗎？")) return;
     try {
-        const { error } = await window.supabaseClient
-            .from('subscriptions')
-            .delete()
-            .eq('id', subscriptionId);
-
-        if (error) throw error;
-        btn.closest('div').parentElement.removeChild(btn.closest('div'));
-    } catch (e) {
-        alert("操作失敗");
+        const { error } = await window.supabaseClient.from('subscriptions').delete().eq('id', subscriptionId);
+        if(error) throw error;
+        btn.parentElement.classList.add('opacity-0', 'scale-95');
+        setTimeout(() => btn.parentElement.remove(), 200);
+    } catch(e) {
+        alert("取消失敗");
     }
-}
-
-window.closeFansSubsModal = function() {
-    const modal = document.getElementById('fans-subs-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-window.openEditProfile = function() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-window.closeEditProfile = function() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (modal) modal.classList.add('hidden');
 }
