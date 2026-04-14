@@ -12,4 +12,13 @@ if (window.supabase) {
     console.log("✅ Supabase 連線已成功初始化！");
 } else {
     console.error("❌ 找不到 Supabase 核心套件，請確認 index.html 有正確引入。");
-}
+}// 全域防禦 XSS 的轉義工具
+window.escapeHTML = function(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
