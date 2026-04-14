@@ -2,7 +2,7 @@
 // js/app.js - 全域邏輯、導航與安全驗證核心
 // ==========================================
 
-// 1. 底部導航欄分頁切換 (原封不動保留)
+// 1. 底部導航欄分頁切換
 function switchTab(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(t => {
         t.classList.add('hidden');
@@ -36,56 +36,36 @@ function switchTab(tabId, btn) {
     if(tabId === 'profile-tab' && typeof window.renderProfile === 'function') window.renderProfile();
 }
 
-// 2. 年齡驗證核心 (修正卡死問題：增加相容性與自動跳轉)
+// 2. 年齡驗證核心 (安全加固：同步資料庫)
 window.confirmAge = async function() {
-    console.log("嘗試驗證年齡...");
-    
-    // 獲取 gate 元素
-    const ageGate = document.getElementById('age-gate');
-
     try {
-        // A. 優先嘗試更新資料庫 (如果已登入)
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        
-        if (user) {
-            const { error } = await window.supabaseClient
-                .from('profiles')
-                .update({ is_adult: true })
-                .eq('id', user.id);
-            
-            if (error) console.warn("資料庫寫入失敗（可能欄位不存在），但允許本地進入", error);
-        }
+        if (!user) return alert("請先登入帳號後再進行驗證");
 
-        // B. 無論資料庫是否寫入成功，都讓用戶「先進入」以改善體驗
-        localStorage.setItem('ageVerified', 'true');
+        // 強制更新後端狀態，這會觸發 RLS 權限開啟
+        const { error } = await window.supabaseClient
+            .from('profiles')
+            .update({ is_adult: true })
+            .eq('id', user.id);
 
+        if (error) throw error;
+
+        const ageGate = document.getElementById('age-gate');
         if (ageGate) {
             ageGate.classList.add('opacity-0');
-            setTimeout(() => {
-                ageGate.style.display = 'none'; // 徹底隱藏
-                // 進入後根據登入狀態決定去哪
-                if (localStorage.getItem('userId')) {
-                    switchTab('home-tab');
-                } else {
-                    switchTab('profile-tab'); // 未登入去登入頁
-                }
-            }, 500);
+            setTimeout(() => ageGate.remove(), 500);
         }
 
+        localStorage.setItem('ageVerified', 'true');
         if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
 
     } catch (e) {
-        console.error("驗證過程異常:", e);
-        // 保底措施：萬一 Supabase 掛了，也要讓用戶能關閉這個門
-        if (ageGate) ageGate.style.display = 'none';
-        localStorage.setItem('ageVerified', 'true');
+        console.error("驗證失敗:", e);
+        alert("驗證寫入失敗，請確認資料庫 profile 表已有 is_adult (bool) 欄位。");
     }
 };
 
-// 為了相容 HTML 中舊有的 enterSite() 呼叫
-window.enterSite = window.confirmAge;
-
-// 3. 抽屜控制 (設定、通知 - 原封不動保留)
+// 3. 抽屜控制 (設定、通知)
 function toggleSettings() {
     const drawer = document.getElementById('settings-drawer');
     const panel = document.getElementById('settings-panel');
@@ -148,7 +128,7 @@ async function toggleNotifications() {
     }
 }
 
-// 4. Modal 控制 (編輯、收藏、訂單 - 原封不動保留)
+// 4. Modal 控制 (編輯、收藏、訂單)
 function openEditProfile() {
     const m = document.getElementById('edit-profile-modal');
     m.classList.remove('hidden'); m.classList.add('flex');
@@ -192,7 +172,7 @@ function closeOrdersModal() {
     setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
 }
 
-// 5. 即時通訊監聽 (通知與訊息紅點 - 原封不動保留)
+// 5. 即時通訊監聽 (通知與訊息紅點)
 function setupGlobalRealtime(userId) {
     if (!userId) return;
     window.supabaseClient.channel('global-sync')
@@ -209,7 +189,7 @@ function setupGlobalRealtime(userId) {
     }).subscribe();
 }
 
-// 6. 初始化與事件綁定 (原封不動保留)
+// 6. 初始化與事件綁定
 window.addEventListener('authReady', async () => {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
@@ -231,6 +211,7 @@ window.addEventListener('authReady', async () => {
 
     setupGlobalRealtime(userId);
     
+    // 首頁內容加載
     if (!document.getElementById('home-tab').classList.contains('hidden')) {
         if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
     }
