@@ -1,8 +1,5 @@
 // ==========================================
-// js/messages.js - 核心通訊最終安全強化版
-// 1. 修復身分偽造漏洞：使用 supabase.auth.getUser() 替代 localStorage
-// 2. 強化 XSS 防禦：所有 UGC 內容均經過 escapeHTML 轉義
-// 3. 配合 RLS：確保所有請求均帶有合法的 Auth Token
+// js/messages.js - 核心通訊最終安全強化版 (全替換完整版)
 // ==========================================
 
 window.activeRoomId = null;
@@ -14,7 +11,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
 
-// 取得當前經過驗證的真實 User ID
+// 1. 取得當前經過驗證的真實 User ID
 async function getValidUserId() {
     // 優先從 session 獲取，這最準確
     const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -30,7 +27,7 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_'); 
 }
 
-// 搜尋發起對話 (帶 XSS 防禦)
+// 2. 搜尋發起對話 (帶 XSS 防禦)
 window.searchUsersToChat = async function() {
     const keyword = document.getElementById('inbox-search-input')?.value.trim();
     const container = document.getElementById('chat-list');
@@ -71,7 +68,7 @@ window.searchUsersToChat = async function() {
     }
 }
 
-// 發送訊息 (配合 RLS 與身份驗證)
+// 3. 發送訊息 (配合 RLS 與身份驗證)
 async function sendMessage(content, mediaUrl) {
     const myRealId = await getValidUserId();
     if (!myRealId) return alert('請先登入');
@@ -83,7 +80,7 @@ async function sendMessage(content, mediaUrl) {
             .from('messages')
             .insert([{
                 room_id: window.activeRoomId,
-                sender_name: myRealId, // 🚨 RLS 會檢查 auth.uid() 是否等於此 ID
+                sender_name: myRealId, 
                 receiver: window.activeChatTarget,
                 content: content || '',
                 image_url: mediaUrl,
@@ -98,7 +95,7 @@ async function sendMessage(content, mediaUrl) {
     }
 }
 
-// 開啟聊天室
+// 4. 開啟聊天室
 window.openChat = async function(targetUid, displayName) {
     const myRealId = await getValidUserId();
     if (!myRealId) return alert('請先登入');
@@ -113,7 +110,6 @@ window.openChat = async function(targetUid, displayName) {
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
 
-    // 標記已讀 (RLS 同樣會驗證 receiver 是否為本人)
     try {
         await window.supabaseClient
             .from('messages')
@@ -126,7 +122,7 @@ window.openChat = async function(targetUid, displayName) {
     setupChatRealtime();
 };
 
-// 載入訊息 (配合 RLS 過濾)
+// 5. 載入訊息
 async function loadMessages() {
     if (!window.activeRoomId) return;
     const container = document.getElementById('chat-messages');
@@ -148,7 +144,7 @@ async function loadMessages() {
     }
 }
 
-// 繪製訊息泡泡 (帶 XSS 防禦)
+// 6. 繪製訊息泡泡
 async function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
@@ -166,14 +162,12 @@ async function drawMessages(messages) {
 
         const safeContent = window.escapeHTML(m.content || '');
         const safeUrl = window.escapeHTML(m.image_url || '');
-        const isVoice = safeUrl && (safeUrl.includes('.webm') || safeUrl.includes('.ogg'));
 
         return `
             <div class="flex ${wrapperClass} mb-4">
                 <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
                     ${safeContent ? `<div class="text-sm">${safeContent}</div>` : ''}
-                    ${(safeUrl && !isVoice) ? `<img src="${safeUrl}" class="rounded-lg mt-1 max-w-full" onclick="window.open('${safeUrl}')">` : ''}
-                    ${isVoice ? `<div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${safeUrl}', this)"><i class="fa-solid fa-play"></i><span class="text-xs">語音訊息</span></div>` : ''}
+                    ${safeUrl ? `<img src="${safeUrl}" class="rounded-lg mt-1 max-w-full" onclick="window.open('${safeUrl}')">` : ''}
                     <div class="text-[9px] opacity-50 mt-1 text-right">
                         ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
@@ -184,7 +178,7 @@ async function drawMessages(messages) {
     container.scrollTop = container.scrollHeight;
 }
 
-// 渲染訊息列表 (首頁 Inbox)
+// 7. 渲染訊息列表 (首頁 Inbox)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     if (!container) return;
@@ -234,41 +228,23 @@ window.renderMessages = async function() {
     }
 };
 
-// ... 其餘語音播放與 Realtime 設定保持原樣 ...
+function setupChatRealtime() {
+    if (!window.activeRoomId) return;
+    if (window.roomChannel) window.roomChannel.unsubscribe();
 
-// ------------------------------------------
-// 3. 繪製對話內容 (由原本的 drawMessages 修改)
-// ------------------------------------------
-async function drawMessages(messages) {
-    const container = document.getElementById('chat-messages');
-    if (!container) return;
-    
-    const myRealUserId = await getAuthenticatedUserId();
-
-    if (!messages || messages.length === 0) {
-        const nameEl = document.getElementById('chat-target-name');
-        const name = nameEl ? nameEl.innerText : '對方';
-        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始與 ${name} 聊天吧</div>`;
-        return;
-    }
-
-    container.innerHTML = messages.map(m => {
-        // 🚨 安全修復：比對時使用驗證後的 UID
-        const isMine = m.sender_name === myRealUserId;
-        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
-        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
-
-        return `
-            <div class="flex ${wrapperClass} mb-4">
-                <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
-                    ${m.content ? `<div class="text-sm">${window.escapeHTML(m.content)}</div>` : ''}
-                    ${m.image_url ? `<img src="${window.escapeHTML(m.image_url)}" class="rounded-lg mt-1 max-w-full">` : ''}
-                    <div class="text-[9px] opacity-50 mt-1 text-right">
-                        ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                </div>
-            </div>`;
-    }).join('');
-    
-    container.scrollTop = container.scrollHeight;
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
+        loadMessages();
+    })
+    .subscribe();
 }
+
+window.closeChat = function() {
+    window.activeChatTarget = null;
+    window.activeRoomId = null;
+    const modal = document.getElementById('chat-modal');
+    if (modal) {
+        modal.classList.add('translate-x-full');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+};
