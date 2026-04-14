@@ -131,3 +131,14 @@ input[type="radio"]:checked + label p { color: var(--sexify) !important; }
     50% { opacity: 1; }
     100% { opacity: 0.2; }
 }
+/* 確保所有分頁內容在滑動到底部時，不會被導航欄擋住 */
+.tab-content {
+    padding-bottom: 100px !important; /* 預留約 100px 的高度給導航欄 */
+    box-sizing: border-box;
+}
+
+/* 如果你的商品是用 masonry 瀑布流，也要確保容器有底部間距 */
+#product-grid {
+    margin-bottom: 0;
+    padding-bottom: 80px; 
+}
