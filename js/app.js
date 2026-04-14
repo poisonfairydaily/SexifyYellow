@@ -54,7 +54,7 @@ function toggleSettings() {
     }
 }
 
-// 3. 右側：通知抽屜 (全面重構：雙重查詢解決 JOIN 報錯)
+// 3. 右側：通知抽屜
 async function toggleNotifications() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
@@ -93,7 +93,6 @@ async function toggleNotifications() {
                 return;
             }
 
-            // 雙重安全查詢：避免資料庫未設定 Foreign Key 時崩潰
             const actorIds = [...new Set(notifs.map(n => n.actor_id).filter(Boolean))];
             let profilesMap = {};
             if (actorIds.length > 0) {
@@ -123,7 +122,7 @@ async function toggleNotifications() {
             }).join('');
         } catch (err) {
             console.error("載入通知失敗:", err);
-            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知，請確認資料庫 RLS 已關閉。</div>`;
+            list.innerHTML = `<div class="text-center text-red-400 text-sm mt-10">無法載入通知。</div>`;
         }
 
     } else {
@@ -132,7 +131,7 @@ async function toggleNotifications() {
     }
 }
 
-// 4. Modal 控制與搜尋列
+// 4. Modal 控制與個人資料安全處理
 function toggleSearch(show) {
     const overlay = document.getElementById('search-overlay');
     if (!overlay) return;
@@ -143,6 +142,45 @@ function toggleSearch(show) {
         overlay.classList.remove('active');
         document.getElementById('searchInput').value = '';
         document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
+    }
+}
+
+// 核心功能更新：分表儲存個人資料
+async function saveUserProfile(formData) {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
+    try {
+        // 分割資料：公開 vs 私密
+        const publicUpdate = {
+            display_name: formData.display_name,
+            avatar_url: formData.avatar_url,
+            bio: formData.bio,
+            updated_at: new Date()
+        };
+
+        const privateUpdate = {
+            id: userId, // 確保 ID 一致
+            birthday: formData.birthday,
+            contact_email: formData.contact_email,
+            updated_at: new Date()
+        };
+
+        // 並行更新兩張表
+        const [resPublic, resPrivate] = await Promise.all([
+            window.supabaseClient.from('profiles').update(publicUpdate).eq('id', userId),
+            window.supabaseClient.from('user_private_data').upsert(privateUpdate) // 使用 upsert 避免初次建立時出錯
+        ]);
+
+        if (resPublic.error) throw resPublic.error;
+        if (resPrivate.error) throw resPrivate.error;
+
+        alert("資料儲存成功！");
+        closeEditProfile();
+        if (typeof window.renderProfile === 'function') window.renderProfile();
+    } catch (err) {
+        console.error("更新個人資料失敗:", err);
+        alert("更新失敗，請檢查資料格式。");
     }
 }
 
@@ -158,7 +196,7 @@ function closeEditProfile() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 收藏、訂單、聯絡我們
+// 收藏、訂單
 function openBookmarksModal() {
     toggleSettings();
     const modal = document.getElementById('bookmarks-modal');
@@ -215,22 +253,19 @@ function closeContactModal() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 5. 核心修復：年齡驗證防卡死 + 背景安全同步
+// 5. 核心：年齡驗證防卡死 + 背景安全同步
 window.verifyAge = async function() {
-    // A. 絕對優先：強制隱藏畫面，絕不讓手機端卡住
     const ageGate = document.getElementById('age-gate');
     if (ageGate) {
-        ageGate.style.display = 'none'; // 粗暴但最有效的隱藏方式
+        ageGate.style.display = 'none';
         ageGate.classList.add('hidden', 'opacity-0');
     }
     localStorage.setItem('ageVerified', 'true');
 
-    // B. 載入內容
     if (typeof window.renderDiscovery === 'function') {
         window.renderDiscovery();
     }
 
-    // C. 背景安全同步：嘗試通知 Supabase 解鎖 RLS
     try {
         if (window.supabaseClient) {
             const { data: { user } } = await window.supabaseClient.auth.getUser();
@@ -239,15 +274,14 @@ window.verifyAge = async function() {
             }
         }
     } catch (e) {
-        console.warn("背景同步年齡狀態失敗，但已允許本地進入", e);
+        console.warn("背景同步失敗，但允許進入", e);
     }
 };
 
-// 增加多重別名，防範 HTML 中按鈕名稱不匹配導致點擊失效
 window.confirmAge = window.verifyAge;
 window.enterSite = window.verifyAge;
 
-// 實時推播：訂閱全局通知與訊息
+// 實時推播監聽
 function setupGlobalRealtime(userId) {
     window.supabaseClient.channel('global-notifications')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
@@ -296,7 +330,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             if (confirm("確定要登出帳號嗎？")) {
-                if (typeof logoutUser === 'function') logoutUser();
+                localStorage.clear();
+                window.location.reload();
             }
         });
     }
