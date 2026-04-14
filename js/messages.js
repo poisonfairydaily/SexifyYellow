@@ -1,12 +1,15 @@
 // ==========================================
-// js/messages.js - 聊天與未讀訊息徽章修復版
+// js/messages.js - 核心通訊重構版 (Storage 儲存 + 語音修復)
+// 1. 移除 Base64，所有媒體改為上傳至 Supabase Storage
+// 2. 修復語音錄製無聲問題 (確保 MIME Type 正確)
+// 3. 優化圖片上傳預覽邏輯
 // ==========================================
 
 window.activeRoomId = null;
 window.activeChatTarget = null;
 window.roomChannel = null;     
 
-let selectedMediaFile = null;
+let selectedMediaFile = null; // 存放待發送的圖片檔案物件
 let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
@@ -28,7 +31,9 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_'); 
 }
 
-// 搜尋發起對話
+/**
+ * 搜尋用戶發起對話
+ */
 window.searchUsersToChat = async function() {
     const keyword = document.getElementById('inbox-search-input').value.trim();
     const container = document.getElementById('chat-list');
@@ -38,289 +43,423 @@ window.searchUsersToChat = async function() {
     container.innerHTML = `<div class="p-6 text-center text-gray-400 mt-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
 
     try {
-        const { data, error } = await window.supabaseClient.from('profiles').select('id, display_name, username, avatar_url')
-            .or(`display_name.ilike.%${keyword}%,username.ilike.%${keyword}%`).neq('id', localStorage.getItem('userId')).limit(10);
-
-        if (error) throw error;
-        if (data.length === 0) return container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm mt-10">找不到相關用戶</div>`;
-
-        container.innerHTML = data.map(user => `
-            <div onclick="openChat('${user.id}', false, '${user.display_name}', '${user.avatar_url}')" class="flex items-center gap-3 p-4 bg-white border-b border-gray-50 active:bg-gray-50 cursor-pointer">
-                <img src="${user.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-12 h-12 rounded-full object-cover">
-                <div class="flex-1"><h4 class="font-bold text-gray-900 text-sm">${user.display_name}</h4></div>
-                <button class="bg-sexify text-white text-xs px-4 py-2 rounded-full font-bold">發訊息</button>
-            </div>`).join('');
-    } catch (err) { container.innerHTML = `<div class="p-6 text-center text-red-400 text-sm mt-10">搜尋發生錯誤</div>`; }
-}
-
-// 收件匣列表
-window.renderMessages = async function() {
-    refreshMyUser();
-    const container = document.getElementById('chat-list');
-    if (!container || !myUserId) return;
-
-    if (document.getElementById('inbox-search-input').value) return; 
-
-    container.innerHTML = `<div class="text-center py-10 mt-10"><i class="fa-solid fa-circle-notch fa-spin text-gray-300 text-2xl"></i></div>`;
-
-    try {
-        const { data: inboxData, error } = await window.supabaseClient.from('messages')
-            .select('*').ilike('room_id', `%${myUserId}%`).order('created_at', { ascending: false }); 
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('id, display_name, username, avatar_url')
+            .or(`username.ilike.%${keyword}%,display_name.ilike.%${keyword}%`)
+            .limit(10);
 
         if (error) throw error;
 
-        let roomsMap = {};
-        let targetIds = new Set();
-        
-        (inboxData || []).forEach(msg => {
-            if (!roomsMap[msg.room_id]) {
-                const ids = msg.room_id.split('_');
-                const targetId = ids[0] === myUserId ? ids[1] : ids[0];
-                
-                if (targetId && targetId.length > 20) { 
-                    roomsMap[msg.room_id] = { msg: msg, targetId: targetId, unreadCount: 0 };
-                    targetIds.add(targetId);
-                }
-            }
-            if (msg.receiver === myUserId && msg.is_read === false && roomsMap[msg.room_id]) {
-                roomsMap[msg.room_id].unreadCount++;
-            }
-        });
+        if (!data || data.length === 0) {
+            container.innerHTML = `<div class="p-10 text-center text-gray-400">找不到用戶</div>`;
+            return;
+        }
 
-        if(targetIds.size === 0) return container.innerHTML = `<div class="text-center py-10 mt-10 text-gray-400 text-sm flex flex-col items-center"><i class="fa-solid fa-inbox text-3xl mb-3 opacity-50"></i>尚無對話記錄</div>`;
-
-        const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url, username').in('id', Array.from(targetIds));
-
-        let profileMap = {};
-        if (profiles) profiles.forEach(p => profileMap[p.id] = p);
-
-        let inboxArray = Object.values(roomsMap).map(room => {
-            const p = profileMap[room.targetId];
-            if (!p) return null; 
-
-            let lastMsgText = room.msg.content;
-            if (room.msg.content && room.msg.content.startsWith('[VOICE]:')) lastMsgText = '語音訊息 🎤';
-            else if (room.msg.image_url) lastMsgText = '傳送了媒體檔案 📁';
-
-            return {
-                id: p.id,
-                displayName: p.display_name || p.username,
-                avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${p.display_name || 'U'}&background=random`,
-                lastMsg: lastMsgText || '新訊息',
-                time: new Date(room.msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}),
-                timestamp: new Date(room.msg.created_at).getTime(),
-                unreadCount: room.unreadCount
-            };
-        }).filter(Boolean).sort((a, b) => b.timestamp - a.timestamp);
-
-        container.innerHTML = inboxArray.map(chat => `
-            <div class="flex items-center gap-4 p-4 bg-white border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${chat.id}', false, '${chat.displayName}', '${chat.avatar}')">
-                <img src="${chat.avatar}" class="w-14 h-14 rounded-full border border-gray-100 object-cover flex-shrink-0">
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-center mb-1">
-                        <h3 class="font-bold text-gray-900 truncate pr-2">${chat.displayName}</h3>
-                        <span class="text-[10px] text-gray-400 font-medium whitespace-nowrap">${chat.time}</span>
-                    </div>
-                    <p class="text-sm truncate ${chat.unreadCount > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}">${chat.lastMsg}</p>
+        container.innerHTML = data.map(u => `
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${u.display_name}')">
+                <img src="${u.avatar_url || 'https://ui-avatars.com/api/?name=' + u.display_name}" class="w-12 h-12 rounded-full object-cover">
+                <div>
+                    <div class="font-bold text-gray-800">${u.display_name}</div>
+                    <div class="text-xs text-gray-400">@${u.username}</div>
                 </div>
-                ${chat.unreadCount > 0 ? `<div class="bg-sexify text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${chat.unreadCount}</div>` : ''}
             </div>
         `).join('');
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<div class="p-10 text-center text-red-400">搜尋失敗</div>`;
+    }
+}
 
-    } catch (err) { container.innerHTML = `<div class="text-center text-red-400 py-10 text-sm mt-10">資料庫讀取異常</div>`; }
+/**
+ * 處理圖片選擇預覽 (不使用 Base64 傳輸，僅用於預覽)
+ */
+window.handleImageSelection = function(input) {
+    if (input.files && input.files[0]) {
+        selectedMediaFile = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            // 在輸入框上方顯示一個小預覽
+            const previewArea = document.getElementById('chat-input-preview') || createPreviewArea();
+            previewArea.innerHTML = `
+                <div class="relative inline-block mt-2 ml-4">
+                    <img src="${e.target.result}" class="w-20 h-20 object-cover rounded-lg border-2 border-sexify">
+                    <button onclick="clearSelectedMedia()" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow-lg"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `;
+        };
+        reader.readAsDataURL(selectedMediaFile);
+    }
 };
 
-// 打開聊天室並標記已讀，消除未讀紅點
-window.openChat = async function(targetId, isGroup = false, displayName = targetId, avatarUrl = '') {
-    refreshMyUser();
-    window.activeChatTarget = targetId;
-    window.activeRoomId = generateRoomId(myUserId, targetId);
+function createPreviewArea() {
+    const area = document.createElement('div');
+    area.id = 'chat-input-preview';
+    area.className = 'bg-white border-t border-gray-100 pb-2';
+    const chatInputArea = document.querySelector('.bg-white.border-t.p-4');
+    chatInputArea.parentNode.insertBefore(area, chatInputArea);
+    return area;
+}
 
-    const modal = document.getElementById('chat-modal');
-    document.getElementById('chat-name').innerText = displayName;
-    document.getElementById('chat-target-avatar').src = avatarUrl;
-    
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
-    const chatMessages = document.getElementById('chat-messages');
-    chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i></div>`;
+window.clearSelectedMedia = function() {
+    selectedMediaFile = null;
+    const previewArea = document.getElementById('chat-input-preview');
+    if (previewArea) previewArea.innerHTML = '';
+    document.getElementById('chat-image-input').value = '';
+};
+
+/**
+ * 語音錄製控制
+ */
+window.toggleVoiceRecord = async function() {
+    if (!window.isRecording) {
+        // 開始錄音
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 指定 MIME Type 解決部分設備聽不到聲音的問題 (WebM 格式最穩定)
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                             ? 'audio/webm;codecs=opus' 
+                             : 'audio/ogg;codecs=opus';
+                             
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: mimeType });
+                if (confirm('是否發送這段語音訊息？')) {
+                    await uploadAndSendMedia(audioBlob, 'voice.webm');
+                }
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            window.isRecording = true;
+            document.querySelector('.fa-microphone').parentElement.classList.replace('text-gray-400', 'text-red-500');
+            document.querySelector('.fa-microphone').parentElement.classList.add('animate-pulse');
+        } catch (err) {
+            alert('無法開啟麥克風：' + err.message);
+        }
+    } else {
+        // 停止錄音
+        mediaRecorder.stop();
+        window.isRecording = false;
+        document.querySelector('.fa-microphone').parentElement.classList.replace('text-red-500', 'text-gray-400');
+        document.querySelector('.fa-microphone').parentElement.classList.remove('animate-pulse');
+    }
+};
+
+/**
+ * 核心上傳邏輯：將檔案上傳至 Storage 並獲取 Public URL
+ */
+async function uploadAndSendMedia(file, fileNameHint) {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
+    const fileExt = fileNameHint.split('.').pop();
+    const fileName = `${userId}_${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
 
     try {
-        // 1. 將該房間所有給我的未讀訊息標記為已讀
-        await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myUserId).eq('is_read', false);
+        // 1. 上傳至 message-images bucket (語音也暫放這或另建 bucket)
+        const { data, error } = await window.supabaseClient.storage
+            .from('message-images')
+            .upload(filePath, file, {
+                contentType: file.type,
+                upsert: true
+            });
 
-        // 2. 重新計算全域的未讀訊息數量，如果歸零就隱藏導航列的紅點
-        const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', myUserId).eq('is_read', false);
-        const msgBadge = document.getElementById('nav-msg-badge');
-        if (msgBadge) {
-            if (msgCount > 0) msgBadge.classList.remove('hidden');
-            else msgBadge.classList.add('hidden');
-        }
-
-        // 3. 載入對話歷史
-        const { data, error } = await window.supabaseClient.from('messages').select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: false });
         if (error) throw error;
-        
-        window.currentRoomMessages = data || [];
-        drawMessages(window.currentRoomMessages);
-        setupRoomRealtime();
-    } catch (err) { chatMessages.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-red-400">無法載入訊息</div>`; }
+
+        // 2. 獲取公開鏈接
+        const { data: { publicUrl } } = window.supabaseClient.storage
+            .from('message-images')
+            .getPublicUrl(filePath);
+
+        // 3. 發送訊息 (如果是語音，我們把 URL 存入 image_url，或根據你的 schema 調整)
+        await sendMessage(null, publicUrl);
+        clearSelectedMedia();
+    } catch (err) {
+        console.error('媒體上傳失敗:', err);
+        alert('檔案傳送失敗，請稍後再試。');
+    }
+}
+
+/**
+ * 處理發送按鈕
+ */
+window.handleSendAction = async function() {
+    const input = document.getElementById('chat-input');
+    const content = input.value.trim();
+
+    if (!content && !selectedMediaFile) return;
+
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.disabled = true;
+
+    if (selectedMediaFile) {
+        // 先處理圖片上傳
+        await uploadAndSendMedia(selectedMediaFile, selectedMediaFile.name);
+    } else {
+        // 純文字發送
+        await sendMessage(content, null);
+    }
+
+    input.value = '';
+    sendBtn.disabled = false;
 };
 
+/**
+ * 執行訊息寫入資料庫
+ */
+async function sendMessage(content, mediaUrl) {
+    if (!window.activeRoomId || !window.activeChatTarget) return;
+    refreshMyUser();
+
+    try {
+        const { error } = await window.supabaseClient
+            .from('messages')
+            .insert([{
+                room_id: window.activeRoomId,
+                sender: myUserId,
+                receiver: window.activeChatTarget,
+                content: content || '',
+                image_url: mediaUrl, // 這裡存放的是 Storage 的 HTTP URL
+                is_read: false
+            }]);
+
+        if (error) throw error;
+        
+        // 發送後重新繪製 (如果即時監聽沒觸發，確保 UI 有反應)
+        if (typeof renderMessages === 'function') renderMessages();
+    } catch (e) {
+        console.error('發送失敗:', e);
+    }
+}
+
+/**
+ * 打開聊天視窗並載入訊息
+ */
+window.openChat = async function(targetUid, displayName) {
+    refreshMyUser();
+    window.activeChatTarget = targetUid;
+    window.activeRoomId = generateRoomId(myUserId, targetUid);
+
+    const modal = document.getElementById('chat-modal');
+    document.getElementById('chat-target-name').innerText = displayName;
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+
+    // 標記訊息為已讀
+    await window.supabaseClient
+        .from('messages')
+        .update({ is_read: true })
+        .eq('room_id', window.activeRoomId)
+        .eq('receiver', myUserId);
+
+    loadMessages();
+    setupChatRealtime();
+};
+
+/**
+ * 從資料庫載入歷史訊息
+ */
+async function loadMessages() {
+    if (!window.activeRoomId) return;
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
+
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('room_id', window.activeRoomId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        drawMessages(data);
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+/**
+ * 渲染訊息到 UI
+ */
 function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
-    if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-gray-300 py-10 w-full text-xs absolute inset-0 flex items-center justify-center">開始你們的第一句話吧！</div>`;
+    if (!messages || messages.length === 0) {
+        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始與 ${document.getElementById('chat-target-name').innerText} 聊天吧</div>`;
         return;
     }
-    container.innerHTML = messages.map(msg => {
-        const isMe = msg.receiver !== myUserId; 
-        const align = isMe ? 'justify-end' : 'justify-start';
-        const bg = isMe ? 'bg-sexify text-white' : 'bg-white border border-gray-100 text-gray-900';
-        const timeStr = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-        
-        let contentHtml = '';
-        if (msg.content) {
-            if (msg.content.startsWith('[VOICE]:')) contentHtml = `<audio controls src="${msg.content.replace('[VOICE]:', '')}" class="max-w-[220px] h-10 mt-1"></audio>`;
-            else contentHtml = `<span>${msg.content}</span>`;
-        }
+
+    container.innerHTML = messages.map(m => {
+        const isMine = m.sender === myUserId;
+        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
+        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+
+        // 判斷是否為語音 (簡單判斷 URL 結尾)
+        const isVoice = m.image_url && (m.image_url.includes('.webm') || m.image_url.includes('.ogg'));
+        const isImage = m.image_url && !isVoice;
 
         return `
-            <div id="msg-${msg.id}" class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-2 msg-container">
-                <div class="flex items-end gap-2 w-full ${align}">
-                    ${isMe ? `<div class="flex flex-col items-end gap-1"><button onclick="deleteMessage('${msg.id}')" class="text-[10px] text-red-500 bg-red-50 px-2 py-1.5 rounded-md shadow-sm border border-red-100 active:scale-95 transition">回收</button><span class="text-[9px] text-gray-400 whitespace-nowrap">${timeStr}</span></div>` : ''}
-                    <div class="${bg} px-4 py-2.5 ${isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm'} shadow-sm max-w-[75%] break-words text-sm flex flex-col">
-                        ${msg.image_url ? `<img src="${msg.image_url}" loading="lazy" class="max-w-full rounded-lg mb-1 object-cover">` : ''}
-                        ${contentHtml}
+            <div class="flex ${wrapperClass} mb-4 animate-in fade-in slide-in-from-bottom-2">
+                <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
+                    ${m.content ? `<div class="text-sm">${m.content}</div>` : ''}
+                    ${isImage ? `<img src="${m.image_url}" class="rounded-lg mt-1 max-w-full cursor-pointer" onclick="window.open('${m.image_url}')">` : ''}
+                    ${isVoice ? `
+                        <div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${m.image_url}', this)">
+                            <i class="fa-solid fa-play"></i>
+                            <div class="text-xs">語音訊息</div>
+                            <div class="w-16 h-1 bg-white/30 rounded-full relative overflow-hidden">
+                                <div class="progress-bar absolute left-0 top-0 h-full bg-white/80 w-0"></div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    <div class="text-[9px] opacity-50 mt-1 text-right">
+                        ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    ${!isMe ? `<span class="text-[9px] text-gray-400 whitespace-nowrap">${timeStr}</span>` : ''}
                 </div>
             </div>
         `;
     }).join('');
+    
+    container.scrollTop = container.scrollHeight;
 }
 
-window.deleteMessage = async function(msgId) {
-    if (!confirm("確定要回收這條訊息嗎？")) return;
-    window.currentRoomMessages = window.currentRoomMessages.filter(m => String(m.id) !== String(msgId));
-    drawMessages(window.currentRoomMessages);
-    try { await window.supabaseClient.from('messages').delete().eq('id', msgId); } catch (err) {}
-};
-
-window.handleSendAction = async function() {
-    refreshMyUser();
-    const input = document.getElementById('chat-input');
-    const text = input.value.trim();
-    if (!text && !selectedMediaFile) return;
-
-    input.value = '';
-    const tempMsg = { id: 'temp_' + Date.now(), receiver: window.activeChatTarget, content: text || null, created_at: new Date().toISOString() };
-    window.currentRoomMessages.unshift(tempMsg);
-    drawMessages(window.currentRoomMessages);
-
-    let uploadedUrl = null;
-    if (selectedMediaFile) { uploadedUrl = document.getElementById('chat-image-preview').src; cancelImageSelection(); }
-
-    try {
-        await window.supabaseClient.from('messages').insert([{
-            room_id: window.activeRoomId, 
-            receiver: window.activeChatTarget,
-            content: tempMsg.content,
-            image_url: uploadedUrl,
-            is_read: false
-        }]);
-    } catch (err) {
-        window.currentRoomMessages = window.currentRoomMessages.filter(m => String(m.id) !== String(tempMsg.id));
-        drawMessages(window.currentRoomMessages);
-    }
-};
-
-window.toggleVoiceRecord = async function() {
-    refreshMyUser();
-    const micBtn = document.getElementById('mic-btn');
-
-    if (window.isRecording) {
-        mediaRecorder.stop();
-        window.isRecording = false;
-        micBtn.classList.remove('text-red-500', 'animate-pulse');
-        micBtn.classList.add('text-gray-400');
+/**
+ * 播放語音訊息
+ */
+window.playVoice = function(url, el) {
+    const icon = el.querySelector('i');
+    const progressBar = el.querySelector('.progress-bar');
+    
+    // 如果點擊正在播放的
+    if (window.currentAudio && window.currentAudio.src === url && !window.currentAudio.paused) {
+        window.currentAudio.pause();
+        icon.className = 'fa-solid fa-play';
         return;
     }
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+    if (window.currentAudio) window.currentAudio.pause();
 
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-        mediaRecorder.onstop = () => {
-            const reader = new FileReader();
-            reader.readAsDataURL(new Blob(audioChunks, { type: 'audio/webm' }));
-            reader.onloadend = async () => {
-                const base64Audio = reader.result;
-                const tempMsg = { id: 'temp_' + Date.now(), receiver: window.activeChatTarget, content: '[VOICE]:' + base64Audio, created_at: new Date().toISOString() };
-                window.currentRoomMessages.unshift(tempMsg);
-                drawMessages(window.currentRoomMessages);
-                try {
-                    await window.supabaseClient.from('messages').insert([{ room_id: window.activeRoomId, receiver: window.activeChatTarget, content: '[VOICE]:' + base64Audio }]);
-                } catch (err) { drawMessages(window.currentRoomMessages); }
-            };
-            stream.getTracks().forEach(track => track.stop());
-        };
+    const audio = new Audio(url);
+    window.currentAudio = audio;
+    icon.className = 'fa-solid fa-spinner fa-spin';
 
-        mediaRecorder.start();
-        window.isRecording = true;
-        micBtn.classList.remove('text-gray-400');
-        micBtn.classList.add('text-red-500', 'animate-pulse');
-    } catch (err) { alert('無法存取麥克風設備'); }
-};
-
-window.handleImageSelection = function(input) {
-    if(!input.files[0]) return;
-    selectedMediaFile = input.files[0];
-    const reader = new FileReader();
-    reader.onload = e => {
-        document.getElementById('chat-image-preview').src = e.target.result;
-        document.getElementById('chat-image-preview-container').classList.remove('hidden');
-        document.getElementById('chat-image-preview-container').classList.add('inline-block');
+    audio.onplay = () => { icon.className = 'fa-solid fa-pause'; };
+    audio.ontimeupdate = () => {
+        const progress = (audio.currentTime / audio.duration) * 100;
+        progressBar.style.width = progress + '%';
     };
-    reader.readAsDataURL(selectedMediaFile);
+    audio.onended = () => {
+        icon.className = 'fa-solid fa-play';
+        progressBar.style.width = '0%';
+    };
+    audio.onerror = () => {
+        alert('語音載入失敗');
+        icon.className = 'fa-solid fa-play';
+    };
+
+    audio.play().catch(e => console.error('播放失敗:', e));
 };
 
-window.cancelImageSelection = function() {
-    selectedMediaFile = null;
-    document.getElementById('chat-image-input').value = '';
-    document.getElementById('chat-image-preview-container').classList.remove('inline-block');
-    document.getElementById('chat-image-preview-container').classList.add('hidden');
-};
+/**
+ * 設置 Realtime 監聽
+ */
+function setupChatRealtime() {
+    if (window.roomChannel) window.roomChannel.unsubscribe();
 
-function setupRoomRealtime() {
-    if (window.roomChannel) window.supabaseClient.removeChannel(window.roomChannel);
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, { config: { broadcast: { ack: false } } })
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, async payload => {
-        if (payload.new.receiver === myUserId) {
-            await window.supabaseClient.from('messages').update({ is_read: true }).eq('id', payload.new.id);
-        } else {
-            window.currentRoomMessages = window.currentRoomMessages.filter(m => !String(m.id).startsWith('temp_'));
-        }
-        window.currentRoomMessages.unshift(payload.new); 
-        drawMessages(window.currentRoomMessages);
-    })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, payload => {
-        window.currentRoomMessages = window.currentRoomMessages.filter(m => String(m.id) !== String(payload.old.id));
-        drawMessages(window.currentRoomMessages);
-    }).subscribe();
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: `room_id=eq.${window.activeRoomId}` 
+        }, payload => {
+            // 如果收到別人的訊息，標記為已讀
+            if (payload.new.receiver === myUserId) {
+                window.supabaseClient.from('messages').update({ is_read: true }).eq('id', payload.new.id);
+            }
+            loadMessages(); // 收到新訊息，重新載入
+        })
+        .subscribe();
 }
 
 window.closeChat = function() {
     window.activeChatTarget = null;
     window.activeRoomId = null;
-    document.getElementById('chat-modal').classList.add('translate-x-full');
+    if (window.roomChannel) window.roomChannel.unsubscribe();
+    
+    const modal = document.getElementById('chat-modal');
+    modal.classList.add('translate-x-full');
     setTimeout(() => {
-        document.getElementById('chat-modal').classList.add('hidden');
-        document.getElementById('chat-messages').innerHTML = ''; 
-        cancelImageSelection();
-        if(window.isRecording && mediaRecorder) toggleVoiceRecord();
+        modal.classList.add('hidden');
     }, 300);
-    renderMessages(); 
+};
+
+/**
+ * 獲取聊天列表 (Inbox)
+ */
+window.renderMessages = async function() {
+    const container = document.getElementById('chat-list');
+    if (!container) return;
+    refreshMyUser();
+
+    try {
+        // 獲取最近的對話列表 (這裡簡化邏輯，實際可能需要 RPC 或更複雜的查詢)
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*, profiles:sender(display_name, avatar_url, username)')
+            .or(`sender.eq.${myUserId},receiver.eq.${myUserId}`)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // 簡單去重，只顯示每個 Room 的最後一條訊息
+        const rooms = {};
+        data.forEach(m => {
+            if (!rooms[m.room_id]) rooms[m.room_id] = m;
+        });
+
+        const sortedRooms = Object.values(rooms);
+
+        if (sortedRooms.length === 0) {
+            container.innerHTML = `<div class="p-10 text-center text-gray-400">目前沒有訊息</div>`;
+            return;
+        }
+
+        // 獲取對方的 Profile 資料
+        container.innerHTML = await Promise.all(sortedRooms.map(async m => {
+            const targetId = m.sender === myUserId ? m.receiver : m.sender;
+            const { data: prof } = await window.supabaseClient.from('profiles').select('*').eq('id', targetId).single();
+            
+            const name = prof?.display_name || '未知用戶';
+            const avatar = prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + name;
+            const isUnread = !m.is_read && m.receiver === myUserId;
+
+            return `
+                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
+                     onclick="openChat('${targetId}', '${name}')">
+                    <div class="relative">
+                        <img src="${avatar}" class="w-14 h-14 rounded-full object-cover">
+                        ${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>' : ''}
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-gray-800">${name}</span>
+                            <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 truncate">${m.content || (m.image_url ? '[媒體訊息]' : '')}</div>
+                    </div>
+                </div>
+            `;
+        })).then(results => results.join(''));
+
+    } catch (e) {
+        console.error(e);
+    }
 };
