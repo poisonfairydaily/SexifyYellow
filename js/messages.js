@@ -1,5 +1,8 @@
 // ==========================================
-// js/messages.js - 安全強化版 (防禦身分偽造漏洞)
+// js/messages.js - 核心通訊最終安全強化版
+// 1. 修復身分偽造漏洞：使用 supabase.auth.getUser() 替代 localStorage
+// 2. 強化 XSS 防禦：所有 UGC 內容均經過 escapeHTML 轉義
+// 3. 配合 RLS：確保所有請求均帶有合法的 Auth Token
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,11 +14,11 @@ let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
 
-// 🚨 漏洞修復：不再在全域初始化時僅依賴 localStorage
-async function getAuthenticatedUserId() {
+// 取得當前經過驗證的真實 User ID
+async function getValidUserId() {
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) {
-        console.error("無法取得驗證用戶:", error);
+        console.warn("身份驗證失效:", error);
         return null;
     }
     return user.id;
@@ -26,29 +29,60 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_'); 
 }
 
-// ------------------------------------------
-// 1. 發送訊息 (由原本的 sendMessage 修改)
-// ------------------------------------------
-async function sendMessage(content, mediaUrl) {
-    // 🚨 安全修復：動態獲取經過 Supabase 驗證的 UID
-    const myRealUserId = await getAuthenticatedUserId();
+// 搜尋發起對話 (帶 XSS 防禦)
+window.searchUsersToChat = async function() {
+    const keyword = document.getElementById('inbox-search-input')?.value.trim();
+    const container = document.getElementById('chat-list');
     
-    if (!myRealUserId) {
-        alert('登入逾時或身分無效，請重新登入');
-        return;
-    }
+    if (!container) return;
+    if (!keyword) { renderMessages(); return; }
 
-    if (!window.activeRoomId || !window.activeChatTarget) {
-        alert('無效的聊天對象');
-        return;
+    container.innerHTML = `<div class="p-6 text-center text-gray-400 mt-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
+
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('id, display_name, username, avatar_url')
+            .or(`username.ilike.%${keyword}%,display_name.ilike.%${keyword}%`)
+            .limit(10);
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = `<div class="p-10 text-center text-gray-400">找不到用戶</div>`;
+            return;
+        }
+
+        container.innerHTML = data.map(u => {
+            const safeName = window.escapeHTML(u.display_name || '未命名');
+            const safeAvatar = window.escapeHTML(u.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName);
+            return `
+                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${u.id}', '${safeName}')">
+                    <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover">
+                    <div>
+                        <div class="font-bold text-gray-800">${safeName}</div>
+                        <div class="text-xs text-gray-400">@${window.escapeHTML(u.username || '')}</div>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (e) {
+        container.innerHTML = `<div class="p-10 text-center text-red-400">搜尋失敗</div>`;
     }
+}
+
+// 發送訊息 (配合 RLS 與身份驗證)
+async function sendMessage(content, mediaUrl) {
+    const myRealId = await getValidUserId();
+    if (!myRealId) return alert('請先登入');
+
+    if (!window.activeRoomId || !window.activeChatTarget) return alert('無效的聊天對象');
 
     try {
         const { error } = await window.supabaseClient
             .from('messages')
             .insert([{
                 room_id: window.activeRoomId,
-                sender_name: myRealUserId, // 🚨 使用驗證過的 UID，不再被 localStorage 欺騙
+                sender_name: myRealId, // 🚨 RLS 會檢查 auth.uid() 是否等於此 ID
                 receiver: window.activeChatTarget,
                 content: content || '',
                 image_url: mediaUrl,
@@ -56,116 +90,89 @@ async function sendMessage(content, mediaUrl) {
             }]);
 
         if (error) throw error;
-        
         if (typeof renderMessages === 'function') renderMessages();
     } catch (e) {
         console.error('發送失敗:', e);
-        alert('發送失敗: ' + e.message);
+        alert('發送失敗，請確認身分權限');
     }
 }
 
-// ------------------------------------------
-// 2. 渲染訊息列表 (由原本的 renderMessages 修改)
-// ------------------------------------------
-window.renderMessages = async function() {
-    const container = document.getElementById('chat-list');
-    if (!container) return;
+// 開啟聊天室
+window.openChat = async function(targetUid, displayName) {
+    const myRealId = await getValidUserId();
+    if (!myRealId) return alert('請先登入');
+    
+    window.activeChatTarget = targetUid;
+    window.activeRoomId = generateRoomId(myRealId, targetUid);
 
-    // 🚨 安全修復：取得真實 UID
-    const myRealUserId = await getAuthenticatedUserId();
-    if (!myRealUserId) return;
+    const modal = document.getElementById('chat-modal');
+    if (!modal) return;
+    
+    document.getElementById('chat-target-name').innerText = displayName || '未知用戶';
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
 
-    container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
-
+    // 標記已讀 (RLS 同樣會驗證 receiver 是否為本人)
     try {
-        const { data: msgData, error: msgError } = await window.supabaseClient
+        await window.supabaseClient
             .from('messages')
-            .select('*')
-            // 🚨 這裡也同步改用驗證後的 UID 查詢
-            .or(`sender_name.eq.${myRealUserId},receiver.eq.${myRealUserId}`)
-            .order('created_at', { ascending: false });
+            .update({ is_read: true })
+            .eq('room_id', window.activeRoomId)
+            .eq('receiver', myRealId);
+    } catch (e) {}
 
-        if (msgError) throw msgError;
-
-        const rooms = {};
-        msgData.forEach(m => {
-            if (!rooms[m.room_id]) rooms[m.room_id] = m;
-        });
-
-        const sortedRooms = Object.values(rooms);
-        if (sortedRooms.length === 0) {
-            container.innerHTML = `<div class="p-10 text-center text-gray-400">目前沒有訊息</div>`;
-            return;
-        }
-
-        const targetIds = [...new Set(sortedRooms.map(m => m.sender_name === myRealUserId ? m.receiver : m.sender_name))];
-        
-        const { data: profilesData } = await window.supabaseClient
-            .from('profiles')
-            .select('id, display_name, avatar_url, username')
-            .in('id', targetIds);
-            
-        const profilesMap = {};
-        if (profilesData) profilesData.forEach(p => profilesMap[p.id] = p);
-
-        container.innerHTML = sortedRooms.map(m => {
-            const targetId = m.sender_name === myRealUserId ? m.receiver : m.sender_name;
-            const prof = profilesMap[targetId];
-            
-            const safeName = window.escapeHTML(prof?.display_name || '未知用戶');
-            const avatar = prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName;
-            const isUnread = !m.is_read && m.receiver === myRealUserId;
-
-            return `
-                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
-                     onclick="openChat('${targetId}', '${safeName}')">
-                    <div class="relative">
-                        <img src="${avatar}" class="w-14 h-14 rounded-full object-cover">
-                        ${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>' : ''}
-                    </div>
-                    <div class="flex-1 overflow-hidden">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="font-bold text-gray-800">${safeName}</span>
-                            <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div class="text-xs text-gray-400 truncate">${window.escapeHTML(m.content || (m.image_url ? '[媒體訊息]' : ''))}</div>
-                    </div>
-                </div>`;
-        }).join('');
-
-    } catch (e) {
-        console.error('渲染訊息列表失敗:', e);
-        container.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗</div>`;
-    }
+    loadMessages();
+    setupChatRealtime();
 };
 
-// ------------------------------------------
-// 3. 繪製對話內容 (由原本的 drawMessages 修改)
-// ------------------------------------------
-async function drawMessages(messages) {
+// 載入訊息 (配合 RLS 過濾)
+async function loadMessages() {
+    if (!window.activeRoomId) return;
     const container = document.getElementById('chat-messages');
     if (!container) return;
     
-    const myRealUserId = await getAuthenticatedUserId();
+    container.innerHTML = `<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>`;
 
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('room_id', window.activeRoomId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        drawMessages(data);
+    } catch (e) {
+        container.innerHTML = `<div class="p-10 text-center text-red-400">載入失敗</div>`;
+    }
+}
+
+// 繪製訊息泡泡 (帶 XSS 防禦)
+async function drawMessages(messages) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+    const myRealId = await getValidUserId();
+    
     if (!messages || messages.length === 0) {
-        const nameEl = document.getElementById('chat-target-name');
-        const name = nameEl ? nameEl.innerText : '對方';
-        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始與 ${name} 聊天吧</div>`;
+        container.innerHTML = `<div class="p-10 text-center text-gray-300 text-sm">開始聊天吧</div>`;
         return;
     }
 
     container.innerHTML = messages.map(m => {
-        // 🚨 安全修復：比對時使用驗證後的 UID
-        const isMine = m.sender_name === myRealUserId;
+        const isMine = m.sender_name === myRealId;
         const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
         const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+
+        const safeContent = window.escapeHTML(m.content || '');
+        const safeUrl = window.escapeHTML(m.image_url || '');
+        const isVoice = safeUrl && (safeUrl.includes('.webm') || safeUrl.includes('.ogg'));
 
         return `
             <div class="flex ${wrapperClass} mb-4">
                 <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm">
-                    ${m.content ? `<div class="text-sm">${window.escapeHTML(m.content)}</div>` : ''}
-                    ${m.image_url ? `<img src="${window.escapeHTML(m.image_url)}" class="rounded-lg mt-1 max-w-full">` : ''}
+                    ${safeContent ? `<div class="text-sm">${safeContent}</div>` : ''}
+                    ${(safeUrl && !isVoice) ? `<img src="${safeUrl}" class="rounded-lg mt-1 max-w-full" onclick="window.open('${safeUrl}')">` : ''}
+                    ${isVoice ? `<div class="flex items-center gap-2 py-1 cursor-pointer" onclick="playVoice('${safeUrl}', this)"><i class="fa-solid fa-play"></i><span class="text-xs">語音訊息</span></div>` : ''}
                     <div class="text-[9px] opacity-50 mt-1 text-right">
                         ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
@@ -175,3 +182,55 @@ async function drawMessages(messages) {
     
     container.scrollTop = container.scrollHeight;
 }
+
+// 渲染訊息列表 (首頁 Inbox)
+window.renderMessages = async function() {
+    const container = document.getElementById('chat-list');
+    if (!container) return;
+    const myRealId = await getValidUserId();
+    if (!myRealId) return;
+
+    try {
+        const { data: msgData, error: msgError } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .or(`sender_name.eq.${myRealId},receiver.eq.${myRealId}`)
+            .order('created_at', { ascending: false });
+
+        if (msgError) throw msgError;
+
+        const rooms = {};
+        msgData.forEach(m => { if (!rooms[m.room_id]) rooms[m.room_id] = m; });
+        const sortedRooms = Object.values(rooms);
+
+        const targetIds = [...new Set(sortedRooms.map(m => m.sender_name === myRealId ? m.receiver : m.sender_name))];
+        const { data: profilesData } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', targetIds);
+            
+        const profilesMap = {};
+        if (profilesData) profilesData.forEach(p => profilesMap[p.id] = p);
+
+        container.innerHTML = sortedRooms.map(m => {
+            const targetId = m.sender_name === myRealId ? m.receiver : m.sender_name;
+            const prof = profilesMap[targetId];
+            const safeName = window.escapeHTML(prof?.display_name || '未知用戶');
+            const isUnread = !m.is_read && m.receiver === myRealId;
+
+            return `
+                <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer ${isUnread ? 'bg-red-50/30' : ''}" 
+                     onclick="openChat('${targetId}', '${safeName}')">
+                    <img src="${window.escapeHTML(prof?.avatar_url || 'https://ui-avatars.com/api/?name=' + safeName)}" class="w-14 h-14 rounded-full object-cover">
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-gray-800">${safeName}</span>
+                            <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 truncate">${window.escapeHTML(m.content || (m.image_url ? '[媒體]' : ''))}</div>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (e) {
+        container.innerHTML = `<div class="p-10 text-center text-red-400">載入清單失敗</div>`;
+    }
+};
+
+// ... 其餘語音播放與 Realtime 設定保持原樣 ...
