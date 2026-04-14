@@ -4,18 +4,25 @@
 
 let clickTimer = null;
 
+// ==========================================
+// 🛡️ 安全修復版 renderDiscovery (防禦 XSS)
+// ==========================================
+
 window.renderDiscovery = async function(filterKeyword = '') {
     const grid = document.getElementById('discovery-grid');
     if (!grid) return;
-    
+
+    // 1. 顯示載入中動畫
     grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-3xl"></i></div>`;
 
     try {
+        // 2. 向 Supabase 請求資料 (包含關聯的 profiles)
         let query = window.supabaseClient
             .from('posts')
             .select('*, profiles(display_name, avatar_url, username)')
             .order('created_at', { ascending: false });
-        
+
+        // 處理關鍵字搜尋
         if (filterKeyword.trim() !== '') {
             query = query.ilike('caption', `%${filterKeyword}%`);
         }
@@ -23,6 +30,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
         const { data: posts, error } = await query;
         if (error) throw error;
 
+        // 3. 處理空狀態 (找不到貼文時)
         if (!posts || posts.length === 0) {
             grid.innerHTML = `
                 <div class="col-span-2 text-center py-20 mt-10 text-gray-400 flex flex-col items-center">
@@ -32,59 +40,70 @@ window.renderDiscovery = async function(filterKeyword = '') {
             return;
         }
 
+        // 4. 取得當前使用者的按讚與收藏狀態 (用於 UI 顯示)
         const myUserId = localStorage.getItem('userId');
-        let myLikes = new Set();
-        if (myUserId) {
-            const { data: likesData } = await window.supabaseClient.from('likes').select('post_id').eq('user_id', myUserId);
-            if (likesData) likesData.forEach(l => myLikes.add(l.post_id));
-        }
+        const myLikes = window.myLikesSet || new Set();
+        const bookmarks = window.bookmarks || []; // 假設有儲存收藏的全域陣列
 
-        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-
+        // 5. 渲染貼文並注入 HTML
         grid.innerHTML = posts.map(post => {
-            const authorName = post.profiles?.display_name || '未知創作者';
-            const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
+            // 🚨 【核心安全防禦】：全面過濾來自資料庫 (使用者輸入) 的字串
+            // 使用我們在 supabase-config.js 定義的 window.escapeHTML
+            const safeName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
+            const safeCaption = window.escapeHTML(post.caption || '');
+            const safeAvatar = window.escapeHTML(post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+            const safeMedia = window.escapeHTML(post.media_url || '');
+
+            // 判斷付費鎖定狀態與模糊效果
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
             
+            // 判斷 Icon 顏色
             const isBookmarked = bookmarks.some(b => b.id === post.id);
             const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
             const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
-            
-            const safePost = { id: post.id, caption: post.caption, media_url: post.media_url, authorName: authorName, authorAvatar: authorAvatar };
-            const postStr = encodeURIComponent(JSON.stringify(safePost));
 
             return `
             <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 cursor-pointer" onclick="viewPost('${post.id}')">
+                
                 ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
                 
                 <div class="absolute top-2 left-2 flex items-center gap-1.5 bg-black/50 backdrop-blur-md rounded-full px-2.5 py-1.5 z-20 cursor-pointer hover:bg-black/70 transition" onclick="event.stopPropagation(); window.location.href='profile.html?userId=${post.user_id}'">
-                    <img src="${authorAvatar}" class="w-5 h-5 rounded-full border border-white/50 object-cover">
-                    <span class="text-white text-[10px] font-bold shadow-sm tracking-wide">${authorName}</span>
+                    <img src="${safeAvatar}" class="w-5 h-5 rounded-full border border-white/50 object-cover" onerror="this.src='https://ui-avatars.com/api/?name=User'">
+                    <span class="text-white text-[10px] font-bold shadow-sm tracking-wide">${safeName}</span>
                 </div>
 
                 <div class="relative bg-gray-100 min-h-[150px]">
-                    ${post.media_url ? `<img src="${post.media_url}" class="w-full h-auto object-cover ${blurClass}" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass}">純文字內容</div>`}
+                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto object-cover ${blurClass}" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass}">純文字內容</div>`}
                 </div>
                 
                 <div class="p-3 bg-white relative z-20">
-                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${post.caption || ''}</p>
+                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed mb-2 font-medium">${safeCaption}</p>
+                    
                     <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
-                        <div class="flex gap-4">
-                            <button class="text-xs hover:text-sexify transition flex items-center gap-1" onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')"><i class="${likeIcon} fa-heart text-base"></i> <span class="font-bold text-gray-400">${post.likes || 0}</span></button>
-                            <button class="text-gray-400 text-xs hover:text-blue-500 transition flex items-center gap-1" onclick="event.stopPropagation(); viewPost('${post.id}')"><i class="fa-regular fa-comment text-base"></i></button>
+                        <div class="flex items-center gap-3">
+                            <button onclick="event.stopPropagation(); toggleLike('${post.id}', this)" class="flex items-center gap-1 group">
+                                <i class="${likeIcon} text-sm transition-transform group-active:scale-125"></i>
+                                <span class="text-[11px] text-gray-500 font-medium">${post.likes_count || 0}</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); viewPost('${post.id}')" class="flex items-center gap-1 group">
+                                <i class="fa-regular fa-comment text-gray-400 text-sm transition-transform group-active:scale-125"></i>
+                                <span class="text-[11px] text-gray-500 font-medium">留言</span>
+                            </button>
                         </div>
-                        <button class="text-xs hover:text-gray-600 transition" onclick="event.stopPropagation(); toggleBookmark(this, '${post.id}', '${postStr}')"><i class="${bmIcon} fa-bookmark text-base"></i></button>
+                        <button onclick="event.stopPropagation(); toggleBookmark('${post.id}', this)" class="group">
+                            <i class="${bmIcon} text-sm transition-transform group-active:scale-125"></i>
+                        </button>
                     </div>
                 </div>
             </div>`;
         }).join('');
 
-    } catch (err) {
-        console.error("載入動態失敗:", err);
-        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 text-sm mt-10">無法連線到伺服器。</div>`;
+    } catch (error) {
+        console.error("載入探索頁面失敗:", error);
+        grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10 text-red-400 text-sm font-bold">載入失敗，請檢查網路連線或稍後再試。</div>`;
     }
-}
+};
 
 // 雲端收藏
 window.toggleBookmark = function(btn, postId, postStr) {
