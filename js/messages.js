@@ -95,7 +95,7 @@ async function sendMessage(content, mediaUrl) {
     }
 }
 
-// 4. 開啟聊天室
+// 修正後的開啟聊天室函數
 window.openChat = async function(targetUid, displayName) {
     const myRealId = await getValidUserId();
     if (!myRealId) return alert('請先登入');
@@ -104,19 +104,33 @@ window.openChat = async function(targetUid, displayName) {
     window.activeRoomId = generateRoomId(myRealId, targetUid);
 
     const modal = document.getElementById('chat-modal');
-    if (!modal) return;
+    const nameDisplay = document.getElementById('chat-target-name'); // 🚨 報錯點
     
-    document.getElementById('chat-target-name').innerText = displayName || '未知用戶';
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+    if (modal) {
+        // 只有當元素存在時，才設定名字，避免程式碼崩潰
+        if (nameDisplay) {
+            nameDisplay.innerText = displayName || '未知用戶';
+        } else {
+            console.warn("找不到 ID 為 'chat-target-name' 的元素，請檢查 HTML");
+        }
 
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.classList.remove('translate-x-full'), 10);
+    } else {
+        console.error("找不到 ID 為 'chat-modal' 的視窗元件");
+        return; 
+    }
+
+    // 標記已讀
     try {
         await window.supabaseClient
             .from('messages')
             .update({ is_read: true })
             .eq('room_id', window.activeRoomId)
             .eq('receiver', myRealId);
-    } catch (e) {}
+    } catch (e) {
+        console.error("更新已讀狀態失敗:", e);
+    }
 
     loadMessages();
     setupChatRealtime();
