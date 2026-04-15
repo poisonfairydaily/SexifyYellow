@@ -10,14 +10,11 @@
     <style>
         #chat-messages::-webkit-scrollbar { display: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .search-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; z-index: 200; display: none; flex-direction: column;
-        }
-        .search-overlay.active { display: flex; }
         .active-tab { color: #FF2D55 !important; }
         .bg-sexify { background-color: #FF2D55; }
         .text-sexify { color: #FF2D55; }
+        .page-view { display: none; }
+        .page-view.active { display: block; }
     </style>
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
@@ -33,16 +30,16 @@
     <div id="app-container" class="max-w-md mx-auto min-h-screen bg-white relative pb-20 shadow-xl shadow-gray-200/50">
         
         <main id="main-content">
-            <div id="discover-view" class="page-view">
+            <div id="discover-view" class="page-view active">
                 <div class="p-4 flex justify-between items-center sticky top-0 bg-white/80 backdrop-blur-md z-30">
                     <h1 class="text-2xl font-black italic text-sexify">Sexify</h1>
-                    <button onclick="toggleSearch(true)" class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-magnifying-glass text-gray-600"></i></button>
+                    <button onclick="toggleSearch(true)" class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-magnifying-glass text-gray-600"></i></button>
                 </div>
                 <div id="posts-container" class="px-2 pb-4">
                     </div>
             </div>
 
-            <div id="messages-view" class="page-view hidden">
+            <div id="messages-view" class="page-view">
                 <div class="p-4 sticky top-0 bg-white/80 backdrop-blur-md z-30 border-b border-gray-100">
                     <h1 class="text-xl font-bold">訊息</h1>
                 </div>
@@ -50,35 +47,25 @@
                     </div>
             </div>
 
-            <div id="profile-view" class="page-view hidden">
+            <div id="profile-view" class="page-view">
                 <div id="creator-header" class="relative">
                     <div class="h-48 bg-gray-200 relative overflow-hidden">
-                        <img id="creator-banner" src="" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/800x400?text=Banner'">
+                        <img id="creator-banner" src="" class="w-full h-full object-cover">
                     </div>
-
                     <div class="px-4 -mt-12 relative z-10">
                         <div class="flex items-end justify-between mb-4">
-                            <img id="creator-avatar" src="" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm" onerror="this.src='https://ui-avatars.com/api/?name=User'">
+                            <img id="creator-avatar" src="" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
                             <button onclick="openEditModal()" class="bg-white border border-gray-300 px-4 py-1.5 rounded-full text-sm font-bold active:scale-95 transition">編輯個人檔案</button>
                         </div>
-                        
                         <h2 id="creator-display-name" class="text-2xl font-bold text-gray-900">載入中...</h2>
                         <p id="creator-username" class="text-gray-500 text-sm mb-3">@username</p>
-                        <p id="creator-bio" class="text-gray-700 text-sm leading-relaxed mb-4">這傢伙很懶，什麼都沒留下。</p>
-                        
+                        <p id="creator-bio" class="text-gray-700 text-sm leading-relaxed mb-4"></p>
                         <div class="flex gap-4 mb-6">
-                            <div onclick="loadFansAndSubs('fans')" class="cursor-pointer">
-                                <span class="font-bold text-gray-900" id="fans-count">0</span> 
-                                <span class="text-gray-500 text-sm">粉絲</span>
-                            </div>
-                            <div onclick="loadFansAndSubs('subs')" class="cursor-pointer">
-                                <span class="font-bold text-gray-900" id="subs-count">0</span> 
-                                <span class="text-gray-500 text-sm">追蹤中</span>
-                            </div>
+                            <div class="cursor-pointer"><span class="font-bold text-gray-900" id="fans-count">0</span> <span class="text-gray-500 text-sm">粉絲</span></div>
+                            <div class="cursor-pointer"><span class="font-bold text-gray-900" id="subs-count">0</span> <span class="text-gray-500 text-sm">追蹤中</span></div>
                         </div>
                     </div>
-
-                    <div id="creator-posts-grid" class="grid grid-cols-2 gap-2 px-2">
+                    <div id="creator-posts-grid" class="grid grid-cols-2 gap-2 px-2 pb-10">
                         </div>
                 </div>
                 <div class="hidden"><span id="header-name"></span></div>
@@ -86,7 +73,7 @@
         </main>
 
         <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-lg border-t border-gray-100 flex justify-around items-center h-16 z-40">
-            <button onclick="switchTab('discover')" id="nav-discover" class="flex flex-col items-center gap-1 active-tab">
+            <button onclick="switchTab('discover-view', this)" class="nav-btn flex flex-col items-center gap-1 active-tab">
                 <i class="fa-solid fa-compass text-xl"></i>
                 <span class="text-[10px] font-medium">探索</span>
             </button>
@@ -95,11 +82,11 @@
                     <i class="fa-solid fa-plus text-white text-xl -rotate-45"></i>
                 </div>
             </button>
-            <button onclick="switchTab('messages')" id="nav-messages" class="flex flex-col items-center gap-1 text-gray-400">
+            <button onclick="switchTab('messages-view', this)" class="nav-btn flex flex-col items-center gap-1 text-gray-400">
                 <i class="fa-solid fa-message text-xl"></i>
                 <span class="text-[10px] font-medium">訊息</span>
             </button>
-            <button onclick="switchTab('profile')" id="nav-profile" class="flex flex-col items-center gap-1 text-gray-400">
+            <button onclick="switchTab('profile-view', this)" class="nav-btn flex flex-col items-center gap-1 text-gray-400">
                 <i class="fa-solid fa-user text-xl"></i>
                 <span class="text-[10px] font-medium">我</span>
             </button>
@@ -117,12 +104,9 @@
         </div>
         <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
             </div>
-        <div class="p-4 bg-white border-t safe-area-bottom">
+        <div class="p-4 bg-white border-t">
             <div class="flex items-end gap-2">
-                <button class="text-gray-400 p-2"><i class="fa-solid fa-image text-xl"></i></button>
-                <div class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 min-h-[40px]">
-                    <input type="text" id="chat-input" placeholder="發送訊息..." class="bg-transparent border-none outline-none w-full text-sm">
-                </div>
+                <input type="text" id="chat-input" placeholder="發送訊息..." class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 text-sm border-none outline-none">
                 <button id="send-btn" onclick="handleSendAction()" class="bg-sexify text-white w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-paper-plane text-sm"></i></button>
             </div>
         </div>
@@ -130,8 +114,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
+    <script src="js/i18n.js"></script>
     <script src="js/auth.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/app.js"></script> <script src="js/discovery.js"></script>
+    <script src="js/messages.js"></script>
     <script src="js/profile.js"></script>
+    <script src="js/profile-view.js"></script>
+    <script src="js/search.js"></script>
+    <script src="js/shop.js"></script>
+    <script src="js/create.js"></script>
+
 </body>
 </html>
