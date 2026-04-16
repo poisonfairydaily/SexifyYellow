@@ -12,11 +12,7 @@ let currentKeyword = '';
  */
 window.handleTokenPurchase = async function(amount = 1) {
     try {
-        if (!window.supabaseClient) {
-            alert("系統尚未就緒，請稍後再試！");
-            return;
-        }
-
+        // 1. 獲取當前用戶
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         if (!user) {
             alert("請先登入後再進行充值");
@@ -25,25 +21,37 @@ window.handleTokenPurchase = async function(amount = 1) {
 
         showNotification("正在為您建立安全付款連結...");
 
-        // 呼叫你在 Supabase 部署的方案 2 (create-payment)
+        // 2. 呼叫 Edge Function
+        // 注意：這裡必須確保 body 是一個物件，Supabase SDK 會自動幫你轉成 JSON
         const { data, error } = await window.supabaseClient.functions.invoke('create-payment', {
             body: { 
                 userId: user.id, 
-                amount: amount  // 預設充值 1 美金
+                amount: amount 
             }
         });
 
-        if (error) throw error;
+        // 3. 處理 Function 回傳的錯誤
+        if (error) {
+            console.error("Function 呼叫報錯:", error);
+            throw new Error("無法連結到支付伺服器");
+        }
 
+        // 4. 判斷後端邏輯回傳的錯誤 (我們剛才在 index.ts 裡改為回傳 { error: ... })
+        if (data && data.error) {
+            console.error("支付邏輯錯誤:", data.error);
+            alert(`⚠️ 充值失敗：${data.error}`);
+            return;
+        }
+
+        // 5. 成功拿到網址就跳轉
         if (data && data.invoice_url) {
-            // 直接跳轉到 NowPayments 付款網址
             window.location.href = data.invoice_url;
         } else {
-            throw new Error("無法取得付款網址");
+            throw new Error("未獲取到付款網址");
         }
 
     } catch (err) {
-        console.error("充值失敗:", err.message);
+        console.error("充值功能崩潰:", err.message);
         alert("系統忙碌中，請檢查網路或稍後再試");
     }
 };
