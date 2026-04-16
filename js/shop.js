@@ -124,6 +124,19 @@ window.switchView = function(toCart) {
 window.renderProfile = async function() {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (data) {
+        const balance = data.balance ?? 0;
+        const rate = 0.1; // 假設 1 Token = 0.1 USD (你可以自己改)
+        const usdValue = (balance * rate).toFixed(2); // 保留兩位小數
+
+        // 更新 Token 數量
+        const balanceEl = document.getElementById('shop-balance-display');
+        if (balanceEl) balanceEl.innerText = balance;
+
+        // 更新美金顯示 (假設你有一個 ID 叫 usd-balance-display)
+        const usdEl = document.getElementById('usd-balance-display');
+        if (usdEl) usdEl.innerText = `($${usdValue} USD)`;
+    }
         if (!user) return;
 
         const { data, error } = await window.supabaseClient
