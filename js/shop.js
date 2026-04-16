@@ -24,8 +24,8 @@ const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
-        'apikey': ANON_KEY, // 這裡必須有！
-        'Authorization': `Bearer ${session.access_token}` // 這裡必須有！
+        'apikey': ANON_KEY, // 必須與 corsHeaders 對應
+        'Authorization': `Bearer ${session.access_token}` // 必須與 corsHeaders 對應
     },
     body: JSON.stringify({ userId: user.id, amount: 5 })
 });
