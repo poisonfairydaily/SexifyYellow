@@ -1,6 +1,5 @@
 /**
- * shop.js - 整合式商城核心邏輯 (Supabase 安全加固 & 金流自動跳轉版)
- * 功能：頁籤切換、搜尋過濾、商品模態窗、RPC 後端支付、購物車批量結帳、餘額不足自動充值。
+ * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉)
  */
 
 let cart = []; // 購物車陣列
@@ -8,64 +7,59 @@ let isCartView = false;
 let currentKeyword = ''; 
 
 /**
- * 0. 新增：全局金流充值功能 (呼叫安全 Edge Function)
+ * 0. 支付與充值介面邏輯
  */
-window.handleTokenPurchase = async function(amount = 1) {
-    try {
-        const { data: { session } } = await window.supabaseClient.auth.getSession();
-        if (!session) return alert("請先登入");
 
-        const user = session.user;
-        const accessToken = session.access_token;
-        const ANON_KEY = window.supabaseClient.supabaseKey; 
+// 控制充值輸入區域的顯示/隱藏
+window.toggleRechargeArea = function() {
+    const drawer = document.getElementById('recharge-drawer');
+    const icon = document.getElementById('recharge-icon');
+    if (!drawer) return;
 
-        console.log("🚀 開始建立請求...", { userId: user.id, amount });
-
-        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json', // 【關鍵】明確告訴瀏覽器我們要 JSON，防止 CORB
-                'apikey': ANON_KEY,
-                'Authorization': `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-                userId: user.id,
-                amount: amount
-            })
-        });
-
-        // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("❌ 伺服器回應錯誤:", response.status, errorText);
-            throw new Error(`伺服器回應 ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-        console.log("✅ 收到回應資料:", data);
-
-        // 如果後端傳回錯誤訊息 (像是金鑰無效)
-        if (data.error || data.message === "Invalid api key") {
-            console.error("❌ 後端報錯:", data);
-            alert(`充值失敗: ${data.message || data.error}`);
-            return;
-        }
-
-        if (data.invoice_url) {
-            console.log("🔗 準備跳轉至:", data.invoice_url);
-            window.location.href = data.invoice_url;
-        } else {
-            alert("充值失敗：無法取得支付連結 (請檢查 NowPayments 設定)");
-        }
-
-    } catch (err) {
-        console.error("💥 執行時崩潰:", err);
-        alert(`連線失敗: ${err.message}`);
+    if (drawer.style.display === 'none' || drawer.style.display === '') {
+        drawer.style.display = 'block';
+        if (icon) icon.classList.replace('fa-plus', 'fa-xmark');
+    } else {
+        drawer.style.display = 'none';
+        if (icon) icon.classList.replace('fa-xmark', 'fa-plus');
     }
 };
+
+// 處理充值跳轉支付
+window.payNow = async function() {
+    const amountVal = document.getElementById('rechargeAmount').value;
+    const amount = parseFloat(amountVal);
+    
+    if (isNaN(amount) || amount < 10) {
+        alert("為了確保區塊鏈交易成功，最低充值金額為 $10 USD");
+        return;
+    }
+
+    try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (!session) { alert("請先登入帳號！"); return; }
+
+        showNotification("正在為您建立安全付款連結...");
+
+        const { data, error } = await window.supabaseClient.functions.invoke('create-payment', {
+            body: { userId: session.user.id, amount: amount }
+        });
+
+        if (error) throw error;
+
+        if (data && data.invoice_url) {
+            window.location.href = data.invoice_url;
+        } else {
+            throw new Error("無法取得付款網址");
+        }
+    } catch (err) {
+        console.error("支付失敗:", err.message);
+        alert("系統忙碌中，請檢查網路或稍後再試");
+    }
+};
+
 /**
- * 1. 動態注入與更新頂部頁籤
+ * 1. 動態注入與更新頂部頁籤 (保留原功能)
  */
 function ensureShopTabs() {
     const grid = document.getElementById('shop-grid');
@@ -90,64 +84,28 @@ function ensureShopTabs() {
     `;
 }
 
-function switchView(toCart) {
+window.switchView = function(toCart) {
     if (isCartView === toCart) return;
     isCartView = toCart;
     renderShop(currentKeyword);
-}
+};
 
 /**
  * 2. 商城主渲染入口
  */
-// 控制展開/隱藏充值介面
-window.toggleRechargeArea = function() {
-    const drawer = document.getElementById('recharge-drawer');
-    const icon = document.getElementById('recharge-icon');
+window.renderShop = async function(filterKeyword = '') {
+    const grid = document.getElementById('shop-grid');
+    if (!grid) return;
 
-    if (drawer.style.display === 'none') {
-        drawer.style.display = 'block';
-        icon.classList.replace('fa-plus', 'fa-xmark'); // + 變 X
+    currentKeyword = filterKeyword;
+    ensureShopTabs();
+
+    if (isCartView) {
+        grid.className = "grid grid-cols-1 gap-4"; 
+        renderCartInline(grid);
     } else {
-        drawer.style.display = 'none';
-        icon.classList.replace('fa-xmark', 'fa-plus'); // X 變 +
-    }
-};
-
-// 處理真正的跳轉請求
-window.payNow = async function() {
-    const amountVal = document.getElementById('rechargeAmount').value;
-    const amount = parseFloat(amountVal);
-    
-    if (isNaN(amount) || amount < 10) {
-        alert("請輸入有效的金額 (最低 $10 USD)");
-        return;
-    }
-
-    try {
-        // 取得用戶 Token
-        const { data: { session } } = await window.supabaseClient.auth.getSession();
-        const user = session?.user;
-        if (!user) { alert("請先登入！"); return; }
-
-        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': window.supabaseClient.supabaseKey,
-                'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({ userId: user.id, amount: amount })
-        });
-
-        const data = await response.json();
-        if (data.invoice_url) {
-            window.location.href = data.invoice_url; // 🚀 執行跳轉
-        } else {
-            alert("支付失敗: " + (data.message || "請檢查設定"));
-        }
-    } catch (err) {
-        console.error("支付出錯:", err);
-        alert("系統連線失敗");
+        grid.className = "grid grid-cols-2 gap-3 sm:gap-4";
+        renderProductGrid(grid, filterKeyword);
     }
 };
 
@@ -189,7 +147,7 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * 4. 商品詳情模態視窗 (安全購買版本)
+ * 4. 商品詳情模態視窗
  */
 window.openProductModal = async function(productId) {
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
@@ -225,12 +183,13 @@ window.openProductModal = async function(productId) {
 };
 
 window.closeProductModal = () => {
-    document.getElementById('product-modal-container').innerHTML = '';
+    const modal = document.getElementById('product-modal-container');
+    if (modal) modal.innerHTML = '';
     document.body.style.overflow = '';
 };
 
 /**
- * 5. 核心：後端安全購買 (包含餘額不足偵測)
+ * 5. 安全購買 (RPC)
  */
 window.executeSecurePurchase = async function(itemId, itemName) {
     if (!confirm(`確定要購買「${itemName}」嗎？`)) return;
@@ -247,14 +206,13 @@ window.executeSecurePurchase = async function(itemId, itemName) {
             alert(`🎉 購買成功！餘額：${data.new_balance}`);
             closeProductModal();
             if (typeof window.renderProfile === 'function') window.renderProfile();
+            renderShop(currentKeyword); // 刷新商城 (如庫存)
         } else {
-            // 偵測後端是否回傳「餘額不足」
             const isInsufficientBalance = data.message.includes('餘額不足') || data.message.includes('balance');
-            
             if (isInsufficientBalance) {
-                if (confirm(`⚠️ 餘額不足！\n您目前的點數不夠購買此商品。是否要立即前往充值？`)) {
+                if (confirm(`⚠️ 餘額不足！\n是否要立即前往充值？`)) {
                     closeProductModal();
-                    window.handleTokenPurchase(1); // 跳轉充值 ($1 USD)
+                    toggleRechargeArea(); // 開啟充值抽屜
                 }
             } else {
                 alert(`⚠️ 失敗：${data.message}`);
@@ -262,12 +220,11 @@ window.executeSecurePurchase = async function(itemId, itemName) {
         }
     } catch (e) {
         alert("交易異常，請稍後再試");
-        console.error(e);
     }
 };
 
 /**
- * 6. 購物車邏輯 (包含批量結帳與餘額偵測)
+ * 6. 購物車邏輯
  */
 window.addToCart = function(id, name, price, img) {
     cart.push({ id, name, price, img });
@@ -308,7 +265,6 @@ window.checkoutCart = async function() {
     let successCount = 0;
     let failedDueToBalance = false;
 
-    // 購物車結帳：循環調用 RPC
     for (let i = 0; i < cart.length; i++) {
         const item = cart[i];
         const { data, error } = await window.supabaseClient.rpc('process_purchase', { p_item_id: item.id, p_quantity: 1 });
@@ -316,45 +272,29 @@ window.checkoutCart = async function() {
         if (error || !data.success) {
             if (data && (data.message.includes('餘額不足') || data.message.includes('balance'))) {
                 failedDueToBalance = true;
-                break; // 餘額不足直接中斷後續購買
+                break;
             }
-            console.error(`購買失敗 (${item.name}):`, error || data.message);
             continue; 
         }
         successCount++;
     }
 
     if (failedDueToBalance) {
-        if (confirm(`⚠️ 餘額不足！部分或全部商品結帳失敗。\n是否要立即前往充值點數？`)) {
-            window.handleTokenPurchase(1); // 跳轉充值
+        if (confirm(`⚠️ 餘額不足！是否要立即前往充值點數？`)) {
+            toggleRechargeArea();
         }
     } else if (successCount > 0) {
         alert(`🎉 批量結帳完成！共成功購買 ${successCount} 項商品。`);
-        cart = []; // 清空購物車
+        cart = []; 
         isCartView = false;
         renderShop();
         if (typeof window.renderProfile === 'function') window.renderProfile();
-    } else {
-        alert("⚠️ 結帳失敗，請稍後再試。");
     }
 };
 
 /**
- * 7. 搜尋功能
+ * 7. 通用與通知
  */
-window.searchShop = function() {
-    const kw = document.getElementById('shop-search').value;
-    const clearBtn = document.getElementById('shop-search-clear-btn');
-    if (clearBtn) kw ? clearBtn.classList.remove('hidden') : clearBtn.classList.add('hidden');
-    if (isCartView && kw) isCartView = false;
-    renderShop(kw);
-};
-
-window.clearShopSearch = () => {
-    document.getElementById('shop-search').value = '';
-    window.searchShop();
-};
-
 function showNotification(msg) {
     let n = document.getElementById('shop-notify') || document.createElement('div');
     n.id = 'shop-notify';
@@ -365,4 +305,7 @@ function showNotification(msg) {
     setTimeout(() => n.style.display = 'none', 2000);
 }
 
-document.addEventListener('DOMContentLoaded', () => renderShop());
+// 監聽 DOM 載入
+document.addEventListener('DOMContentLoaded', () => {
+    renderShop();
+});
