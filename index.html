@@ -86,10 +86,12 @@
                         <div class="w-10 h-10 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center"><i class="fa-solid fa-bookmark"></i></div>
                         <span class="font-bold text-gray-700" data-i18n="menu_bookmarks">我的收藏</span>
                     </button>
-                    <button onclick="openOrdersModal()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
-                        <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center"><i class="fa-solid fa-bag-shopping"></i></div>
-                        <span class="font-bold text-gray-700" data-i18n="menu_orders">訂單記錄</span>
-                    </button>
+<button onclick="toggleMyOrders()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
+    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+        <i class="fa-solid fa-bag-shopping"></i>
+    </div>
+    <span class="font-bold text-gray-700" data-i18n="menu_orders">訂單記錄</span>
+</button>
                     <button onclick="openContactModal()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
                         <div class="w-10 h-10 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center"><i class="fa-solid fa-envelope"></i></div>
                         <span class="font-bold text-gray-700" data-i18n="menu_contact">聯絡我們</span>
