@@ -24,13 +24,16 @@ window.handleTokenPurchase = async function(amount = 1) {
         showNotification("正在為您建立安全付款連結...");
 
         // 2. 呼叫 Edge Function (手動傳入 headers 確保 JSON 格式正確)
-        const { data, error } = await window.supabaseClient.functions.invoke('create-payment', {
-            method: 'POST', // 強制指定 POST
-            body: { 
-                userId: user.id, 
-                amount: amount 
-            }
-        });
+        // 在 handleTokenPurchase 裡面，把 invoke 那段換成這個
+const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await window.supabaseClient.auth.getSession()).data.session?.access_token}`
+    },
+    body: JSON.stringify({ userId: user.id, amount: amount })
+});
+const data = await response.json();
 
         // 3. 處理呼叫失敗
         if (error) {
