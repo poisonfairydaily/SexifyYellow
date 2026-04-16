@@ -12,8 +12,10 @@ let currentKeyword = '';
  */
 window.handleTokenPurchase = async function(amount = 1) {
     try {
-        // 1. 獲取當前用戶
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        // 1. 取得使用者 Session (確保已登入)
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        const user = session?.user;
+
         if (!user) {
             alert("請先登入後再進行充值");
             return;
@@ -21,38 +23,42 @@ window.handleTokenPurchase = async function(amount = 1) {
 
         showNotification("正在為您建立安全付款連結...");
 
-        // 2. 呼叫 Edge Function
-        // 注意：這裡必須確保 body 是一個物件，Supabase SDK 會自動幫你轉成 JSON
+        // 2. 呼叫 Edge Function (手動傳入 headers 確保 JSON 格式正確)
         const { data, error } = await window.supabaseClient.functions.invoke('create-payment', {
+            method: 'POST', // 強制指定 POST
             body: { 
                 userId: user.id, 
                 amount: amount 
             }
         });
 
-        // 3. 處理 Function 回傳的錯誤
+        // 3. 處理呼叫失敗
         if (error) {
-            console.error("Function 呼叫報錯:", error);
-            throw new Error("無法連結到支付伺服器");
+            console.error("Function Error:", error);
+            // 如果還是報 JSON 錯誤，這裡會印出具體訊息
+            alert("伺服器連線失敗，請檢查網路");
+            return;
         }
 
-        // 4. 判斷後端邏輯回傳的錯誤 (我們剛才在 index.ts 裡改為回傳 { error: ... })
+        // 4. 處理後端回傳的邏輯報錯
         if (data && data.error) {
-            console.error("支付邏輯錯誤:", data.error);
+            console.error("Payment API Error:", data.error);
             alert(`⚠️ 充值失敗：${data.error}`);
             return;
         }
 
-        // 5. 成功拿到網址就跳轉
+        // 5. 成功獲取網址後跳轉
         if (data && data.invoice_url) {
+            console.log("正在前往付款頁面:", data.invoice_url);
             window.location.href = data.invoice_url;
         } else {
-            throw new Error("未獲取到付款網址");
+            console.error("回傳內容不全:", data);
+            alert("無法獲取付款連結，請聯繫客服");
         }
 
     } catch (err) {
-        console.error("充值功能崩潰:", err.message);
-        alert("系統忙碌中，請檢查網路或稍後再試");
+        console.error("Unexpected Error:", err);
+        alert("系統發生非預期錯誤");
     }
 };
 
