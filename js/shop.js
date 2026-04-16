@@ -24,7 +24,14 @@ window.toggleRechargeArea = function() {
         if (icon) icon.classList.replace('fa-xmark', 'fa-plus');
     }
 };
-
+// 在 shop.js 加入一個手動刷新函數
+window.refreshBalance = async function() {
+    console.log("正在同步餘額...");
+    if (typeof window.renderProfile === 'function') {
+        await window.renderProfile(); // 假設這是你 app.js 裡更新餘額的函數
+        alert("餘額已同步");
+    }
+};
 // 處理充值跳轉支付
 window.payNow = async function() {
     const amountVal = document.getElementById('rechargeAmount').value;
