@@ -21,11 +21,11 @@ window.handleTokenPurchase = async function(amount = 1) {
 
         console.log("🚀 開始建立請求...", { userId: user.id, amount });
 
-        // --- 補回遺失的 fetch 區塊 ---
         const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json', // 【關鍵】明確告訴瀏覽器我們要 JSON，防止 CORB
                 'apikey': ANON_KEY,
                 'Authorization': `Bearer ${accessToken}`
             },
@@ -34,8 +34,8 @@ window.handleTokenPurchase = async function(amount = 1) {
                 amount: amount
             })
         });
-        // --------------------------
 
+        // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
         if (!response.ok) {
             const errorText = await response.text();
             console.error("❌ 伺服器回應錯誤:", response.status, errorText);
@@ -45,10 +45,18 @@ window.handleTokenPurchase = async function(amount = 1) {
         const data = await response.json();
         console.log("✅ 收到回應資料:", data);
 
+        // 如果後端傳回錯誤訊息 (像是金鑰無效)
+        if (data.error || data.message === "Invalid api key") {
+            console.error("❌ 後端報錯:", data);
+            alert(`充值失敗: ${data.message || data.error}`);
+            return;
+        }
+
         if (data.invoice_url) {
+            console.log("🔗 準備跳轉至:", data.invoice_url);
             window.location.href = data.invoice_url;
         } else {
-            alert("充值失敗：" + (data.error || "未知錯誤"));
+            alert("充值失敗：無法取得支付連結 (請檢查 NowPayments 設定)");
         }
 
     } catch (err) {
