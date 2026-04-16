@@ -367,6 +367,27 @@ function showNotification(msg) {
 document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
+/**
+ * 切換已購內容視窗的顯示/隱藏
+ */
+window.toggleMyOrders = function() {
+    console.log("正在切換已購內容視窗...");
+    const view = document.getElementById('my-orders-view');
+    
+    if (!view) {
+        console.error("找不到 ID 為 my-orders-view 的 HTML 元素，請檢查 index.html");
+        return;
+    }
+
+    if (view.classList.contains('hidden')) {
+        // 如果目前是隱藏的，就顯示它並抓取資料
+        view.classList.remove('hidden');
+        window.renderMyOrders(); 
+    } else {
+        // 如果目前是開啟的，就隱藏它
+        view.classList.add('hidden');
+    }
+};
 // 切換顯示已購內容
 window.renderMyOrders = async function() {
     // 1. 抓取容器
