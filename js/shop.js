@@ -20,18 +20,15 @@ window.handleTokenPurchase = async function(amount = 1) {
 
         console.log("🚀 開始建立請求...", { userId: user.id, amount });
 
-        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-                'apikey': ANON_KEY
-            },
-            body: JSON.stringify({
-                userId: user.id,
-                amount: amount
-            })
-        });
+const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'apikey': ANON_KEY, // 這裡必須有！
+        'Authorization': `Bearer ${session.access_token}` // 這裡必須有！
+    },
+    body: JSON.stringify({ userId: user.id, amount: 5 })
+});
 
         // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
         if (!response.ok) {
