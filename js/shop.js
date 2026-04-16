@@ -368,28 +368,22 @@ document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
 // 切換顯示已購內容
-window.toggleMyOrders = function() {
-    const view = document.getElementById('my-orders-view');
-    if (view.classList.contains('hidden')) {
-        view.classList.remove('hidden');
-        renderMyOrders(); // 打開時順便刷新列表
-    } else {
-        view.classList.add('hidden');
-    }
-};
-
-async function renderMyOrders() {
+window.renderMyOrders = async function() {
+    // 1. 抓取容器
     const container = document.getElementById('orders-list-container');
-    if (!container) return;
+    if (!container) {
+        console.error("找不到 ID 為 orders-list-container 的 HTML 元素！");
+        return;
+    }
     
-    container.innerHTML = '<div class="text-white text-center py-10">讀取中...</div>';
+    container.innerHTML = '<div class="text-center py-10 text-gray-400">讀取中...</div>';
 
-    // 這裡要注意：如果你的產品表欄位不是 image_url 或是 name，請改成正確的名稱
+    // 2. 抓取資料 (注意這裏的 products 關連語法)
     const { data, error } = await window.supabaseClient
         .from('orders')
         .select(`
             purchased_at,
-            product:products (
+            products (
                 name,
                 image_url,
                 description
@@ -398,30 +392,31 @@ async function renderMyOrders() {
         .order('purchased_at', { ascending: false });
 
     if (error) {
-        console.error("抓取訂單失敗:", error);
-        container.innerHTML = `<div class="text-red-400">讀取失敗: ${error.message}</div>`;
+        container.innerHTML = `<div class="text-red-500 p-4">錯誤: ${error.message}</div>`;
         return;
     }
 
     if (!data || data.length === 0) {
-        container.innerHTML = '<div class="text-gray-400 text-center py-10">目前沒有已購內容</div>';
+        container.innerHTML = '<div class="text-center py-20 text-gray-400">目前沒有購買紀錄</div>';
         return;
     }
 
+    // 3. 渲染 HTML
     container.innerHTML = data.map(order => {
-        // 防止 product 資料為空導致報錯
-        const p = order.product || { name: '未知商品', image_url: '', description: '' };
+        // 取得產品資訊 (若關連失效則提供預設值)
+        const p = order.products || { name: '未知商品', image_url: '', description: '無描述' };
+        
         return `
-            <div class="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-center">
-                <img src="${p.image_url}" class="w-16 h-16 object-cover rounded-lg bg-gray-800">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4 mb-4">
+                <img src="${p.image_url}" class="w-20 h-20 object-cover rounded-xl bg-gray-100">
                 <div class="flex-1">
-                    <h3 class="text-white font-bold">${p.name}</h3>
-                    <p class="text-gray-400 text-xs mt-1">${p.description || ''}</p>
-                    <div class="text-[10px] text-gray-500 mt-2">
-                        購入於: ${new Date(order.purchased_at).toLocaleString()}
+                    <h3 class="font-bold text-gray-900">${p.name}</h3>
+                    <p class="text-xs text-gray-500 mt-1 line-clamp-2">${p.description || ''}</p>
+                    <div class="text-[10px] text-gray-400 mt-2">
+                        購買於: ${new Date(order.purchased_at).toLocaleString()}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
-}
+};
