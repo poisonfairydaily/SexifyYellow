@@ -25,13 +25,37 @@ window.toggleRechargeArea = function() {
     }
 };
 // 在 shop.js 加入一個手動刷新函數
-window.refreshBalance = async function() {
-    console.log("正在同步餘額...");
-    if (typeof window.renderProfile === 'function') {
-        await window.renderProfile(); // 假設這是你 app.js 裡更新餘額的函數
-        alert("餘額已同步");
+/**
+ * 強制更新餘額顯示補丁
+ */
+window.refreshBalanceUI = async function() {
+    try {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('balance')
+            .eq('id', user.id)
+            .single();
+
+        if (error) throw error;
+
+        // 這裡尋找你的 HTML 標籤，假設它的 ID 叫 user-balance
+        const balanceDisplay = document.getElementById('user-balance');
+        if (balanceDisplay) {
+            balanceDisplay.innerText = data.balance !== null ? data.balance : 0;
+            console.log("餘額更新成功:", data.balance);
+        }
+    } catch (err) {
+        console.error("餘額顯示失敗:", err.message);
     }
 };
+
+// 每當頁面載入時跑一次
+document.addEventListener('DOMContentLoaded', window.refreshBalanceUI);
+// 每隔 10 秒自動檢查一次（適合支付完自動跳數字）
+setInterval(window.refreshBalanceUI, 10000);
 // 處理充值跳轉支付
 window.payNow = async function() {
     const amountVal = document.getElementById('rechargeAmount').value;
