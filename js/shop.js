@@ -1,5 +1,5 @@
 /**
- * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉)
+ * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉、我的內容)
  */
 
 let cart = []; // 購物車陣列
@@ -24,7 +24,7 @@ window.toggleRechargeArea = function() {
         if (icon) icon.classList.replace('fa-xmark', 'fa-plus');
     }
 };
-// 在 shop.js 加入一個手動刷新函數
+
 /**
  * 強制更新餘額顯示補丁
  */
@@ -41,11 +41,9 @@ window.refreshBalanceUI = async function() {
 
         if (error) throw error;
 
-        // 這裡尋找你的 HTML 標籤，假設它的 ID 叫 user-balance
         const balanceDisplay = document.getElementById('user-balance');
         if (balanceDisplay) {
             balanceDisplay.innerText = data.balance !== null ? data.balance : 0;
-            console.log("餘額更新成功:", data.balance);
         }
     } catch (err) {
         console.error("餘額顯示失敗:", err.message);
@@ -54,8 +52,9 @@ window.refreshBalanceUI = async function() {
 
 // 每當頁面載入時跑一次
 document.addEventListener('DOMContentLoaded', window.refreshBalanceUI);
-// 每隔 10 秒自動檢查一次（適合支付完自動跳數字）
+// 每隔 10 秒自動檢查一次
 setInterval(window.refreshBalanceUI, 10000);
+
 // 處理充值跳轉支付
 window.payNow = async function() {
     const amountVal = document.getElementById('rechargeAmount').value;
@@ -90,7 +89,7 @@ window.payNow = async function() {
 };
 
 /**
- * 1. 動態注入與更新頂部頁籤 (保留原功能)
+ * 1. 動態注入與更新頂部頁籤
  */
 function ensureShopTabs() {
     const grid = document.getElementById('shop-grid');
@@ -120,6 +119,7 @@ window.switchView = function(toCart) {
     isCartView = toCart;
     renderShop(currentKeyword);
 };
+
 // 定義一個專門更新餘額的函數
 window.renderProfile = async function() {
     try {
@@ -134,20 +134,17 @@ window.renderProfile = async function() {
 
         if (error) throw error;
 
-        // 注意：這裡的 ID 必須完全對應你 HTML 裡的 shop-balance-display
         const balanceEl = document.getElementById('shop-balance-display');
         if (balanceEl) {
-            // 使用 ?? 0 確保如果資料庫沒數字時顯示 0
             balanceEl.innerText = data.balance ?? 0;
-            console.log("餘額顯示已更新:", data.balance);
         }
     } catch (err) {
         console.error("更新餘額出錯:", err.message);
     }
 };
 
-// 網頁載入後立刻執行一次
 document.addEventListener('DOMContentLoaded', window.renderProfile);
+
 /**
  * 2. 商城主渲染入口
  */
@@ -264,13 +261,13 @@ window.executeSecurePurchase = async function(itemId, itemName) {
             alert(`🎉 購買成功！餘額：${data.new_balance}`);
             closeProductModal();
             if (typeof window.renderProfile === 'function') window.renderProfile();
-            renderShop(currentKeyword); // 刷新商城 (如庫存)
+            renderShop(currentKeyword); 
         } else {
             const isInsufficientBalance = data.message.includes('餘額不足') || data.message.includes('balance');
             if (isInsufficientBalance) {
                 if (confirm(`⚠️ 餘額不足！\n是否要立即前往充值？`)) {
                     closeProductModal();
-                    toggleRechargeArea(); // 開啟充值抽屜
+                    toggleRechargeArea(); 
                 }
             } else {
                 alert(`⚠️ 失敗：${data.message}`);
@@ -363,43 +360,33 @@ function showNotification(msg) {
     setTimeout(() => n.style.display = 'none', 2000);
 }
 
-// 監聽 DOM 載入
 document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
+
+
 /**
- * 切換已購內容視窗的顯示/隱藏
+ * 8. 我的內容 (已購商品庫存)
  */
+
 window.toggleMyOrders = function() {
-    console.log("正在切換已購內容視窗...");
     const view = document.getElementById('my-orders-view');
-    
-    if (!view) {
-        console.error("找不到 ID 為 my-orders-view 的 HTML 元素，請檢查 index.html");
-        return;
-    }
+    if (!view) return;
 
     if (view.classList.contains('hidden')) {
-        // 如果目前是隱藏的，就顯示它並抓取資料
         view.classList.remove('hidden');
         window.renderMyOrders(); 
     } else {
-        // 如果目前是開啟的，就隱藏它
         view.classList.add('hidden');
     }
 };
-// 切換顯示已購內容
-window.renderMyOrders = async function() {
-    // 1. 抓取容器
-    const container = document.getElementById('orders-list-container');
-    if (!container) {
-        console.error("找不到 ID 為 orders-list-container 的 HTML 元素！");
-        return;
-    }
-    
-    container.innerHTML = '<div class="text-center py-10 text-gray-400">讀取中...</div>';
 
-    // 2. 抓取資料 (注意這裏的 products 關連語法)
+window.renderMyOrders = async function() {
+    const container = document.getElementById('orders-list-container');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center py-10 text-white/50"><i class="fa-solid fa-spinner fa-spin text-xl"></i></div>';
+
     const { data, error } = await window.supabaseClient
         .from('orders')
         .select(`
@@ -413,31 +400,72 @@ window.renderMyOrders = async function() {
         .order('purchased_at', { ascending: false });
 
     if (error) {
-        container.innerHTML = `<div class="text-red-500 p-4">錯誤: ${error.message}</div>`;
+        container.innerHTML = `<div class="text-red-400 text-center py-4 text-xs">讀取失敗</div>`;
         return;
     }
 
     if (!data || data.length === 0) {
-        container.innerHTML = '<div class="text-center py-20 text-gray-400">目前沒有購買紀錄</div>';
+        container.innerHTML = '<div class="text-center py-20 text-white/40 text-sm">庫存空空如也</div>';
         return;
     }
 
-    // 3. 渲染 HTML
+    // 這裡換成了深色、更緊湊的 UI
     container.innerHTML = data.map(order => {
-        // 取得產品資訊 (若關連失效則提供預設值)
         const p = order.products || { name: '未知商品', image_url: '', description: '無描述' };
         
         return `
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4 mb-4">
-                <img src="${p.image_url}" class="w-20 h-20 object-cover rounded-xl bg-gray-100">
-                <div class="flex-1">
-                    <h3 class="font-bold text-gray-900">${p.name}</h3>
-                    <p class="text-xs text-gray-500 mt-1 line-clamp-2">${p.description || ''}</p>
-                    <div class="text-[10px] text-gray-400 mt-2">
-                        購買於: ${new Date(order.purchased_at).toLocaleString()}
+            <div onclick="window.showItemDetail('${p.name}', '${p.image_url}', '${(p.description || '').replace(/'/g, "\\'")}')" 
+                 class="bg-white/[0.03] border border-white/10 p-3 rounded-2xl flex gap-4 items-center cursor-pointer active:scale-[0.98] transition-all hover:bg-white/[0.05]">
+                
+                <img src="${p.image_url}" class="w-14 h-14 object-cover rounded-xl bg-gray-800 shadow-lg">
+                
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-white text-sm font-bold truncate">${p.name}</h3>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[9px] text-gray-500">${new Date(order.purchased_at).toLocaleDateString()}</span>
+                        <span class="text-[8px] bg-sexify/20 text-sexify px-1.5 py-0.5 rounded italic font-bold">UNLOCKED</span>
                     </div>
                 </div>
+                
+                <i class="fa-solid fa-chevron-right text-white/20 text-[10px]"></i>
             </div>
         `;
     }).join('');
+};
+
+/**
+ * 9. 單一商品詳情彈窗 (點擊我的內容後觸發)
+ */
+window.showItemDetail = function(name, imageUrl, description) {
+    let detailView = document.getElementById('item-detail-view');
+    
+    // 如果 HTML 中沒找到，用 JS 自動建立並插入到 body
+    if (!detailView) {
+        detailView = document.createElement('div');
+        detailView.id = 'item-detail-view';
+        detailView.className = 'hidden fixed inset-0 z-[6000] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm';
+        detailView.innerHTML = `
+            <div class="bg-[#1a1a1a] w-full max-w-sm rounded-[32px] overflow-hidden border border-white/10 relative shadow-2xl flex flex-col">
+                <button onclick="document.getElementById('item-detail-view').classList.add('hidden')" class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/80 w-8 h-8 rounded-full flex items-center justify-center z-10 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <img id="detail-img" src="" class="w-full aspect-square object-cover bg-gray-900">
+                <div class="p-6">
+                    <h2 id="detail-title" class="text-xl font-bold text-white mb-2"></h2>
+                    <p id="detail-desc" class="text-gray-400 text-xs leading-relaxed mb-6"></p>
+                    <button onclick="alert('這裡可以觸發下載或跳轉連結！')" class="w-full bg-sexify text-white py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-sexify/30 active:scale-95 transition-all">
+                        查看完整內容
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(detailView);
+    }
+
+    // 填入資料並顯示
+    document.getElementById('detail-img').src = imageUrl;
+    document.getElementById('detail-title').innerText = name;
+    document.getElementById('detail-desc').innerText = description || '暫無詳細描述';
+    
+    detailView.classList.remove('hidden');
 };
