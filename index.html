@@ -161,15 +161,20 @@
                 <p class="text-sm text-gray-300 opacity-90">解鎖專屬圖集與私密互動</p>
             </div>
 
-            <div class="text-right">
-                <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">我的餘額</div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xl font-black text-sexify">🪙 <span id="shop-balance-display">--</span></span>
-                    <button onclick="toggleRechargeArea()" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-all active:scale-90">
-                        <i id="recharge-icon" class="fa-solid fa-plus text-xs"></i>
-                    </button>
-                </div>
-            </div>
+<div class="text-right">
+    <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">我的餘額</div>
+    <div class="flex items-center gap-2">
+        <span class="text-xl font-black text-sexify">🪙 <span id="shop-balance-display">--</span></span>
+        
+        <button onclick="toggleMyOrders()" class="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg border border-white/10 text-xs transition-all active:scale-90">
+            <i class="fa-solid fa-box-open mr-1"></i> 我的內容
+        </button>
+
+        <button onclick="toggleRechargeArea()" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-all active:scale-90">
+            <i id="recharge-icon" class="fa-solid fa-plus text-xs"></i>
+        </button>
+    </div>
+</div>
         </div>
 
         <div id="recharge-drawer" style="display: none;" class="mt-6 pt-4 border-t border-white/10 relative z-20">
@@ -195,15 +200,6 @@
         </div>
         
         <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-sexify/20 rounded-full blur-3xl z-0"></div>
-        <div id="my-orders-view" class="fixed inset-0 z-[9999] bg-white hidden flex-col">
-    <div class="p-4 border-b flex justify-between items-center bg-gray-50">
-        <h2 class="font-bold text-lg">我的已購內容</h2>
-        <button onclick="toggleMyOrders()" class="p-2 text-2xl">&times;</button>
-    </div>
-    
-    <div id="orders-list-container" class="flex-1 overflow-y-auto p-4 bg-gray-50">
-        </div>
-</div>
     </div>
 
     <div id="shop-grid" class="grid grid-cols-2 gap-4 pb-32"></div>
