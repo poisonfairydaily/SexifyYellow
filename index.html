@@ -463,7 +463,17 @@
             </div>
         </div>
     </div>
-
+<div id="my-orders-view" class="hidden fixed inset-0 z-[5500] bg-black flex flex-col animate-in slide-in-from-bottom duration-300">
+        <div class="p-6 flex items-center gap-4 border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-10">
+            <button onclick="toggleMyOrders()" class="text-white text-xl w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <h2 class="text-white text-lg font-bold" data-i18n="menu_orders">訂單記錄</h2>
+        </div>
+        
+        <div id="orders-list-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-black">
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/i18n.js"></script>
