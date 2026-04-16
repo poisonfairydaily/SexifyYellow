@@ -16,12 +16,26 @@ window.handleTokenPurchase = async function(amount = 1) {
         if (!session) return alert("請先登入");
 
         const user = session.user;
-        const ANON_KEY = window.supabaseClient.supabaseKey; // 自動獲取你的 Anon Key
+        const accessToken = session.access_token;
+        const ANON_KEY = window.supabaseClient.supabaseKey; 
 
         console.log("🚀 開始建立請求...", { userId: user.id, amount });
 
-Verify JWT with legacy secret
-        // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
+        // --- 補回遺失的 fetch 區塊 ---
+        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': ANON_KEY,
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                amount: amount
+            })
+        });
+        // --------------------------
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error("❌ 伺服器回應錯誤:", response.status, errorText);
