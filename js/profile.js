@@ -194,13 +194,13 @@ window.renderProfile = async function() {
                     </div>
                 </div>
             </div>
-            <div class="bg-gray-50 pt-2 min-h-[300px]"><div class="masonry-grid px-2">`;
+            <div class="bg-gray-50 pt-3 pb-32 min-h-[300px]"><div class="masonry-grid px-2">`;
         
         if (myPosts.length > 0) {
             html += myPosts.map(p => `
-                <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl" onclick="viewPost('${p.id}')">
+                <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl mb-3 break-inside-avoid" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
-                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${window.escapeHTML(p.caption || '')}</p>
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed mt-1">${window.escapeHTML(p.caption || '')}</p>
                 </div>
             `).join('');
         } else {
@@ -313,8 +313,9 @@ window.viewOtherProfile = async function(userId) {
         if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
         else {
             grid.innerHTML = posts.map(p => `
-                <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl" onclick="viewPost('${p.id}')">
+                <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl mb-3 break-inside-avoid" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字</div>`}
+                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed mt-1">${window.escapeHTML(p.caption || '')}</p>
                 </div>
             `).join('');
         }
