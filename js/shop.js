@@ -1,11 +1,52 @@
 /**
- * shop.js - 整合式商城核心邏輯 (Supabase 安全加固版)
- * 功能：頁籤切換、搜尋過濾、商品模態窗、RPC 後端支付、購物車批量結帳。
+ * shop.js - 整合式商城核心邏輯 (Supabase 安全加固 & 金流自動跳轉版)
+ * 功能：頁籤切換、搜尋過濾、商品模態窗、RPC 後端支付、購物車批量結帳、餘額不足自動充值。
  */
 
 let cart = []; // 購物車陣列
 let isCartView = false; 
 let currentKeyword = ''; 
+
+/**
+ * 0. 新增：全局金流充值功能 (呼叫安全 Edge Function)
+ */
+window.handleTokenPurchase = async function(amount = 1) {
+    try {
+        if (!window.supabaseClient) {
+            alert("系統尚未就緒，請稍後再試！");
+            return;
+        }
+
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) {
+            alert("請先登入後再進行充值");
+            return;
+        }
+
+        showNotification("正在為您建立安全付款連結...");
+
+        // 呼叫你在 Supabase 部署的方案 2 (create-payment)
+        const { data, error } = await window.supabaseClient.functions.invoke('create-payment', {
+            body: { 
+                userId: user.id, 
+                amount: amount  // 預設充值 1 美金
+            }
+        });
+
+        if (error) throw error;
+
+        if (data && data.invoice_url) {
+            // 直接跳轉到 NowPayments 付款網址
+            window.location.href = data.invoice_url;
+        } else {
+            throw new Error("無法取得付款網址");
+        }
+
+    } catch (err) {
+        console.error("充值失敗:", err.message);
+        alert("系統忙碌中，請檢查網路或稍後再試");
+    }
+};
 
 /**
  * 1. 動態注入與更新頂部頁籤
@@ -137,7 +178,7 @@ window.closeProductModal = () => {
 };
 
 /**
- * 5. 核心：後端安全購買 (RPC)
+ * 5. 核心：後端安全購買 (包含餘額不足偵測)
  */
 window.executeSecurePurchase = async function(itemId, itemName) {
     if (!confirm(`確定要購買「${itemName}」嗎？`)) return;
@@ -155,15 +196,26 @@ window.executeSecurePurchase = async function(itemId, itemName) {
             closeProductModal();
             if (typeof window.renderProfile === 'function') window.renderProfile();
         } else {
-            alert(`⚠️ 失敗：${data.message}`);
+            // 偵測後端是否回傳「餘額不足」
+            const isInsufficientBalance = data.message.includes('餘額不足') || data.message.includes('balance');
+            
+            if (isInsufficientBalance) {
+                if (confirm(`⚠️ 餘額不足！\n您目前的點數不夠購買此商品。是否要立即前往充值？`)) {
+                    closeProductModal();
+                    window.handleTokenPurchase(1); // 跳轉充值 ($1 USD)
+                }
+            } else {
+                alert(`⚠️ 失敗：${data.message}`);
+            }
         }
     } catch (e) {
         alert("交易異常，請稍後再試");
+        console.error(e);
     }
 };
 
 /**
- * 6. 購物車邏輯
+ * 6. 購物車邏輯 (包含批量結帳與餘額偵測)
  */
 window.addToCart = function(id, name, price, img) {
     cart.push({ id, name, price, img });
@@ -201,14 +253,38 @@ window.checkoutCart = async function() {
     if (cart.length === 0) return;
     if (!confirm(`確定結帳這 ${cart.length} 項商品？`)) return;
 
-    // 購物車結帳：循環調用 RPC (更進階做法是寫一個批量 RPC，這裡先維持簡單邏輯)
-    for (let item of cart) {
-        await window.supabaseClient.rpc('process_purchase', { p_item_id: item.id, p_quantity: 1 });
+    let successCount = 0;
+    let failedDueToBalance = false;
+
+    // 購物車結帳：循環調用 RPC
+    for (let i = 0; i < cart.length; i++) {
+        const item = cart[i];
+        const { data, error } = await window.supabaseClient.rpc('process_purchase', { p_item_id: item.id, p_quantity: 1 });
+
+        if (error || !data.success) {
+            if (data && (data.message.includes('餘額不足') || data.message.includes('balance'))) {
+                failedDueToBalance = true;
+                break; // 餘額不足直接中斷後續購買
+            }
+            console.error(`購買失敗 (${item.name}):`, error || data.message);
+            continue; 
+        }
+        successCount++;
     }
-    alert("批量結帳完成！");
-    cart = [];
-    isCartView = false;
-    renderShop();
+
+    if (failedDueToBalance) {
+        if (confirm(`⚠️ 餘額不足！部分或全部商品結帳失敗。\n是否要立即前往充值點數？`)) {
+            window.handleTokenPurchase(1); // 跳轉充值
+        }
+    } else if (successCount > 0) {
+        alert(`🎉 批量結帳完成！共成功購買 ${successCount} 項商品。`);
+        cart = []; // 清空購物車
+        isCartView = false;
+        renderShop();
+        if (typeof window.renderProfile === 'function') window.renderProfile();
+    } else {
+        alert("⚠️ 結帳失敗，請稍後再試。");
+    }
 };
 
 /**
