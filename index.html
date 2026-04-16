@@ -161,38 +161,40 @@
                 <p class="text-sm text-gray-300 opacity-90">解鎖專屬圖集與私密互動</p>
             </div>
 
-<div class="text-right">
-    <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">我的餘額</div>
-    <div class="flex items-center gap-2">
-        <span class="text-xl font-black text-sexify">🪙 <span id="shop-balance-display">--</span></span>
+<div class="text-right flex flex-col items-end justify-center">
+    <div class="text-[9px] text-gray-400 uppercase tracking-tighter mb-1 opacity-70">我的餘額</div>
+    <div class="flex items-center gap-1.5">
+        <div class="flex items-center bg-white/5 px-2 py-1 rounded-full border border-white/10">
+            <span class="text-sm font-black text-sexify">🪙 <span id="shop-balance-display">--</span></span>
+        </div>
         
-        <button onclick="window.toggleMyOrders()" class="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg border border-white/10 text-xs transition-all active:scale-90 flex items-center">
-            <i class="fa-solid fa-box-open mr-1.5"></i> 我的內容
+        <button onclick="window.toggleMyOrders()" class="bg-white/10 hover:bg-white/20 text-white h-[28px] px-2.5 rounded-full border border-white/10 text-[10px] transition-all active:scale-95 flex items-center">
+            <i class="fa-solid fa-box-open mr-1"></i>內容
         </button>
 
-        <button onclick="window.toggleRechargeArea()" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-all active:scale-90">
-            <i id="recharge-icon" class="fa-solid fa-plus text-xs"></i>
+        <button onclick="window.toggleRechargeArea()" class="bg-sexify text-white w-[28px] h-[28px] flex items-center justify-center rounded-full shadow-lg shadow-sexify/20 transition-all active:scale-90">
+            <i id="recharge-icon" class="fa-solid fa-plus text-[10px]"></i>
         </button>
     </div>
-<div id="my-orders-view" class="hidden fixed inset-0 z-[5000] bg-black/60 backdrop-blur-xl flex flex-col items-center justify-start sm:py-10">
-    <div class="w-full h-full sm:h-auto sm:max-w-2xl sm:rounded-3xl bg-[#121212] border border-white/10 shadow-2xl flex flex-col overflow-hidden">
+</div>
+<div id="my-orders-view" class="hidden fixed inset-0 z-[5000] bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center">
+    
+    <div class="w-full max-h-[85vh] bg-[#121212] rounded-t-[32px] sm:rounded-[32px] sm:max-w-md border-t border-x border-white/10 flex flex-col overflow-hidden shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
         
-        <div class="px-6 py-5 flex justify-between items-center bg-white/[0.02] border-b border-white/10">
+        <div class="w-12 h-1 bg-white/10 rounded-full mx-auto mt-3 mb-1"></div>
+
+        <div class="px-6 py-4 flex justify-between items-center">
             <div>
-                <h2 class="text-white text-xl font-heavy tracking-tight">我的庫存</h2>
-                <p class="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">My Collection</p>
+                <h2 class="text-white text-lg font-bold">我的庫存</h2>
+                <p class="text-[9px] text-gray-500 uppercase">My Collection</p>
             </div>
-            <button onclick="window.toggleMyOrders()" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-all active:scale-90">
-                <i class="fa-solid fa-xmark text-lg"></i>
+            <button onclick="window.toggleMyOrders()" class="w-8 h-8 rounded-full bg-white/5 text-white flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-sm"></i>
             </button>
         </div>
         
-        <div id="orders-list-container" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <div id="orders-list-container" class="flex-1 overflow-y-auto px-4 pb-10 space-y-3 custom-scrollbar">
             </div>
-        
-        <div class="p-4 bg-white/[0.01] border-t border-white/5 text-center">
-            <p class="text-[10px] text-gray-600">已購買的內容將永久保留在您的帳號中</p>
-        </div>
     </div>
 </div>
 </div>
