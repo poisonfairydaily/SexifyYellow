@@ -99,41 +99,55 @@ function switchView(toCart) {
 /**
  * 2. 商城主渲染入口
  */
-window.renderShop = async function(filterKeyword = '') {
-    const grid = document.getElementById('shop-grid');
-    if (!grid) return;
+// 控制展開/隱藏充值介面
+window.toggleRechargeArea = function() {
+    const drawer = document.getElementById('recharge-drawer');
+    const icon = document.getElementById('recharge-icon');
 
-    // --- 新增：更新餘額邏輯 ---
-    const balanceEl = document.getElementById('shop-balance-display');
-    const userId = localStorage.getItem('userId');
-    
-    if (balanceEl && userId) {
-        // 先顯示加載中，避免顯示舊資料
-        balanceEl.innerText = '...'; 
-        
-        window.supabaseClient
-            .from('profiles')
-            .select('balance')
-            .eq('id', userId)
-            .single()
-            .then(({ data }) => {
-                if (data) balanceEl.innerText = data.balance;
-            })
-            .catch(() => {
-                balanceEl.innerText = '0';
-            });
-    }
-    // ------------------------
-
-    currentKeyword = filterKeyword;
-    ensureShopTabs();
-
-    if (isCartView) {
-        grid.className = "grid grid-cols-1 gap-4"; 
-        renderCartInline(grid);
+    if (drawer.style.display === 'none') {
+        drawer.style.display = 'block';
+        icon.classList.replace('fa-plus', 'fa-xmark'); // + 變 X
     } else {
-        grid.className = "grid grid-cols-2 gap-3 sm:gap-4";
-        renderProductGrid(grid, filterKeyword);
+        drawer.style.display = 'none';
+        icon.classList.replace('fa-xmark', 'fa-plus'); // X 變 +
+    }
+};
+
+// 處理真正的跳轉請求
+window.payNow = async function() {
+    const amountVal = document.getElementById('rechargeAmount').value;
+    const amount = parseFloat(amountVal);
+    
+    if (isNaN(amount) || amount < 10) {
+        alert("請輸入有效的金額 (最低 $10 USD)");
+        return;
+    }
+
+    try {
+        // 取得用戶 Token
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        const user = session?.user;
+        if (!user) { alert("請先登入！"); return; }
+
+        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': window.supabaseClient.supabaseKey,
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ userId: user.id, amount: amount })
+        });
+
+        const data = await response.json();
+        if (data.invoice_url) {
+            window.location.href = data.invoice_url; // 🚀 執行跳轉
+        } else {
+            alert("支付失敗: " + (data.message || "請檢查設定"));
+        }
+    } catch (err) {
+        console.error("支付出錯:", err);
+        alert("系統連線失敗");
     }
 };
 
