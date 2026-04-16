@@ -367,3 +367,52 @@ function showNotification(msg) {
 document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
+// 切換顯示已購內容
+window.toggleMyOrders = function() {
+    const view = document.getElementById('my-orders-view');
+    if (view.classList.contains('hidden')) {
+        view.classList.remove('hidden');
+        renderMyOrders(); // 打開時順便刷新列表
+    } else {
+        view.classList.add('hidden');
+    }
+};
+
+// 抓取並顯示內容
+async function renderMyOrders() {
+    const container = document.getElementById('orders-list-container');
+    container.innerHTML = '<div class="text-center py-10">讀取中...</div>';
+
+    const { data, error } = await window.supabaseClient
+        .from('orders')
+        .select(`
+            purchased_at,
+            products (
+                name,
+                image_url,
+                description
+            )
+        `)
+        .order('purchased_at', { ascending: false });
+
+    if (error) {
+        container.innerHTML = `<div class="text-red-500">讀取失敗: ${error.message}</div>`;
+        return;
+    }
+
+    if (data.length === 0) {
+        container.innerHTML = '<div class="text-center py-10 text-gray-400">尚未購買任何內容</div>';
+        return;
+    }
+
+    container.innerHTML = data.map(order => `
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4">
+            <img src="${order.products.image_url}" class="w-20 h-20 object-cover rounded-xl">
+            <div class="flex-1">
+                <h3 class="font-bold text-gray-900">${order.products.name}</h3>
+                <p class="text-xs text-gray-500 mt-1">${order.products.description || ''}</p>
+                <div class="text-[10px] text-gray-400 mt-2">購買時間: ${new Date(order.purchased_at).toLocaleString()}</div>
+            </div>
+        </div>
+    `).join('');
+}
