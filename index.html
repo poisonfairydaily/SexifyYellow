@@ -160,7 +160,42 @@
                 <h2 class="text-2xl font-black mb-1">SEXIFY 商城</h2>
                 <p class="text-sm text-gray-300 opacity-90">解鎖專屬圖集與私密互動</p>
             </div>
+<div class="mt-8 p-6 bg-gray-800/50 border border-gray-700 rounded-2xl">
+    <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+        <span class="mr-2">💎</span> 帳戶充值
+    </h2>
+    
+    <div class="space-y-4">
+        <div>
+            <label class="block text-sm text-gray-400 mb-2">選擇或輸入金額 (USD)</label>
+            <div class="flex gap-2 mb-3">
+                <button onclick="document.getElementById('rechargeAmount').value=10" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$10</button>
+                <button onclick="document.getElementById('rechargeAmount').value=50" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$50</button>
+                <button onclick="document.getElementById('rechargeAmount').value=100" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$100</button>
+            </div>
+            
+            <input 
+                type="number" 
+                id="rechargeAmount" 
+                value="10" 
+                min="10"
+                class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="最低 $10"
+            >
+        </div>
 
+        <button 
+            onclick="payNow()" 
+            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all transform active:scale-95 shadow-lg shadow-blue-900/20"
+        >
+            立即獲取 Token
+        </button>
+        
+        <p class="text-center text-xs text-gray-500">
+            支持 BTC, ETH, USDT 等多種加密貨幣
+        </p>
+    </div>
+</div>
             <div class="text-right">
                 <div class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">我的餘額</div>
                 <div class="flex items-center gap-2">
@@ -352,42 +387,7 @@
             </div>
         </div>
     </div>
-<div class="mt-8 p-6 bg-gray-800/50 border border-gray-700 rounded-2xl">
-    <h2 class="text-xl font-bold text-white mb-4 flex items-center">
-        <span class="mr-2">💎</span> 帳戶充值
-    </h2>
-    
-    <div class="space-y-4">
-        <div>
-            <label class="block text-sm text-gray-400 mb-2">選擇或輸入金額 (USD)</label>
-            <div class="flex gap-2 mb-3">
-                <button onclick="document.getElementById('rechargeAmount').value=10" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$10</button>
-                <button onclick="document.getElementById('rechargeAmount').value=50" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$50</button>
-                <button onclick="document.getElementById('rechargeAmount').value=100" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition">$100</button>
-            </div>
-            
-            <input 
-                type="number" 
-                id="rechargeAmount" 
-                value="10" 
-                min="10"
-                class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                placeholder="最低 $10"
-            >
-        </div>
 
-        <button 
-            onclick="payNow()" 
-            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all transform active:scale-95 shadow-lg shadow-blue-900/20"
-        >
-            立即獲取 Token
-        </button>
-        
-        <p class="text-center text-xs text-gray-500">
-            支持 BTC, ETH, USDT 等多種加密貨幣
-        </p>
-    </div>
-</div>
     <div id="fans-subs-modal" class="fixed inset-0 z-[300] bg-gray-50 hidden flex-col transform translate-y-full transition-transform duration-300">
         <header class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
             <button onclick="closeFansSubsModal()" class="text-gray-500 font-bold px-2 py-1"><i class="fa-solid fa-chevron-left text-xl"></i></button>
