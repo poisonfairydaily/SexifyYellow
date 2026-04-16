@@ -12,59 +12,48 @@ let currentKeyword = '';
  */
 window.handleTokenPurchase = async function(amount = 1) {
     try {
-        // 1. 取得使用者 Session (確保已登入)
         const { data: { session } } = await window.supabaseClient.auth.getSession();
-        const user = session?.user;
+        if (!session) return alert("請先登入");
 
-        if (!user) {
-            alert("請先登入後再進行充值");
-            return;
+        const user = session.user;
+        const ANON_KEY = window.supabaseClient.supabaseKey; // 自動獲取你的 Anon Key
+
+        console.log("🚀 開始建立請求...", { userId: user.id, amount });
+
+        const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey': ANON_KEY
+            },
+            body: JSON.stringify({
+                userId: user.id,
+                amount: amount
+            })
+        });
+
+        // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("❌ 伺服器回應錯誤:", response.status, errorText);
+            throw new Error(`伺服器回應 ${response.status}: ${errorText}`);
         }
 
-        showNotification("正在為您建立安全付款連結...");
+        const data = await response.json();
+        console.log("✅ 收到回應資料:", data);
 
-        // 2. 呼叫 Edge Function (手動傳入 headers 確保 JSON 格式正確)
-        // 在 handleTokenPurchase 裡面，把 invoke 那段換成這個
-const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions/v1/create-payment', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(await window.supabaseClient.auth.getSession()).data.session?.access_token}`
-    },
-    body: JSON.stringify({ userId: user.id, amount: amount })
-});
-const data = await response.json();
-
-        // 3. 處理呼叫失敗
-        if (error) {
-            console.error("Function Error:", error);
-            // 如果還是報 JSON 錯誤，這裡會印出具體訊息
-            alert("伺服器連線失敗，請檢查網路");
-            return;
-        }
-
-        // 4. 處理後端回傳的邏輯報錯
-        if (data && data.error) {
-            console.error("Payment API Error:", data.error);
-            alert(`⚠️ 充值失敗：${data.error}`);
-            return;
-        }
-
-        // 5. 成功獲取網址後跳轉
-        if (data && data.invoice_url) {
-            console.log("正在前往付款頁面:", data.invoice_url);
+        if (data.invoice_url) {
             window.location.href = data.invoice_url;
         } else {
-            console.error("回傳內容不全:", data);
-            alert("無法獲取付款連結，請聯繫客服");
+            alert("充值失敗：" + (data.error || "未知錯誤"));
         }
 
     } catch (err) {
-        console.error("Unexpected Error:", err);
-        alert("系統發生非預期錯誤");
+        console.error("💥 執行時崩潰:", err);
+        alert(`連線失敗: ${err.message}`);
     }
 };
-
 /**
  * 1. 動態注入與更新頂部頁籤
  */
