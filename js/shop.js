@@ -120,7 +120,34 @@ window.switchView = function(toCart) {
     isCartView = toCart;
     renderShop(currentKeyword);
 };
+// 定義一個專門更新餘額的函數
+window.renderProfile = async function() {
+    try {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) return;
 
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('balance')
+            .eq('id', user.id)
+            .single();
+
+        if (error) throw error;
+
+        // 注意：這裡的 ID 必須完全對應你 HTML 裡的 shop-balance-display
+        const balanceEl = document.getElementById('shop-balance-display');
+        if (balanceEl) {
+            // 使用 ?? 0 確保如果資料庫沒數字時顯示 0
+            balanceEl.innerText = data.balance ?? 0;
+            console.log("餘額顯示已更新:", data.balance);
+        }
+    } catch (err) {
+        console.error("更新餘額出錯:", err.message);
+    }
+};
+
+// 網頁載入後立刻執行一次
+document.addEventListener('DOMContentLoaded', window.renderProfile);
 /**
  * 2. 商城主渲染入口
  */
