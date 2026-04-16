@@ -378,16 +378,18 @@ window.toggleMyOrders = function() {
     }
 };
 
-// 抓取並顯示內容
 async function renderMyOrders() {
     const container = document.getElementById('orders-list-container');
-    container.innerHTML = '<div class="text-center py-10">讀取中...</div>';
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-white text-center py-10">讀取中...</div>';
 
+    // 這裡要注意：如果你的產品表欄位不是 image_url 或是 name，請改成正確的名稱
     const { data, error } = await window.supabaseClient
         .from('orders')
         .select(`
             purchased_at,
-            products (
+            product:products (
                 name,
                 image_url,
                 description
@@ -396,23 +398,30 @@ async function renderMyOrders() {
         .order('purchased_at', { ascending: false });
 
     if (error) {
-        container.innerHTML = `<div class="text-red-500">讀取失敗: ${error.message}</div>`;
+        console.error("抓取訂單失敗:", error);
+        container.innerHTML = `<div class="text-red-400">讀取失敗: ${error.message}</div>`;
         return;
     }
 
-    if (data.length === 0) {
-        container.innerHTML = '<div class="text-center py-10 text-gray-400">尚未購買任何內容</div>';
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div class="text-gray-400 text-center py-10">目前沒有已購內容</div>';
         return;
     }
 
-    container.innerHTML = data.map(order => `
-        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4">
-            <img src="${order.products.image_url}" class="w-20 h-20 object-cover rounded-xl">
-            <div class="flex-1">
-                <h3 class="font-bold text-gray-900">${order.products.name}</h3>
-                <p class="text-xs text-gray-500 mt-1">${order.products.description || ''}</p>
-                <div class="text-[10px] text-gray-400 mt-2">購買時間: ${new Date(order.purchased_at).toLocaleString()}</div>
+    container.innerHTML = data.map(order => {
+        // 防止 product 資料為空導致報錯
+        const p = order.product || { name: '未知商品', image_url: '', description: '' };
+        return `
+            <div class="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-center">
+                <img src="${p.image_url}" class="w-16 h-16 object-cover rounded-lg bg-gray-800">
+                <div class="flex-1">
+                    <h3 class="text-white font-bold">${p.name}</h3>
+                    <p class="text-gray-400 text-xs mt-1">${p.description || ''}</p>
+                    <div class="text-[10px] text-gray-500 mt-2">
+                        購入於: ${new Date(order.purchased_at).toLocaleString()}
+                    </div>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
