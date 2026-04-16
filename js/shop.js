@@ -87,6 +87,28 @@ window.renderShop = async function(filterKeyword = '') {
     const grid = document.getElementById('shop-grid');
     if (!grid) return;
 
+    // --- 新增：更新餘額邏輯 ---
+    const balanceEl = document.getElementById('shop-balance-display');
+    const userId = localStorage.getItem('userId');
+    
+    if (balanceEl && userId) {
+        // 先顯示加載中，避免顯示舊資料
+        balanceEl.innerText = '...'; 
+        
+        window.supabaseClient
+            .from('profiles')
+            .select('balance')
+            .eq('id', userId)
+            .single()
+            .then(({ data }) => {
+                if (data) balanceEl.innerText = data.balance;
+            })
+            .catch(() => {
+                balanceEl.innerText = '0';
+            });
+    }
+    // ------------------------
+
     currentKeyword = filterKeyword;
     ensureShopTabs();
 
