@@ -24,12 +24,11 @@ const response = await fetch('https://shsmvbeebuxscnvnmlzf.supabase.co/functions
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
-        'apikey': ANON_KEY, // 必須與 corsHeaders 對應
-        'Authorization': `Bearer ${session.access_token}` // 必須與 corsHeaders 對應
+        'apikey': ANON_KEY, // 這裡的 ANON_KEY 必須正確
+        'Authorization': `Bearer ${session.access_token}`
     },
     body: JSON.stringify({ userId: user.id, amount: 5 })
 });
-
         // 如果連 HTTP 狀態碼都沒有，代表網路真的斷了或網址錯了
         if (!response.ok) {
             const errorText = await response.text();
