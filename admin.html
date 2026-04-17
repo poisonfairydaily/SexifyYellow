@@ -57,24 +57,22 @@
     const adminSection = document.getElementById('admin-section');
 
     // --- 初始化檢查登入狀態 ---
-window.onload = async () => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    
-    if (session) {
-        // 取得使用者標籤
-        const userRole = session.user.app_metadata.role;
+    window.onload = async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
         
-        if (userRole === 'admin') {
-            showAdmin(); // 是管理員，顯示上架介面
+        if (session) {
+            const userRole = session.user.app_metadata.role;
+            if (userRole === 'admin') {
+                showAdmin(); 
+            } else {
+                alert("抱歉，您沒有管理員權限！");
+                await supabaseClient.auth.signOut();
+                location.reload();
+            }
         } else {
-            alert("抱歉，您沒有管理員權限！");
-            await supabaseClient.auth.signOut();
-            location.reload();
+            showLogin();
         }
-    } else {
-        showLogin();
-    }
-};
+    };
 
     function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
     function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
@@ -114,7 +112,7 @@ window.onload = async () => {
         }
     });
 
-    // --- 上架邏輯 ---
+    // --- 上架邏輯 (已修改為存檔名) ---
     document.getElementById('upload-btn').addEventListener('click', async () => {
         const name = document.getElementById('p-name').value;
         const price = document.getElementById('p-price').value;
@@ -127,29 +125,29 @@ window.onload = async () => {
         btn.disabled = true;
         status.innerText = "⏳ 正在安全上傳中...";
 
-// --- 修改後的上傳邏輯片段 ---
-try {
-    const fileName = `${Date.now()}_${file.name}`;
-    // A. 上傳圖片
-    const { data: sData, error: sErr } = await supabaseClient.storage
-        .from('products')
-        .upload(fileName, file);
-    if (sErr) throw sErr;
+        try {
+            const fileName = `${Date.now()}_${file.name}`;
+            
+            // A. 上傳圖片到 Private Bucket
+            const { data: sData, error: sErr } = await supabaseClient.storage
+                .from('products')
+                .upload(fileName, file);
+            if (sErr) throw sErr;
 
-    // B. 注意：這裡不需要 getPublicUrl 了
-    // 直接將「檔案路徑 (fileName)」存入資料庫即可
-    const { error: dbErr } = await supabaseClient.from('products').insert([{
-        name: name,
-        price: parseInt(price),
-        image_url: fileName // 現在這裡存的是檔案名稱/路徑，而不是完整網址
-    }]);
+            // B. 將「檔案路徑 (fileName)」存入資料庫
+            const { error: dbErr } = await supabaseClient.from('products').insert([{
+                name: name,
+                price: parseInt(price),
+                image_url: fileName 
+            }]);
 
-    if (dbErr) throw dbErr;
-    alert("✅ 上架成功！");
-    location.reload();
-} catch (err) {
-    status.innerText = "❌ 錯誤：" + err.message;
-}
+            if (dbErr) throw dbErr;
+            alert("✅ 上架成功！");
+            location.reload();
+        } catch (err) {
+            status.innerText = "❌ 錯誤：" + err.message;
+            btn.disabled = false;
+        }
     });
 </script>
 
