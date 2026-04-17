@@ -1,3 +1,34 @@
+// 在頁面載入時立刻執行安全檢查
+async function checkAdminAccess() {
+    // 1. 檢查是否已登入
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    
+    if (!session) {
+        alert("請先登入帳號！");
+        window.location.href = 'index.html'; // 沒登入就踢回首頁
+        return;
+    }
+
+    // 2. 檢查是否具備管理員權限 (假設你在 profiles 表有一個 is_admin 欄位)
+    const { data: profile, error } = await window.supabaseClient
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error || !profile?.is_admin) {
+        alert("權限不足，僅限管理員進入！");
+        window.location.href = 'index.html'; // 不是管理員也踢走
+        return;
+    }
+
+    // 通過檢查，顯示頁面內容
+    document.body.style.display = 'block'; 
+}
+
+// 預設先隱藏內容，防止「閃現」
+document.body.style.display = 'none';
+checkAdminAccess();
 <script>
         async function handleUpload() {
             const name = document.getElementById('p-name').value;
