@@ -145,34 +145,86 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * 4. 商品詳情模態視窗
+ * 4. 商品詳情 / 漫畫讀閱模式
  */
 window.openProductModal = async function(productId) {
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
     if (!p) return;
 
-    // 檢查權限
+    // 檢查權限：是否已購買或為管理員
     const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).single() : { data: null };
     const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single() : { data: null };
     const isUnlocked = order || profile?.is_admin;
-
-    let displayImg = 'https://via.placeholder.com/300?text=Locked';
-    const fileName = p.image_url?.split('/').pop();
-    
-    // 只有解鎖了才去拿簽名網址，否則給一張模糊的佔位圖
-    if (isUnlocked && fileName) {
-        const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(fileName, 600);
-        if (data) displayImg = data.signedUrl;
-    } else {
-        displayImg = p.image_url; // 會因為 Private Bucket + 無簽名而自動破圖/模糊
-    }
 
     let modal = document.getElementById('product-modal-container');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'product-modal-container';
         document.body.appendChild(modal);
+    }
+
+    // --- 🚀 重點：判斷是否進入「漫畫讀閱模式」 ---
+    if (isUnlocked && currentView === 'owned') {
+        renderMangaViewer(modal, p);
+        return;
+    }
+
+    // --- 🛒 否則顯示原本的「購買詳情模式」 ---
+    renderPurchaseModal(modal, p, isUnlocked);
+};
+
+/**
+ * 子函數 A：漫畫讀閱模式 (全螢幕、多圖、垂直捲動)
+ */
+async function renderMangaViewer(modal, p) {
+    // 預留未來多圖邏輯：假設你未來 image_url 會用逗號隔開多張檔名 "1.jpg,2.jpg"
+    // 目前先支援單張，以後只要資料庫改一下這裡就通了
+    const fileNames = p.image_url ? p.image_url.split(',') : []; 
+    
+    // 向 Storage 獲取所有圖片的簽名網址
+    const { data: sData } = await window.supabaseClient.storage
+        .from('products')
+        .createSignedUrls(fileNames, 7200); // 通行證設長一點 (2小時)
+
+    const imgTags = sData ? sData.map(item => `
+        <img src="${item.signedUrl}" class="manga-page" loading="lazy">
+    `).join('') : '<p class="text-white text-center">圖片加載中...</p>';
+
+    modal.innerHTML = `
+        <div class="fixed inset-0 bg-black z-[4000] overflow-hidden">
+            <div onclick="closeProductModal()" class="manga-close">
+                <i class="fa-solid fa-xmark"></i>
+            </div>
+            <div class="manga-viewer">
+                <div class="text-center text-white/50 text-xs mb-8">
+                    <h2 class="text-lg text-white font-bold">${p.name}</h2>
+                    <p>正在閱讀：${fileNames.length} 頁內容</p>
+                </div>
+                ${imgTags}
+                <div class="py-20 text-center text-white/30 text-xs">
+                    --- 已經到底部了 ---
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 子函數 B：購買詳情模式 (方案 3 邏輯)
+ */
+async function renderPurchaseModal(modal, p, isUnlocked) {
+    const fileName = p.image_url?.split('/').pop();
+    let displayImg = 'https://via.placeholder.com/300?text=Locked';
+    
+    if (isUnlocked && fileName) {
+        const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(fileName, 600);
+        if (data) displayImg = data.signedUrl;
+    } else {
+        // 方案 3：未解鎖時讀取 previews 桶內的模糊預覽圖
+        const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(fileName);
+        displayImg = data.publicUrl;
     }
 
     modal.innerHTML = `
@@ -184,15 +236,15 @@ window.openProductModal = async function(productId) {
                 </div>
                 <div class="p-6">
                     <h2 class="text-xl font-black text-gray-900">${p.name}</h2>
-                    <p class="text-gray-500 text-xs mt-2 line-clamp-2">${p.description || '購買後即可解鎖完整高清內容'}</p>
+                    <p class="text-gray-500 text-xs mt-2 line-clamp-2">${p.description || '購買後即可查看高清多圖內容'}</p>
                     <div class="mt-6 flex items-center justify-between">
                         <span class="text-sexify font-black text-2xl">🪙 ${p.price}</span>
                         <div class="flex gap-2">
                             ${!isUnlocked ? `
-                                <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${displayImg}')" class="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold text-sm">加入清單</button>
-                                <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="bg-sexify text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-pink-200">立即解鎖</button>
+                                <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${displayImg}')" class="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold text-sm">加入</button>
+                                <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="bg-sexify text-white px-6 py-3 rounded-xl font-bold text-sm">立即購買</button>
                             ` : `
-                                <button class="w-full bg-green-500 text-white px-10 py-3 rounded-xl font-bold">您已擁有此內容</button>
+                                <button onclick="switchView('owned')" class="w-full bg-blue-500 text-white px-8 py-3 rounded-xl font-bold">進入我的庫存查看</button>
                             `}
                         </div>
                     </div>
@@ -201,13 +253,7 @@ window.openProductModal = async function(productId) {
         </div>
     `;
     document.body.style.overflow = 'hidden';
-};
-
-window.closeProductModal = () => {
-    const modal = document.getElementById('product-modal-container');
-    if (modal) modal.innerHTML = '';
-    document.body.style.overflow = '';
-};
+}
 
 /**
  * 5. 安全購買 RPC (保留原邏輯，加入成功後刷新)
