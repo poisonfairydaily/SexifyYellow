@@ -1,5 +1,5 @@
 /**
- * creator.js - 創作者中心 (上傳 + 管理)
+ * creator.js - 創作者中心 (上傳 + 管理 + 安全防護版)
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
@@ -11,6 +11,14 @@ const statusBox = document.getElementById('status-box');
 const statusText = document.getElementById('status-text');
 const uploadBtn = document.getElementById('upload-btn');
 const myProductsList = document.getElementById('my-products-list');
+
+// --- 🛡️ 安全核心：防止 XSS 攻擊的文字過濾器 ---
+function escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
 
 // 🔄 頁面初始化
 window.addEventListener('DOMContentLoaded', () => {
@@ -149,13 +157,13 @@ async function loadMyProducts() {
                 <div class="flex items-center gap-4 bg-gray-50/50 p-3 rounded-2xl border border-gray-100">
                     <img src="${imgUrl}" class="w-14 h-14 rounded-xl object-cover">
                     <div class="flex-1 min-w-0">
-                        <div class="text-xs font-bold text-gray-800 truncate">${p.name}</div>
+                        <div class="text-xs font-bold text-gray-800 truncate">${escapeHTML(p.name)}</div>
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-[10px] font-black text-red-500">🪙 ${p.price}</span>
                             <span class="text-[9px] px-2 py-0.5 rounded-full font-bold ${statusStyles[p.status]}">${statusTexts[p.status]}</span>
                         </div>
                     </div>
-                    <button onclick="deleteMyProduct('${p.id}', '${p.name}')" class="text-gray-300 hover:text-red-500 transition-colors px-2">
+                    <button onclick="deleteMyProduct('${p.id}', '${escapeHTML(p.name).replace(/'/g, "\\'")}')" class="text-gray-300 hover:text-red-500 transition-colors px-2">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 </div>
