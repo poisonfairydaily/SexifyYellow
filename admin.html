@@ -56,22 +56,28 @@
     const loginSection = document.getElementById('login-section');
     const adminSection = document.getElementById('admin-section');
 
-    window.onload = async () => {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            // 注意：若尚未設定 admin role，可先移除此判斷直接顯示 showAdmin() 進行測試
-            const userRole = session.user.app_metadata.role;
-            if (userRole === 'admin') {
-                showAdmin();
-            } else {
-                alert("抱歉，您沒有管理員權限！");
-                await supabaseClient.auth.signOut();
-                location.reload();
-            }
+window.onload = async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
+    if (session) {
+        // 直接去資料庫查這個人是不是 admin，而不是看 session
+        const { data: profile } = await supabaseClient
+            .from('profiles') // 這裡要對應你的表格名稱
+            .select('is_admin')
+            .eq('id', session.user.id)
+            .single();
+        
+        if (profile && profile.is_admin === true) {
+            showAdmin();
         } else {
-            showLogin();
+            alert("抱歉，您沒有管理員權限！");
+            await supabaseClient.auth.signOut();
+            location.reload();
         }
-    };
+    } else {
+        showLogin();
+    }
+};
 
     function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
     function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
