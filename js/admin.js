@@ -93,7 +93,6 @@ async function generateBlurBlob(file) {
             }
             canvas.width = width;
             canvas.height = height;
-            ctx.filter = 'blur(25px)';
             ctx.drawImage(img, 0, 0, width, height);
             canvas.toBlob((blob) => { resolve(blob); }, 'image/jpeg', 0.7);
         };
