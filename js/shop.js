@@ -1,24 +1,49 @@
 /**
  * shop.js - 核心商城邏輯
- * 整合：R2 代理圖片、Supabase 餘額監聽、購買與彈窗。
+ * 整合：R2 代理圖片、Supabase 餘額監聽、購買與彈窗、以及 JWT 安全驗證。
  */
 
 const IMAGE_CONFIG = {
     source: 'R2', 
-    workerUrl: 'https://sexifyyellow.poisonfairydaily.workers.dev' // 需確保此為新建立的 Worker
+    workerUrl: 'https://sexifyyellow.poisonfairydaily.workers.dev/' // 已補上結尾斜線
 };
 
 let cart = []; 
 let balanceSubscription = null;
 
-/** 1. 處理圖片：對接 Worker **/
+/** 1. 處理圖片：帶上 Token 請求 R2 Worker (已升級 JWT 驗證版) **/
 async function getSignedUrlSafe(path) {
     if (!path) return 'https://via.placeholder.com/300?text=No+Image';
     if (path.startsWith('http')) return path; 
 
-    const cleanPath = path.trim();
-    // 使用 encodeURIComponent 確保檔名中的空格（%20）能被正確處理
-    return `${IMAGE_CONFIG.workerUrl}?key=${encodeURIComponent(cleanPath)}`;
+    try {
+        // 1. 取得使用者目前的登入 Session (Token)
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        
+        // 如果沒登入，就不浪費時間發請求了，直接回傳破圖或佔位圖
+        if (!session) return 'https://via.placeholder.com/300?text=Please+Login';
+
+        const token = session.access_token;
+        const url = `${IMAGE_CONFIG.workerUrl}?key=${encodeURIComponent(path.trim())}`;
+
+        // 2. 帶著 Token 發送請求給 Worker
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}` // 出示門票！
+            }
+        });
+
+        if (!response.ok) throw new Error('圖片驗證失敗或無權限');
+
+        // 3. 將收到的圖片資料轉換成瀏覽器可以顯示的 Blob URL
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+
+    } catch (error) {
+        console.error("圖片載入失敗:", error);
+        return 'https://via.placeholder.com/300?text=Error';
+    }
 }
 
 /** 2. 餘額同步：即時監聽資料庫變動 **/
