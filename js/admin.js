@@ -1,3 +1,7 @@
+const pass = prompt("請輸入管理員密碼：");
+if (pass !== "SEXIFYILOVE2026") {
+    document.body.innerHTML = "<h1>拒絕存取</h1>";
+}
 // 1. 初始化 Supabase (請換成你自己的金鑰)
 const SUPABASE_URL = '你的_SUPABASE_URL';
 const SUPABASE_KEY = '你的_SUPABASE_ANON_KEY';
