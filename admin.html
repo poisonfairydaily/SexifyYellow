@@ -1,42 +1,4 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <title>商品管理後台</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-lg">
-        <h1 class="text-2xl font-black mb-6">發佈新產品</h1>
-        
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-bold mb-1">商品名稱</label>
-                <input type="text" id="p-name" class="w-full border p-3 rounded-xl outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-bold mb-1">價格 (金幣)</label>
-                <input type="number" id="p-price" class="w-full border p-3 rounded-xl outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-bold mb-1">描述</label>
-                <textarea id="p-desc" class="w-full border p-3 rounded-xl outline-none"></textarea>
-            </div>
-            <div>
-                <label class="block text-sm font-bold mb-1">上傳相片</label>
-                <input type="file" id="p-file" accept="image/*" class="w-full">
-            </div>
-            
-            <button onclick="handleUpload()" id="upload-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">
-                確認發佈
-            </button>
-        </div>
-        <p id="status" class="mt-4 text-sm text-center text-gray-500"></p>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="js/supabase-config.js"></script>
-    <script>
+<script>
         async function handleUpload() {
             const name = document.getElementById('p-name').value;
             const price = document.getElementById('p-price').value;
@@ -48,29 +10,47 @@
             if (!name || !price || !fileInput.files[0]) return alert("請填寫完整資訊");
 
             btn.disabled = true;
-            status.innerText = "正在處理中...";
-
-            const file = fileInput.files[0];
-            // 產生唯一檔名，避免重複覆蓋 (時間戳 + 原始檔名)
-            const fileName = `${Date.now()}-${file.name}`;
-            const workerUrl = `https://sexifyyellow.poisonfairydaily.workers.dev/?key=${encodeURIComponent(fileName)}`;
+            status.innerText = "正在檢查登入狀態...";
 
             try {
-                // 1. 上傳相片到 Cloudflare R2 (透過 Worker)
+                // 🔐 1. 取得使用者的登入門票 (Token)
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                if (!session) {
+                    throw new Error("您尚未登入，請先登入後再上傳商品！");
+                }
+                const token = session.access_token;
+
+                status.innerText = "正在處理相片上傳...";
+
+                const file = fileInput.files[0];
+                // 產生唯一檔名，避免重複覆蓋 (時間戳 + 原始檔名)
+                const fileName = `${Date.now()}-${file.name}`;
+                // 注意：這裡請確保網址是你自己的 Worker 網址
+                const workerUrl = `https://sexifyyellow.poisonfairydaily.workers.dev/?key=${encodeURIComponent(fileName)}`;
+
+                // 📤 2. 上傳相片到 Cloudflare R2，並【帶上門票】
                 const uploadRes = await fetch(workerUrl, {
                     method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}` // 就是這行！向 Worker 出示門票
+                    },
                     body: file
                 });
 
-                if (!uploadRes.ok) throw new Error("相片上傳 R2 失敗");
+                if (!uploadRes.ok) {
+                    const errorText = await uploadRes.text();
+                    throw new Error(`相片上傳 R2 失敗: ${errorText}`);
+                }
 
-                // 2. 將資訊寫入 Supabase 資料庫
+                status.innerText = "相片上傳成功，正在寫入資料庫...";
+
+                // 💾 3. 將資訊寫入 Supabase 資料庫
                 const { error } = await window.supabaseClient.from('products').insert([
                     { 
                         name: name, 
                         price: parseInt(price), 
                         description: desc, 
-                        image_url: fileName // 只存檔名，shop.js 會自動拼接
+                        image_url: fileName // 只存檔名
                     }
                 ]);
 
@@ -86,5 +66,3 @@
             }
         }
     </script>
-</body>
-</html>
