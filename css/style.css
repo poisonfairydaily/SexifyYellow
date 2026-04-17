@@ -2,11 +2,12 @@
     1. 基礎重置與全域變數
    ================================== */
 :root { 
-    --sexify: #ff2442; 
+    --sexify: #ff2442; /* 小紅書紅 */
     --bg: #f8f8f8;
     --card: #ffffff;
 }
 
+/* 隱藏捲動條但保留功能 */
 ::-webkit-scrollbar { 
     display: none; 
 }
@@ -17,6 +18,7 @@ body {
     font-family: "PingFang TC", "Microsoft JhengHei", -apple-system, sans-serif; 
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
 }
 
 /* 基礎公用類 */
@@ -24,9 +26,8 @@ body {
 .bg-sexify { background-color: var(--sexify); }
 
 /* ==================================
-    2. 佈局與導航 (Layout & Nav)
+    2. 佈局與導航 (小紅書瀑布流風格)
    ================================== */
-/* 瀑布流優化 (小紅書風格) */
 .masonry-grid { 
     column-count: 2; 
     column-gap: 8px; 
@@ -49,15 +50,15 @@ body {
 .masonry-item img, 
 .masonry-item video { 
     width: 100%; 
-    max-height: 350px; 
+    max-height: 400px; 
     object-fit: cover; 
     display: block; 
 }
 
-/* 分頁內容間距 */
+/* 分頁內容 */
 .tab-content { 
     display: none; 
-    padding-bottom: 100px !important; /* 確保不被底部導航遮擋 */
+    padding-bottom: 100px !important; 
     box-sizing: border-box;
 }
 
@@ -68,31 +69,27 @@ body {
 
 /* 底部導航欄特效 */
 .nav-btn { transition: all 0.2s ease; min-width: 50px; }
-.nav-btn i { font-size: 1.1rem; }
 .nav-active { color: #000 !important; }
 .nav-active i { transform: scale(1.1); color: #000; }
-.nav-active span { font-weight: 900; color: #000; }
+.nav-active span { font-weight: 900; }
 
 /* ==================================
-    3. 付費保護與圖片特效 (Scheme 2/3)
+    3. 付費保護與預覽特效 (清晰版)
    ================================== */
-/* 方案 2 核心：模糊濾鏡 */
+/* ✨ 這裡修改了：將模糊度設為 0 */
 .locked-blur {
-    /* 增加縮放防止模糊邊緣露出白邊 */
-    filter: blur(15px) brightness(0.9);
-    transform: scale(1.05);
+    filter: blur(0px) brightness(1.0); 
     transition: all 0.5s ease;
-    pointer-events: none; /* 防止未購買時被拖動保存 */
+    pointer-events: none; 
 }
 
-/* 鎖頭圖層 (磨砂玻璃效果) */
+/* 鎖頭圖層 (改為極輕微的磨砂，不遮擋視線) */
 .lock-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.2);
-    /* 修正語法：需使用 backdrop-filter */
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.05); /* 降低暗度 */
+    -webkit-backdrop-filter: blur(0px); /* 移除模糊 */
+    backdrop-filter: blur(0px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -113,63 +110,50 @@ body {
     font-size: 9px; 
     padding: 4px 8px; 
     border-radius: 40px; 
-    font-weight: 800; 
-    letter-spacing: 0.5px;
     z-index: 5;
 }
 
 /* ==================================
-    4. 漫畫模式讀閱器 (Owned View)
+    4. 漫畫模式讀閱器 (最簡約風格)
    ================================== */
-.manga-viewer {
-    width: 100%;
-    height: 100vh;
-    overflow-y: auto;
-    background: #111; /* 深色背景看圖更專注 */
-    padding: 0;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
+#product-modal-container {
+    z-index: 5000;
 }
 
 .manga-page {
     width: 100%;
     max-width: 800px;
-    margin: 0 auto 1px auto; /* 緊密排列 */
+    margin: 0 auto; 
     display: block;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    /* 移除外邊距實現無縫接合 */
+    margin-bottom: 0px; 
 }
 
-/* 強制置頂的關閉按鈕 */
 .manga-close {
     position: fixed;
-    top: 25px;
+    top: 20px;
     right: 20px;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.4);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     color: white;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999 !important; /* 最高層級 */
+    z-index: 9999 !important;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* ==================================
-    5. 動態與互動特效 (Animations)
+    5. 動態特效
    ================================== */
-/* 骨架屏閃爍 */
-.skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* 雙擊巨型愛心 */
+/* 雙擊愛心動畫 */
 .big-heart-anim {
     position: absolute;
     font-size: 5rem;
@@ -179,35 +163,10 @@ body {
     pointer-events: none;
     z-index: 100;
     animation: bigHeart 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    text-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
-/* 輸入等待點點 */
-.typing-dots span {
-    animation: blink 1s infinite;
-    margin: 0 1px;
-}
-.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-/* 上傳面板 */
-#price-input-container { animation: slideInDown 0.3s ease-out forwards; }
-input[type="radio"]:checked + label p { color: var(--sexify) !important; }
-
-/* Keyframes 匯總 */
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-@keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-@keyframes slideInDown { 
-    from { opacity: 0; transform: translateY(-10px); } 
-    to { opacity: 1; transform: translateY(0); } 
-}
 @keyframes bigHeart {
     0% { opacity: 0; transform: scale(0.5) translate(-50%, -50%); }
     15% { opacity: 1; transform: scale(1.2) translate(-50%, -50%); }
     100% { opacity: 0; transform: scale(1.5) translate(-50%, -80%); }
-}
-@keyframes pop { 
-    0%, 100% { transform: scale(1); } 
-    50% { transform: scale(1.4); } 
 }
