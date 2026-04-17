@@ -1,124 +1,188 @@
-::-webkit-scrollbar { display: none; }   
+/* ==================================
+    1. 基礎重置與全域變數
+   ================================== */
+:root { 
+    --sexify: #ff2442; 
+    --bg: #f8f8f8;
+    --card: #ffffff;
+}
+
+::-webkit-scrollbar { 
+    display: none; 
+}
+
 body { 
     -webkit-tap-highlight-color: transparent; 
-    background-color: #f8f8f8; 
-    font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
+    background-color: var(--bg); 
+    font-family: "PingFang TC", "Microsoft JhengHei", -apple-system, sans-serif; 
+    margin: 0;
+    padding: 0;
 }
-:root { --sexify: #ff2442; }
 
-/* 基礎設定 */
+/* 基礎公用類 */
 .text-sexify { color: var(--sexify); }
 .bg-sexify { background-color: var(--sexify); }
-.tab-content { display: none; }
-.tab-content.active { display: block; animation: fadeIn 0.3s ease-out; }
 
-/* 底部導航欄特效 */
-.nav-btn { transition: all 0.2s ease; min-width: 50px; }
-.nav-btn i { font-size: 1.1rem; }
-.nav-active { color: #000 !important; transform: none !important; }
-.nav-active i { transform: scale(1.1); color: #000; }
-.nav-active span { font-weight: 900; color: #000; }
+/* ==================================
+    2. 佈局與導航 (Layout & Nav)
+   ================================== */
+/* 瀑布流優化 (小紅書風格) */
+.masonry-grid { 
+    column-count: 2; 
+    column-gap: 8px; 
+    padding: 8px; 
+}
 
-/* 瀑布流優化 */
-.masonry-grid { column-count: 2; column-gap: 8px; padding: 8px; }
 .masonry-item { 
     break-inside: avoid; 
     margin-bottom: 8px; 
-    background: white; 
+    background: var(--card); 
     border-radius: 12px; 
     overflow: hidden; 
     box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
     transition: transform 0.2s ease; 
+    position: relative;
 }
+
 .masonry-item:active { transform: scale(0.98); }
-.masonry-item img, .masonry-item video { 
+
+.masonry-item img, 
+.masonry-item video { 
     width: 100%; 
     max-height: 350px; 
     object-fit: cover; 
     display: block; 
 }
 
-/* 全局動畫 */
-.animate-fade-in { animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-/* 愛心點讚動畫 */
-.heartPop { animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-@keyframes pop { 
-    0% { transform: scale(1); } 
-    50% { transform: scale(1.4); } 
-    100% { transform: scale(1); } 
+/* 分頁內容間距 */
+.tab-content { 
+    display: none; 
+    padding-bottom: 100px !important; /* 確保不被底部導航遮擋 */
+    box-sizing: border-box;
 }
 
-/* 付費解鎖與影片 UI 標籤 */
+.tab-content.active { 
+    display: block; 
+    animation: fadeIn 0.3s ease-out; 
+}
+
+/* 底部導航欄特效 */
+.nav-btn { transition: all 0.2s ease; min-width: 50px; }
+.nav-btn i { font-size: 1.1rem; }
+.nav-active { color: #000 !important; }
+.nav-active i { transform: scale(1.1); color: #000; }
+.nav-active span { font-weight: 900; color: #000; }
+
+/* ==================================
+    3. 付費保護與圖片特效 (Scheme 2/3)
+   ================================== */
+/* 方案 2 核心：模糊濾鏡 */
+.locked-blur {
+    /* 增加縮放防止模糊邊緣露出白邊 */
+    filter: blur(15px) brightness(0.9);
+    transform: scale(1.05);
+    transition: all 0.5s ease;
+    pointer-events: none; /* 防止未購買時被拖動保存 */
+}
+
+/* 鎖頭圖層 (磨砂玻璃效果) */
+.lock-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.2);
+    /* 修正語法：需使用 backdrop-filter */
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    z-index: 10;
+}
+
+/* 影片 UI 標籤 */
 .video-mark { 
     position: absolute; 
     top: 8px; 
     right: 8px; 
     background: rgba(0,0,0,0.5); 
-    backdrop-blur: 2px;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
     color: white; 
     font-size: 9px; 
     padding: 4px 8px; 
     border-radius: 40px; 
     font-weight: 800; 
     letter-spacing: 0.5px;
+    z-index: 5;
 }
-.paid-lock { 
-    position: absolute; 
-    inset: 0; 
-    background: rgba(0,0,0,0.35); 
-    backdrop-blur: 4px; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center; 
-    color: white; 
-}
-
-/* 上傳面板特效 */
-#price-input-container { animation: slideInDown 0.3s ease-out forwards; }
-@keyframes slideInDown { 
-    from { opacity: 0; transform: translateY(-10px); } 
-    to { opacity: 1; transform: translateY(0); } 
-}
-input[type="radio"]:checked + label p { color: var(--sexify) !important; }
-
 
 /* ==================================
-   🔥 新增功能動畫：骨架屏與雙擊愛心
+    4. 漫畫模式讀閱器 (Owned View)
    ================================== */
+.manga-viewer {
+    width: 100%;
+    height: 100vh;
+    overflow-y: auto;
+    background: #111; /* 深色背景看圖更專注 */
+    padding: 0;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
 
-/* 1. 灰色骨架佔位動畫 (圖片加載前顯示) */
+.manga-page {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto 1px auto; /* 緊密排列 */
+    display: block;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+/* 強制置頂的關閉按鈕 */
+.manga-close {
+    position: fixed;
+    top: 25px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999 !important; /* 最高層級 */
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ==================================
+    5. 動態與互動特效 (Animations)
+   ================================== */
+/* 骨架屏閃爍 */
 .skeleton {
     background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite linear;
 }
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
 
-/* 2. 雙擊觸發的巨型愛心特效 */
+/* 雙擊巨型愛心 */
 .big-heart-anim {
     position: absolute;
     font-size: 5rem;
     color: var(--sexify);
     opacity: 0;
     transform: scale(0.5) translate(-50%, -50%);
-    pointer-events: none; /* 確保不阻擋點擊 */
-    z-index: 50;
+    pointer-events: none;
+    z-index: 100;
     animation: bigHeart 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    text-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    text-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
-@keyframes bigHeart {
-    0% { opacity: 0; transform: scale(0.5) translate(-50%, -50%); }
-    15% { opacity: 1; transform: scale(1.2) translate(-50%, -50%); }
-    30% { opacity: 1; transform: scale(1) translate(-50%, -50%); }
-    70% { opacity: 1; transform: scale(1) translate(-50%, -50%); }
-    100% { opacity: 0; transform: scale(1.5) translate(-50%, -80%); }
-}
+
+/* 輸入等待點點 */
 .typing-dots span {
     animation: blink 1s infinite;
     margin: 0 1px;
@@ -126,63 +190,24 @@ input[type="radio"]:checked + label p { color: var(--sexify) !important; }
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
-@keyframes blink {
-    0% { opacity: 0.2; }
-    50% { opacity: 1; }
-    100% { opacity: 0.2; }
-}
-/* 確保所有分頁內容在滑動到底部時，不會被導航欄擋住 */
-.tab-content {
-    padding-bottom: 100px !important; /* 預留約 100px 的高度給導航欄 */
-    box-sizing: border-box;
-}
+/* 上傳面板 */
+#price-input-container { animation: slideInDown 0.3s ease-out forwards; }
+input[type="radio"]:checked + label p { color: var(--sexify) !important; }
 
-/* 如果你的商品是用 masonry 瀑布流，也要確保容器有底部間距 */
-#product-grid {
-    margin-bottom: 0;
-    padding-bottom: 80px; 
+/* Keyframes 匯總 */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+@keyframes slideInDown { 
+    from { opacity: 0; transform: translateY(-10px); } 
+    to { opacity: 1; transform: translateY(0); } 
 }
-/* 模糊濾鏡：方案 2 核心 */
-.locked-blur {
-    filter: blur(12px) brightness(0.8);
-    transition: all 0.5s ease;
+@keyframes bigHeart {
+    0% { opacity: 0; transform: scale(0.5) translate(-50%, -50%); }
+    15% { opacity: 1; transform: scale(1.2) translate(-50%, -50%); }
+    100% { opacity: 0; transform: scale(1.5) translate(-50%, -80%); }
 }
-/* 鎖頭圖層 */
-.lock-overlay {
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-blur: 2px;
-}
-/* 漫畫模式讀閱器 */
-.manga-viewer {
-    width: 100%;
-    height: 100vh;
-    overflow-y: auto; /* 支援垂直捲動 */
-    background: #111; /* 深色背景看圖更舒服 */
-    padding: 20px 0;
-}
-
-.manga-page {
-    width: 100%;
-    max-width: 800px; /* 限制寬度避免在大螢幕上太散 */
-    margin: 0 auto 10px auto;
-    display: block;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-}
-
-/* 關閉按鈕加強版 */
-.manga-close {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    color: white;
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 5000;
-    cursor: pointer;
+@keyframes pop { 
+    0%, 100% { transform: scale(1); } 
+    50% { transform: scale(1.4); } 
 }
