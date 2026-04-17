@@ -19,7 +19,7 @@
             color: #1d1d1f;
         }
         .container {
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
             background: #fff;
             padding: 30px;
@@ -36,52 +36,50 @@
         }
         h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
         
-        table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin-top: 10px;
-        }
+        /* 表格樣式優化 */
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 10px; }
         th {
-            text-align: left;
-            background: #fff;
-            padding: 12px 15px;
-            color: #86868b;
-            font-size: 13px;
-            font-weight: 600;
+            text-align: left; background: #fff; padding: 12px 15px;
+            color: #86868b; font-size: 13px; font-weight: 600;
             border-bottom: 1px solid #f2f2f2;
         }
-        td {
-            padding: 20px 15px;
-            vertical-align: middle;
-            border-bottom: 1px solid #f9f9f9;
-        }
-        
-        /* 讓表格在手機上能滾動 */
-        .table-wrapper {
-            overflow-x: auto;
-        }
+        td { padding: 20px 15px; vertical-align: middle; border-bottom: 1px solid #f9f9f9; }
 
         .btn-back {
-            text-decoration: none;
-            color: #0066cc;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 8px 16px;
-            background: #f5f5f7;
-            border-radius: 20px;
+            text-decoration: none; color: #0066cc; font-size: 13px; font-weight: 600;
+            padding: 8px 16px; background: #f5f5f7; border-radius: 20px;
             transition: all 0.2s;
         }
         .btn-back:hover { background: #e8e8ed; }
 
-        /* 修復圖片預覽樣式 */
-        .audit-img {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 12px;
-            background: #f5f5f7;
+        /* ✨ 圖片放大 Lightbox 樣式 */
+        #audit-lightbox {
+            display: none; /* 預設隱藏 */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 9999;
+            align-items: center; justify-content: center;
+            cursor: zoom-out; opacity: 0; transition: opacity 0.3s ease;
         }
+        #audit-lightbox img {
+            max-width: 90%; max-height: 90%;
+            border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #audit-lightbox.active { display: flex; opacity: 1; }
+        #audit-lightbox.active img { transform: scale(1); }
+
+        /* 縮圖網格樣式 */
+        .img-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 6px; width: 180px;
+        }
+        .img-grid img {
+            width: 55px; height: 55px; object-fit: cover;
+            border-radius: 8px; border: 1px solid #eee;
+            cursor: zoom-in; transition: opacity 0.2s;
+        }
+        .img-grid img:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -98,7 +96,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>圖片預覽</th>
+                    <th>圖片預覽 (點擊放大)</th>
                     <th>商品資訊</th>
                     <th>價格</th>
                     <th>AI 審核報告</th>
@@ -107,8 +105,8 @@
             </thead>
             <tbody id="audit-list">
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 60px; color: #86868b; font-size: 14px;">
-                        <i class="fa-solid fa-spinner fa-spin" style="margin-bottom: 10px; font-size: 20px;"></i><br>
+                    <td colspan="5" style="text-align: center; padding: 80px; color: #86868b; font-size: 14px;">
+                        <i class="fa-solid fa-spinner fa-spin" style="margin-bottom: 12px; font-size: 24px; color: #0066cc;"></i><br>
                         🚀 正在抓取商品數據與檢舉統計...
                     </td>
                 </tr>
@@ -116,6 +114,32 @@
         </table>
     </div>
 </div>
+
+<div id="audit-lightbox" onclick="this.classList.remove('active')">
+    </div>
+
+<script>
+    // --- 🛡️ 安全防護：HTML 轉義函數 ---
+    // 雖然 dashboard.js 已有此函數，但在 HTML 這裡保留作為全域備援
+    window.escapeHTML = function(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    };
+
+    // --- 🔍 燈箱開關邏輯 ---
+    window.openLightbox = function(url) {
+        const lb = document.getElementById('audit-lightbox');
+        lb.innerHTML = `<img src="${url}" alt="放大檢視">`;
+        lb.classList.add('active');
+    };
+
+    // 支援 ESC 鍵關閉
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') document.getElementById('audit-lightbox').classList.remove('active');
+    });
+</script>
 
 <script src="js/dashboard.js"></script>
 
