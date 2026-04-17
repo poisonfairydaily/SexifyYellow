@@ -60,9 +60,9 @@ window.onload = async () => {
     const { data: { session } } = await supabaseClient.auth.getSession();
     
     if (session) {
-        // 直接去資料庫查這個人是不是 admin，而不是看 session
-        const { data: profile } = await supabaseClient
-            .from('profiles') // 這裡要對應你的表格名稱
+        // 直接從資料庫獲取最真實的權限狀態
+        const { data: profile, error } = await supabaseClient
+            .from('profiles') // 這裡請確保名稱與你 SQL 建立的相同
             .select('is_admin')
             .eq('id', session.user.id)
             .single();
@@ -70,7 +70,7 @@ window.onload = async () => {
         if (profile && profile.is_admin === true) {
             showAdmin();
         } else {
-            alert("抱歉，您沒有管理員權限！");
+            alert("權限不足：您不是管理員。");
             await supabaseClient.auth.signOut();
             location.reload();
         }
