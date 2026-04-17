@@ -30,11 +30,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // --- 1. 設定區 (請務必填入你的正確資料) ---
+        // --- 1. 設定區 ---
         const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 修正點：將變數名稱從 supabase 改為 supabaseClient 以避免與 SDK 名稱衝突
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const uploadBtn = document.getElementById('upload-btn');
         const statusText = document.getElementById('status');
@@ -71,20 +72,20 @@
             statusText.innerText = "處理中，請稍候...";
 
             try {
-                // A. 上傳圖片到 Storage
+                // A. 上傳圖片到 Storage (使用修正後的 supabaseClient)
                 const fileName = `${Date.now()}_${file.name}`;
-                const { data: storageData, error: storageError } = await supabase.storage
+                const { data: storageData, error: storageError } = await supabaseClient.storage
                     .from('products')
                     .upload(fileName, file);
 
                 if (storageError) throw storageError;
 
-                // B. 取得圖片公開網址 (或簽名網址)
-                const { data: urlData } = supabase.storage.from('products').getPublicUrl(fileName);
+                // B. 取得圖片公開網址
+                const { data: urlData } = supabaseClient.storage.from('products').getPublicUrl(fileName);
                 const imageUrl = urlData.publicUrl;
 
                 // C. 將資料寫入 Database
-                const { error: dbError } = await supabase
+                const { error: dbError } = await supabaseClient
                     .from('products')
                     .insert([{ name, price: parseInt(price), image_url: imageUrl }]);
 
@@ -100,7 +101,7 @@
             }
         });
         
-        console.log("控制台已就緒，等待操作...");
+        console.log("控制台已就緒，等待操作... (已修正變數衝突)");
     </script>
 </body>
 </html>
