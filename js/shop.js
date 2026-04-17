@@ -186,21 +186,32 @@ async function renderProductGrid(grid, keyword) {
         }
 
         // --- 🔒 核心：針對所有商品批量取得「限時通行證」 ---
-        const fileNames = products.map(p => p.image_url).filter(Boolean);
-        let signedUrlsMap = {};
+// --- 🔒 核心修正：將完整 URL 轉為 Supabase 能辨識的「檔名」 ---
+const fileNames = products.map(p => {
+    if (!p.image_url) return null;
+    
+    // 如果是 https://.../img.jpg，我們只取最後一段 "img.jpg"
+    // 如果已經是檔名 "img.jpg"，split('/').pop() 依然會回傳 "img.jpg"
+    return p.image_url.split('/').pop(); 
+}).filter(Boolean);
 
-        if (fileNames.length > 0) {
-            // 一次申請所有圖片的 1 小時 (3600秒) 有效網址
-            const { data: signedData, error: sError } = await window.supabaseClient.storage
-                .from('products')
-                .createSignedUrls(fileNames, 3600);
+let signedUrlsMap = {};
 
-            if (!sError && signedData) {
-                // 將結果整理成一個快速查詢表 { "檔名": "簽名網址" }
-                signedData.forEach(item => {
-                    signedUrlsMap[item.path] = item.signedUrl;
-                });
-            }
+if (fileNames.length > 0) {
+    // 使用過濾後的「純檔名」去跟伺服器換鑰匙
+    const { data: signedData, error: sError } = await window.supabaseClient.storage
+        .from('products')
+        .createSignedUrls(fileNames, 3600);
+
+    if (!sError && signedData) {
+        signedData.forEach(item => {
+            // item.path 通常就是檔名
+            signedUrlsMap[item.path] = item.signedUrl;
+        });
+    } else {
+        console.error("簽名失敗:", sError);
+    }
+}
         }
 
         grid.innerHTML = products.map(p => {
