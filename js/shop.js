@@ -1,5 +1,5 @@
 /**
- * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉)
+ * shop.js - 整合式商城核心邏輯 (修復版：解決語法錯誤與圖片對齊問題)
  */
 
 let cart = []; // 購物車陣列
@@ -10,7 +10,6 @@ let currentKeyword = '';
  * 0. 支付與充值介面邏輯
  */
 
-// 控制充值輸入區域的顯示/隱藏
 window.toggleRechargeArea = function() {
     const drawer = document.getElementById('recharge-drawer');
     const icon = document.getElementById('recharge-icon');
@@ -24,10 +23,7 @@ window.toggleRechargeArea = function() {
         if (icon) icon.classList.replace('fa-xmark', 'fa-plus');
     }
 };
-// 在 shop.js 加入一個手動刷新函數
-/**
- * 強制更新餘額顯示補丁
- */
+
 window.refreshBalanceUI = async function() {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
@@ -41,22 +37,18 @@ window.refreshBalanceUI = async function() {
 
         if (error) throw error;
 
-        // 這裡尋找你的 HTML 標籤，假設它的 ID 叫 user-balance
         const balanceDisplay = document.getElementById('user-balance');
         if (balanceDisplay) {
             balanceDisplay.innerText = data.balance !== null ? data.balance : 0;
-            console.log("餘額更新成功:", data.balance);
         }
     } catch (err) {
         console.error("餘額顯示失敗:", err.message);
     }
 };
 
-// 每當頁面載入時跑一次
 document.addEventListener('DOMContentLoaded', window.refreshBalanceUI);
-// 每隔 10 秒自動檢查一次（適合支付完自動跳數字）
 setInterval(window.refreshBalanceUI, 10000);
-// 處理充值跳轉支付
+
 window.payNow = async function() {
     const amountVal = document.getElementById('rechargeAmount').value;
     const amount = parseFloat(amountVal);
@@ -90,7 +82,7 @@ window.payNow = async function() {
 };
 
 /**
- * 1. 動態注入與更新頂部頁籤 (保留原功能)
+ * 1. 動態注入與更新頂部頁籤
  */
 function ensureShopTabs() {
     const grid = document.getElementById('shop-grid');
@@ -120,7 +112,7 @@ window.switchView = function(toCart) {
     isCartView = toCart;
     renderShop(currentKeyword);
 };
-// 定義一個專門更新餘額的函數
+
 window.renderProfile = async function() {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
@@ -134,20 +126,17 @@ window.renderProfile = async function() {
 
         if (error) throw error;
 
-        // 注意：這裡的 ID 必須完全對應你 HTML 裡的 shop-balance-display
         const balanceEl = document.getElementById('shop-balance-display');
         if (balanceEl) {
-            // 使用 ?? 0 確保如果資料庫沒數字時顯示 0
             balanceEl.innerText = data.balance ?? 0;
-            console.log("餘額顯示已更新:", data.balance);
         }
     } catch (err) {
         console.error("更新餘額出錯:", err.message);
     }
 };
 
-// 網頁載入後立刻執行一次
 document.addEventListener('DOMContentLoaded', window.renderProfile);
+
 /**
  * 2. 商城主渲染入口
  */
@@ -168,7 +157,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染商品網格 (修正版：支援私有圖片簽名)
+ * 3. 渲染商品網格 (修正版：處理 URL 轉簽名檔名)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -185,39 +174,30 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
-        // --- 🔒 核心：針對所有商品批量取得「限時通行證」 ---
-// --- 🔒 核心修正：將完整 URL 轉為 Supabase 能辨識的「檔名」 ---
-const fileNames = products.map(p => {
-    if (!p.image_url) return null;
-    
-    // 如果是 https://.../img.jpg，我們只取最後一段 "img.jpg"
-    // 如果已經是檔名 "img.jpg"，split('/').pop() 依然會回傳 "img.jpg"
-    return p.image_url.split('/').pop(); 
-}).filter(Boolean);
+        // --- 🔒 核心修正：將完整 URL 轉為 Supabase 能辨識的「純檔名」 ---
+        const fileNames = products.map(p => {
+            if (!p.image_url) return null;
+            return p.image_url.split('/').pop(); // 只取最後一段檔名
+        }).filter(Boolean);
 
-let signedUrlsMap = {};
+        let signedUrlsMap = {};
 
-if (fileNames.length > 0) {
-    // 使用過濾後的「純檔名」去跟伺服器換鑰匙
-    const { data: signedData, error: sError } = await window.supabaseClient.storage
-        .from('products')
-        .createSignedUrls(fileNames, 3600);
+        if (fileNames.length > 0) {
+            const { data: signedData, error: sError } = await window.supabaseClient.storage
+                .from('products')
+                .createSignedUrls(fileNames, 3600);
 
-    if (!sError && signedData) {
-        signedData.forEach(item => {
-            // item.path 通常就是檔名
-            signedUrlsMap[item.path] = item.signedUrl;
-        });
-    } else {
-        console.error("簽名失敗:", sError);
-    }
-}
+            if (!sError && signedData) {
+                signedData.forEach(item => {
+                    signedUrlsMap[item.path] = item.signedUrl; // 這裡的 path 是檔名
+                });
+            }
         }
 
         grid.innerHTML = products.map(p => {
-            // 如果沒付錢或沒權限，這裡會拿到 undefined 或破圖
-            // 你可以準備一張「未解鎖」的佔位圖
-            const displayImg = signedUrlsMap[p.image_url] || 'https://via.placeholder.com/300?text=Locked';
+            // 查詢時，也要用同樣的邏輯把全網址轉成檔名來找 Map
+            const fileName = p.image_url ? p.image_url.split('/').pop() : '';
+            const displayImg = signedUrlsMap[fileName] || 'https://via.placeholder.com/300?text=Locked';
             
             return `
                 <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
@@ -241,17 +221,19 @@ if (fileNames.length > 0) {
 }
 
 /**
- * 4. 商品詳情模態視窗 (修正版：支援詳情頁簽名)
+ * 4. 商品詳情模態視窗 (修正版：支援網址切換)
  */
 window.openProductModal = async function(productId) {
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
     if (!p) return;
 
-    // --- 🔒 詳情頁也需要單獨申請一次通行證 ---
+    // 將資料庫的全網址切成檔名
+    const fileName = p.image_url ? p.image_url.split('/').pop() : '';
     let detailImg = 'https://via.placeholder.com/300?text=Locked';
+    
     const { data: sData } = await window.supabaseClient.storage
         .from('products')
-        .createSignedUrl(p.image_url, 600); // 10分鐘有效
+        .createSignedUrl(fileName, 600); 
     
     if (sData) detailImg = sData.signedUrl;
 
@@ -284,6 +266,12 @@ window.openProductModal = async function(productId) {
     document.body.style.overflow = 'hidden';
 };
 
+window.closeProductModal = () => {
+    const modal = document.getElementById('product-modal-container');
+    if (modal) modal.innerHTML = '';
+    document.body.style.overflow = '';
+};
+
 /**
  * 5. 安全購買 (RPC)
  */
@@ -302,13 +290,13 @@ window.executeSecurePurchase = async function(itemId, itemName) {
             alert(`🎉 購買成功！餘額：${data.new_balance}`);
             closeProductModal();
             if (typeof window.renderProfile === 'function') window.renderProfile();
-            renderShop(currentKeyword); // 刷新商城 (如庫存)
+            renderShop(currentKeyword);
         } else {
             const isInsufficientBalance = data.message.includes('餘額不足') || data.message.includes('balance');
             if (isInsufficientBalance) {
                 if (confirm(`⚠️ 餘額不足！\n是否要立即前往充值？`)) {
                     closeProductModal();
-                    toggleRechargeArea(); // 開啟充值抽屜
+                    toggleRechargeArea();
                 }
             } else {
                 alert(`⚠️ 失敗：${data.message}`);
@@ -401,7 +389,6 @@ function showNotification(msg) {
     setTimeout(() => n.style.display = 'none', 2000);
 }
 
-// 監聽 DOM 載入
 document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
