@@ -1,20 +1,101 @@
-<div id="admin-dashboard">
-    <h2>🛠️ 商品審核中控台</h2>
-    <div id="stats">
-        <p>待審核總數：<span id="pending-count">0</span></p>
-    </div>
-    
-    <table border="1" id="audit-table" style="width: 100%; border-collapse: collapse;">
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理員審核中控台</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        h1 { margin: 0; color: #333; font-size: 24px; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 12px;
+            color: #666;
+            font-weight: 600;
+            border-bottom: 2px solid #eee;
+        }
+        td {
+            padding: 15px 12px;
+            vertical-align: middle;
+        }
+        .status-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        .status-pending { background: #fff7e6; color: #fa8c16; }
+        .status-approved { background: #f6ffed; color: #52c41a; }
+        .status-rejected { background: #fff1f0; color: #f5222d; }
+
+        .btn-back {
+            text-decoration: none;
+            color: #666;
+            font-size: 14px;
+        }
+        .btn-back:hover { color: #000; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🛠️ 商戶審核中控台</h1>
+        <a href="admin.html" class="btn-back">⬅️ 返回上傳頁面</a>
+    </header>
+
+    <table>
         <thead>
-            <tr style="background: #f4f4f4;">
+            <tr>
                 <th>圖片預覽</th>
-                <th>商品名稱</th>
+                <th>商品資訊</th>
                 <th>價格</th>
-                <th>創作者 ID</th>
-                <th>操作</th>
+                <th>AI 審核報告</th>
+                <th>操作決策</th>
             </tr>
         </thead>
         <tbody id="audit-list">
-            </tbody>
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
+                    ⏳ 正在連線至資料庫...
+                </td>
+            </tr>
+        </tbody>
     </table>
 </div>
+
+<script src="js/dashboard.js"></script>
+
+</body>
+</html>
