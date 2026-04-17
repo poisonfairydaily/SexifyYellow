@@ -1,6 +1,5 @@
 /**
- * shop.js - 專業商城最終版
- * 功能：大圖捲動瀏覽、方案3預覽/原圖分離、我的庫存、關閉鈕修復
+ * shop.js - 專業商城最終版 (清晰預覽 + 多圖垂直捲動)
  */
 
 let cart = []; 
@@ -22,18 +21,15 @@ window.refreshBalanceUI = async function() {
     } catch (err) { console.error(err); }
 };
 
-// 強制關閉模態視窗函數 (修復版)
 window.closeProductModal = () => {
     const modal = document.getElementById('product-modal-container');
     if (modal) {
         modal.innerHTML = ''; 
         modal.style.display = 'none';
     }
-    document.body.style.overflow = ''; // 恢復網頁捲動
-    console.log("視窗已關閉");
+    document.body.style.overflow = ''; 
 };
 
-// 監聽鍵盤 Esc 鍵關閉
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') window.closeProductModal();
 });
@@ -89,7 +85,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格 (自動判定模糊/清晰)
+ * 3. 渲染網格
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -110,15 +106,17 @@ async function renderProductGrid(grid, keyword) {
         let displayProducts = products;
         if (currentView === 'owned') {
             displayProducts = products.filter(p => purchasedIds.has(p.id));
-            if (displayProducts.length === 0) {
-                grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚未擁有任何商品</div>`;
-                return;
-            }
         }
 
+        if (displayProducts.length === 0) {
+            grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">目前沒有內容</div>`;
+            return;
+        }
+
+        // 提取所有第一張圖片的檔名用於簽署 (解鎖用)
         const unlockableFiles = displayProducts
             .filter(p => purchasedIds.has(p.id) || isAdmin)
-            .map(p => p.image_url?.split(',')[0].split('/').pop()) // 取第一張圖換鑰匙
+            .map(p => p.image_url?.split(',')[0]) 
             .filter(Boolean);
 
         let signedMap = {};
@@ -128,24 +126,24 @@ async function renderProductGrid(grid, keyword) {
         }
 
         grid.innerHTML = displayProducts.map(p => {
-            const fileName = p.image_url?.split(',')[0].split('/').pop();
+            const firstFileName = p.image_url?.split(',')[0];
             const isUnlocked = purchasedIds.has(p.id) || isAdmin;
             
             let displayImg;
-            if (isUnlocked && signedMap[fileName]) {
-                displayImg = signedMap[fileName];
+            if (isUnlocked && signedMap[firstFileName]) {
+                displayImg = signedMap[firstFileName];
             } else {
-                // 方案 3：未解鎖時讀取 previews 桶
-                const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(fileName);
+                // 從 previews 儲存桶獲取清晰縮圖
+                const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(firstFileName);
                 displayImg = data.publicUrl;
             }
             
             return `
                 <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95">
                     <div class="aspect-square w-full overflow-hidden bg-gray-100 relative">
-                        <img src="${displayImg}" class="w-full h-full object-cover transition-all duration-700 ${!isUnlocked ? 'locked-blur' : ''}">
+                        <img src="${displayImg}" class="w-full h-full object-cover transition-all duration-700">
                         ${!isUnlocked ? `
-                            <div class="lock-overlay absolute inset-0 flex items-center justify-center bg-black/10">
+                            <div class="lock-overlay absolute inset-0 flex items-center justify-center bg-black/5">
                                 <div class="bg-white/90 p-2.5 rounded-full shadow-lg">
                                     <i class="fa-solid fa-lock text-sexify text-sm"></i>
                                 </div>
@@ -185,7 +183,6 @@ window.openProductModal = async function(productId) {
     }
     modal.style.display = 'block';
 
-    // 如果在庫存頁面點擊已購買商品 -> 進入漫畫大圖模式
     if (isUnlocked && currentView === 'owned') {
         renderMangaViewer(modal, p);
     } else {
@@ -194,7 +191,7 @@ window.openProductModal = async function(productId) {
 };
 
 /**
- * 漫畫讀閱模式 (全螢幕、垂直捲動、修復關閉鈕)
+ * 漫畫讀閱模式 (多圖高清垂直排列)
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
@@ -203,24 +200,23 @@ async function renderMangaViewer(modal, p) {
         .createSignedUrls(fileNames, 7200);
 
     const imgTags = sData ? sData.map(item => `
-        <img src="${item.signedUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto 10px; display:block; shadow:0 4px 10px rgba(0,0,0,0.5);">
-    `).join('') : '<p class="text-white text-center py-20">載入中...</p>';
+        <img src="${item.signedUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto 1px; display:block;">
+    `).join('') : '<p class="text-white text-center py-20">載入圖片中...</p>';
 
     modal.innerHTML = `
         <div class="fixed inset-0 bg-black z-[5000] overflow-hidden flex flex-col">
-            <div onclick="window.closeProductModal()" class="manga-close" style="position:fixed; top:20px; right:20px; z-index:9999; background:rgba(255,255,255,0.2); width:44px; height:44px; border-radius:50%; display:flex; items-center:center; justify-content:center; color:white; cursor:pointer; backdrop-filter:blur(10px);">
-                <i class="fa-solid fa-xmark text-xl" style="pointer-events:none;"></i>
+            <div onclick="window.closeProductModal()" class="manga-close" style="position:fixed; top:20px; right:20px; z-index:9999; background:rgba(0,0,0,0.5); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; cursor:pointer; backdrop-filter:blur(5px);">
+                <i class="fa-solid fa-xmark text-xl"></i>
             </div>
-            
-            <div class="flex-1 overflow-y-auto pt-10 pb-20">
-                <div class="text-center py-8">
-                    <h2 class="text-white font-bold text-xl">${p.name}</h2>
-                    <p class="text-gray-500 text-xs mt-2">共 ${fileNames.length} 頁內容</p>
+            <div class="flex-1 overflow-y-auto pt-4">
+                <div class="text-center py-6">
+                    <h2 class="text-white font-bold text-lg">${p.name}</h2>
+                    <p class="text-gray-500 text-[10px] mt-1">HD FULL GALLERY (${fileNames.length}P)</p>
                 </div>
-                <div class="px-2">
+                <div class="bg-black">
                     ${imgTags}
                 </div>
-                <div class="text-center text-gray-600 text-xs py-10">--- END ---</div>
+                <div class="text-center text-gray-700 text-[10px] py-10">THE END</div>
             </div>
         </div>
     `;
@@ -228,41 +224,40 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情模式 (原本的彈窗)
+ * 購買詳情彈窗
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
-    const fileName = p.image_url?.split(',')[0].split('/').pop();
+    const firstFileName = p.image_url?.split(',')[0];
     let displayImg;
     
     if (isUnlocked) {
-        const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(fileName, 600);
+        const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(firstFileName, 600);
         displayImg = data?.signedUrl;
     } else {
-        const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(fileName);
+        const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(firstFileName);
         displayImg = data.publicUrl;
     }
 
     modal.innerHTML = `
-        <div class="fixed inset-0 bg-black/80 z-[3500] flex items-center justify-center p-4 backdrop-blur-md" onclick="window.closeProductModal()">
-            <div class="bg-white rounded-[2.5rem] w-full max-w-sm overflow-hidden relative" onclick="event.stopPropagation()">
+        <div class="fixed inset-0 bg-black/60 z-[3500] flex items-center justify-center p-4 backdrop-blur-sm" onclick="window.closeProductModal()">
+            <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden relative shadow-2xl" onclick="event.stopPropagation()">
                 <div class="relative aspect-square">
-                    <img src="${displayImg}" class="w-full h-full object-cover ${!isUnlocked ? 'locked-blur' : ''}">
-                    ${!isUnlocked ? '<div class="absolute inset-0 flex items-center justify-center bg-black/10"><i class="fa-solid fa-lock text-white text-4xl opacity-50"></i></div>' : ''}
-                    <div onclick="window.closeProductModal()" class="absolute top-4 right-4 bg-black/20 text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer">
+                    <img src="${displayImg}" class="w-full h-full object-cover">
+                    <div onclick="window.closeProductModal()" class="absolute top-4 right-4 bg-black/10 text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer">
                         <i class="fa-solid fa-xmark"></i>
                     </div>
                 </div>
                 <div class="p-6">
-                    <h2 class="text-xl font-black text-gray-900">${p.name}</h2>
-                    <p class="text-gray-500 text-xs mt-2 line-clamp-2">${p.description || '購買後解鎖高清完整內容'}</p>
+                    <h2 class="text-xl font-bold text-gray-900">${p.name}</h2>
+                    <p class="text-gray-400 text-xs mt-2">解鎖後可觀看全部 ${p.image_url?.split(',').length || 1} 張高清大圖</p>
                     <div class="mt-6 flex items-center justify-between">
                         <span class="text-sexify font-black text-2xl">🪙 ${p.price}</span>
                         <div class="flex gap-2">
                             ${!isUnlocked ? `
-                                <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${displayImg}')" class="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold text-sm">加入</button>
-                                <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="bg-sexify text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-pink-200">立即購買</button>
+                                <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${displayImg}')" class="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold text-xs">加入清單</button>
+                                <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="bg-sexify text-white px-6 py-3 rounded-xl font-bold text-xs">立即解鎖</button>
                             ` : `
-                                <button onclick="window.switchView('owned')" class="bg-blue-500 text-white px-8 py-3 rounded-xl font-bold text-sm">庫存中查看</button>
+                                <button onclick="window.switchView('owned'); window.closeProductModal();" class="bg-black text-white px-8 py-3 rounded-xl font-bold text-xs">前往庫存查看</button>
                             `}
                         </div>
                     </div>
@@ -277,19 +272,19 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
  * 5. 安全購買 RPC
  */
 window.executeSecurePurchase = async function(itemId, itemName) {
-    if (!confirm(`確定要購買「${itemName}」嗎？`)) return;
+    if (!confirm(`確定要消耗 🪙 購買「${itemName}」嗎？`)) return;
     try {
         const { data, error } = await window.supabaseClient.rpc('process_purchase', { p_item_id: itemId, p_quantity: 1 });
         if (error) throw error;
         if (data.success) {
-            alert("🎉 購買成功！請至我的庫存查看內容。");
+            alert("🎉 解鎖成功！請至我的庫存查看內容。");
             window.closeProductModal();
             window.refreshBalanceUI();
             window.renderShop();
         } else {
             alert(data.message);
         }
-    } catch (e) { alert("交易異常"); }
+    } catch (e) { alert("交易異常，請稍後再試"); }
 };
 
 /**
@@ -297,14 +292,14 @@ window.executeSecurePurchase = async function(itemId, itemName) {
  */
 window.addToCart = function(id, name, price, img) {
     cart.push({ id, name, price, img });
-    showNotification(`已加入清單`);
+    showNotification(`已加入待買清單`);
     ensureShopTabs();
     window.closeProductModal();
 };
 
 function renderCartInline(grid) {
     if (cart.length === 0) {
-        grid.innerHTML = `<div class="text-center py-20 text-gray-400">清單空空如也</div>`;
+        grid.innerHTML = `<div class="text-center py-20 text-gray-400">清單目前是空的</div>`;
         return;
     }
     const total = cart.reduce((s, i) => s + i.price, 0);
@@ -318,8 +313,8 @@ function renderCartInline(grid) {
                 </div>
             `).join('')}
             <div class="mt-6 p-6 bg-gray-50 rounded-[2rem]">
-                <div class="flex justify-between mb-4"><span class="text-gray-500">總計</span><span class="text-sexify font-black text-xl">🪙 ${total.toFixed(1)}</span></div>
-                <button onclick="checkoutCart()" class="w-full bg-sexify text-white font-black py-4 rounded-2xl">確認結帳</button>
+                <div class="flex justify-between mb-4"><span class="text-gray-500 text-xs">合計金額</span><span class="text-sexify font-black text-xl">🪙 ${total.toFixed(1)}</span></div>
+                <button onclick="alert('請點擊商品進入詳情頁完成購買')" class="w-full bg-black text-white font-bold py-4 rounded-2xl text-xs">請逐一完成購買</button>
             </div>
         </div>
     `;
@@ -329,10 +324,10 @@ window.removeFromCart = (idx) => { cart.splice(idx, 1); window.renderShop(); };
 
 function showNotification(msg) {
     const n = document.createElement('div');
-    n.className = 'fixed top-20 left-1/2 -translate-x-1/2 bg-black/80 text-white px-6 py-2 rounded-full text-xs font-bold z-[5000]';
+    n.className = 'fixed top-12 left-1/2 -translate-x-1/2 bg-black/80 text-white px-6 py-2 rounded-full text-[10px] font-bold z-[6000]';
     n.innerText = msg;
     document.body.appendChild(n);
-    setTimeout(() => n.remove(), 2000);
+    setTimeout(() => n.remove(), 1500);
 }
 
 document.addEventListener('DOMContentLoaded', () => window.renderShop());
