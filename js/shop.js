@@ -168,7 +168,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染商品網格 (從 Supabase 抓取)
+ * 3. 渲染商品網格 (修正版：支援私有圖片簽名)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -185,31 +185,64 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
-        grid.innerHTML = products.map(p => `
-            <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
-                <div class="aspect-square w-full overflow-hidden bg-gray-50">
-                    <img src="${p.image_url || 'https://via.placeholder.com/300'}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
-                </div>
-                <div class="p-3">
-                    <h3 class="font-bold text-xs text-gray-800 mb-1 line-clamp-1">${p.name}</h3>
-                    <div class="flex items-end gap-1.5 mt-2">
-                        <span class="text-sexify font-black text-sm">🪙 ${p.price}</span>
-                        ${p.stock <= 0 ? `<span class="text-red-400 text-[9px] font-bold">已售罄</span>` : ''}
+        // --- 🔒 核心：針對所有商品批量取得「限時通行證」 ---
+        const fileNames = products.map(p => p.image_url).filter(Boolean);
+        let signedUrlsMap = {};
+
+        if (fileNames.length > 0) {
+            // 一次申請所有圖片的 1 小時 (3600秒) 有效網址
+            const { data: signedData, error: sError } = await window.supabaseClient.storage
+                .from('products')
+                .createSignedUrls(fileNames, 3600);
+
+            if (!sError && signedData) {
+                // 將結果整理成一個快速查詢表 { "檔名": "簽名網址" }
+                signedData.forEach(item => {
+                    signedUrlsMap[item.path] = item.signedUrl;
+                });
+            }
+        }
+
+        grid.innerHTML = products.map(p => {
+            // 如果沒付錢或沒權限，這裡會拿到 undefined 或破圖
+            // 你可以準備一張「未解鎖」的佔位圖
+            const displayImg = signedUrlsMap[p.image_url] || 'https://via.placeholder.com/300?text=Locked';
+            
+            return `
+                <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
+                    <div class="aspect-square w-full overflow-hidden bg-gray-50">
+                        <img src="${displayImg}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-bold text-xs text-gray-800 mb-1 line-clamp-1">${p.name}</h3>
+                        <div class="flex items-end gap-1.5 mt-2">
+                            <span class="text-sexify font-black text-sm">🪙 ${p.price}</span>
+                            ${p.stock <= 0 ? `<span class="text-red-400 text-[9px] font-bold">已售罄</span>` : ''}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (e) {
+        console.error("商城渲染失敗:", e);
         grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-400">載入失敗</div>`;
     }
 }
 
 /**
- * 4. 商品詳情模態視窗
+ * 4. 商品詳情模態視窗 (修正版：支援詳情頁簽名)
  */
 window.openProductModal = async function(productId) {
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
     if (!p) return;
+
+    // --- 🔒 詳情頁也需要單獨申請一次通行證 ---
+    let detailImg = 'https://via.placeholder.com/300?text=Locked';
+    const { data: sData } = await window.supabaseClient.storage
+        .from('products')
+        .createSignedUrl(p.image_url, 600); // 10分鐘有效
+    
+    if (sData) detailImg = sData.signedUrl;
 
     let modal = document.getElementById('product-modal-container');
     if (!modal) {
@@ -222,14 +255,14 @@ window.openProductModal = async function(productId) {
         <div class="fixed inset-0 bg-black/70 z-[3500] flex items-center justify-center p-4 backdrop-blur-md" onclick="closeProductModal()">
             <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden relative shadow-2xl" onclick="event.stopPropagation()">
                 <button onclick="closeProductModal()" class="absolute top-4 right-4 bg-black/20 text-white rounded-full w-9 h-9 flex items-center justify-center z-10"><i class="fa-solid fa-xmark"></i></button>
-                <img src="${p.image_url}" class="w-full aspect-square object-cover">
+                <img src="${detailImg}" class="w-full aspect-square object-cover">
                 <div class="p-6">
                     <h2 class="text-xl font-extrabold text-gray-900">${p.name}</h2>
                     <p class="text-gray-500 text-sm mt-2">${p.description || '暫無描述'}</p>
                     <div class="mt-4 pt-4 border-t border-gray-50">
                         <span class="text-sexify font-black text-2xl">🪙 ${p.price}</span>
                         <div class="flex gap-2 mt-4">
-                            <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${p.image_url}')" class="flex-1 bg-orange-50 text-orange-500 font-bold py-3.5 rounded-2xl text-sm">加入清單</button>
+                            <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${detailImg}')" class="flex-1 bg-orange-50 text-orange-500 font-bold py-3.5 rounded-2xl text-sm">加入清單</button>
                             <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="flex-[1.5] bg-sexify text-white font-bold py-3.5 rounded-2xl text-sm">立即購買</button>
                         </div>
                     </div>
@@ -238,12 +271,6 @@ window.openProductModal = async function(productId) {
         </div>
     `;
     document.body.style.overflow = 'hidden';
-};
-
-window.closeProductModal = () => {
-    const modal = document.getElementById('product-modal-container');
-    if (modal) modal.innerHTML = '';
-    document.body.style.overflow = '';
 };
 
 /**
