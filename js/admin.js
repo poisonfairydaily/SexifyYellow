@@ -1,5 +1,5 @@
 /**
- * admin.js - 商戶後台邏輯核心 (多圖批量上傳版)
+ * admin.js - 商戶後台邏輯核心 (高品質多圖批量上傳版)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -75,8 +75,10 @@ document.getElementById('p-image').addEventListener('change', function(e) {
     }
 });
 
-// --- 🎨 核心：自動模糊化處理 (Canvas) ---
-async function generateBlurBlob(file) {
+/**
+ * 🎨 核心：生成高品質預覽圖 (移除模糊，強化清晰度)
+ */
+async function generatePreviewBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
@@ -84,9 +86,8 @@ async function generateBlurBlob(file) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // 1. 提升解析度：從 400 改成 800 或 1000
-            // 這樣在手機上看起來會非常清晰，且檔案大小依然比原圖小很多
-            const max_size = 1000; 
+            // 🚀 解析度設定為 1200px (視網膜等級清晰度)
+            const max_size = 1200; 
             
             let width = img.width;
             let height = img.height;
@@ -100,17 +101,22 @@ async function generateBlurBlob(file) {
             canvas.width = width;
             canvas.height = height;
 
-            // 確保沒有模糊濾鏡
+            // ✨ 強制啟動高品質縮放算法 (防止模糊的關鍵)
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // 確保無濾鏡
             ctx.filter = 'none'; 
             ctx.drawImage(img, 0, 0, width, height);
             
-            // 2. 提升 JPEG 品質：從 0.7 改成 0.9
+            // 🚀 JPEG 品質設為 0.92 (高畫質與容量的甜點位)
             canvas.toBlob((blob) => { 
                 resolve(blob); 
-            }, 'image/jpeg', 0.9); 
+            }, 'image/jpeg', 0.92); 
         };
     });
 }
+
 // --- 🚀 核心：批量上傳邏輯 ---
 document.getElementById('upload-btn').addEventListener('click', async () => {
     const name = document.getElementById('p-name').value;
@@ -130,25 +136,25 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
             const file = files[i];
             status.innerText = `⏳ 正在處理第 ${i+1}/${files.length} 張：${file.name}`;
             
-            // 安全檔名處理：移除逗號與空格
+            // 安全檔名處理
             const safeName = file.name.replace(/[, ]/g, '_');
             const fileName = `${Date.now()}_${i}_${safeName}`;
 
-            // 1. 生成模糊版
-            const blurBlob = await generateBlurBlob(file);
+            // 1. 生成高品質縮圖
+            const previewBlob = await generatePreviewBlob(file);
 
-            // 2. 上傳原圖 (Private)
+            // 2. 上傳高清原圖 (Private Bucket)
             const { error: err1 } = await supabaseClient.storage.from('products').upload(fileName, file);
             if (err1) throw err1;
 
-            // 3. 上傳模糊預覽圖 (Public)
-            const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, blurBlob);
+            // 3. 上傳高品質預覽圖 (Public Bucket)
+            const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
             if (err2) throw err2;
             
             uploadedFileNames.push(fileName);
         }
 
-        // 4. 將所有檔名結合並寫入資料庫
+        // 4. 同步到資料庫
         const finalImagesString = uploadedFileNames.join(',');
         status.innerText = "⏳ 正在同步到資料庫...";
         
@@ -160,7 +166,9 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
         }]);
 
         if (dbError) throw dbError;
-        alert(`🎉 恭喜！成功上架 ${files.length} 張相片。`);
+        
+        status.innerText = "✅ 上傳成功！";
+        alert(`🎉 成功上架 ${files.length} 張相片。`);
         location.reload();
     } catch (err) {
         console.error(err);
