@@ -1,5 +1,5 @@
 /**
- * creator.js - 創作者高品質多圖投稿邏輯
+ * creator.js - 創作者高品質多圖投稿邏輯 (WebP + 多圖 + AI 審核)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -28,7 +28,7 @@ fileInput.addEventListener('change', (e) => {
     });
 });
 
-// --- 🛠️ 工具：檔案轉 Base64 ---
+// --- 🛠️ 工具：檔案轉 Base64 (AI 審核用) ---
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -38,10 +38,7 @@ function fileToBase64(file) {
     });
 }
 
-// --- 🎨 核心：生成高品質預覽圖 ---
-/**
- * 修改後的圖片處理函數：強制轉為 WebP 並壓縮
- */
+// --- 🎨 核心：生成高品質 WebP ---
 async function generatePreviewBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -50,8 +47,7 @@ async function generatePreviewBlob(file) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // 設定最大寬度（例如 1200px），避免有人上傳 8K 圖爆掉你的容量
-            const max_size = 1200; 
+            const max_size = 1200; // 限制最大寬度防止容量爆表
             let width = img.width;
             let height = img.height;
             
@@ -64,18 +60,18 @@ async function generatePreviewBlob(file) {
             canvas.width = width;
             canvas.height = height;
             
-            // 高品質縮放
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
             
-            // ✨ 關鍵：轉成 image/webp，品質設為 0.8 (這已經非常清晰且體積極小)
+            // 強制轉成 WebP 格式，品質 0.8
             canvas.toBlob((blob) => {
                 resolve(blob);
             }, 'image/webp', 0.8); 
         };
     });
 }
+
 // --- 🚀 投稿主邏輯 ---
 uploadBtn.addEventListener('click', async () => {
     const name = document.getElementById('p-name').value;
@@ -98,48 +94,53 @@ uploadBtn.addEventListener('click', async () => {
             const file = files[i];
             statusText.innerText = `正在 AI 審核第 ${i+1}/${files.length} 張...`;
 
-            // 1. 呼叫 AI 審核 (Edge Function)
+            // 1. AI 審核
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
             });
 
             if (auditError) throw new Error("安全審核系統連線異常");
-            finalAiReport = audit.details; // 存儲最後一張圖的報告
+            finalAiReport = audit.details;
 
             if (!audit.safe) {
                 alert(`❌ 攔截：圖片 "${file.name}" ${audit.reason}`);
                 continue; 
             }
 
-            // 2. 處理並上傳
-            statusText.innerText = `正在上傳第 ${i+1}/${files.length} 張...`;
-            const fileName = `${Date.now()}_${i}_${file.name.replace(/[, ]/g, '_')}`;
-            const previewBlob = await generatePreviewBlob(file);
+            // 2. 處理 WebP 與檔名
+            statusText.innerText = `正在壓縮並轉換第 ${i+1}/${files.length} 張...`;
+            const webpBlob = await generatePreviewBlob(file);
+            
+            // 移除舊副檔名，確保檔名乾淨
+            const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[, ]/g, '_');
+            const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
-            // 上傳原圖與預覽圖
-            await supabaseClient.storage.from('products').upload(fileName, file);
-            await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
+            // 3. 上傳到 Storage (products 與 previews 都用轉好的 WebP)
+            statusText.innerText = `正在上傳第 ${i+1}/${files.length} 張...`;
+            
+            await supabaseClient.storage.from('products').upload(fileName, webpBlob);
+            await supabaseClient.storage.from('previews').upload(fileName, webpBlob);
             
             uploadedFileNames.push(fileName);
         }
 
         if (uploadedFileNames.length === 0) throw new Error("無效內容，投稿失敗");
 
-        // 3. 寫入資料庫 (狀態為 pending)
+        // 4. 寫入資料庫
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: name,
             price: parseInt(price),
             image_url: uploadedFileNames.join(','),
             creator_id: user.id,
-            status: 'pending', // ✨ 創作者必須經過審核
+            status: 'pending',
             ai_report: finalAiReport
         }]);
 
         if (dbError) throw dbError;
 
         alert("🎉 投稿已送出！請靜候管理員審核。");
-        window.location.href = 'index.html'; // 返回首頁
+        window.location.href = 'index.html';
 
     } catch (err) {
         console.error(err);
