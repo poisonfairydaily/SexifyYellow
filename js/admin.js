@@ -1,5 +1,5 @@
 /**
- * admin.js - 商戶後台邏輯核心
+ * admin.js - 商戶後台邏輯核心 (多圖批量上傳版)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -9,7 +9,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const loginSection = document.getElementById('login-section');
 const adminSection = document.getElementById('admin-section');
 
-// --- 🔐 權限檢查邏輯 ---
+// --- 🔐 權限檢查與初始化 ---
 window.onload = async () => {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
@@ -34,7 +34,7 @@ window.onload = async () => {
 function showLogin() { loginSection.style.display = 'block'; }
 function showAdmin() { adminSection.style.display = 'block'; }
 
-// --- 🔑 登入與登出 ---
+// --- 🔑 登入與登出事件 ---
 document.getElementById('login-btn').addEventListener('click', async () => {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
@@ -55,7 +55,7 @@ document.getElementById('logout-btn-trigger').addEventListener('click', async ()
     location.reload();
 });
 
-// --- 🖼️ 圖片預覽處理 ---
+// --- 🖼️ 多圖預覽處理 ---
 document.getElementById('p-image').addEventListener('change', function(e) {
     const files = e.target.files;
     const container = document.getElementById('preview-container');
@@ -75,7 +75,7 @@ document.getElementById('p-image').addEventListener('change', function(e) {
     }
 });
 
-// --- 🎨 核心：自動模糊化處理 ---
+// --- 🎨 核心：自動模糊化處理 (Canvas) ---
 async function generateBlurBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -111,28 +111,36 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
     if (!name || !price || files.length === 0) return alert("資訊不完整");
 
     btn.disabled = true;
-    status.innerText = `⏳ 正在處理 ${files.length} 張圖片...`;
+    status.innerText = `⏳ 正在啟動批量上傳，共 ${files.length} 張圖片...`;
 
     try {
         let uploadedFileNames = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            status.innerText = `⏳ 正在處理第 ${i+1}/${files.length} 張...`;
+            status.innerText = `⏳ 正在處理第 ${i+1}/${files.length} 張：${file.name}`;
             
-            const safeName = file.name.replace(/,/g, '');
+            // 安全檔名處理：移除逗號與空格
+            const safeName = file.name.replace(/[, ]/g, '_');
             const fileName = `${Date.now()}_${i}_${safeName}`;
 
+            // 1. 生成模糊版
             const blurBlob = await generateBlurBlob(file);
 
-            // 分別上傳到兩個桶
-            await supabaseClient.storage.from('products').upload(fileName, file);
-            await supabaseClient.storage.from('previews').upload(fileName, blurBlob);
+            // 2. 上傳原圖 (Private)
+            const { error: err1 } = await supabaseClient.storage.from('products').upload(fileName, file);
+            if (err1) throw err1;
+
+            // 3. 上傳模糊預覽圖 (Public)
+            const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, blurBlob);
+            if (err2) throw err2;
             
             uploadedFileNames.push(fileName);
         }
 
+        // 4. 將所有檔名結合並寫入資料庫
         const finalImagesString = uploadedFileNames.join(',');
-
+        status.innerText = "⏳ 正在同步到資料庫...";
+        
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: name,
             price: parseInt(price),
@@ -141,7 +149,7 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
         }]);
 
         if (dbError) throw dbError;
-        alert(`✅ 成功！已上架 ${files.length} 張圖片。`);
+        alert(`🎉 恭喜！成功上架 ${files.length} 張相片。`);
         location.reload();
     } catch (err) {
         console.error(err);
