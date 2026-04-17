@@ -1,5 +1,5 @@
 /**
- * shop.js - 專業商城最終版 (清晰預覽 + 多圖垂直捲動)
+ * shop.js - 專業商城最終版 (清晰預覽 + 無鎖頭模式)
  */
 
 let cart = []; 
@@ -85,7 +85,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格
+ * 3. 渲染網格 (移除模糊與鎖頭圖層)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -113,7 +113,6 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
-        // 提取所有第一張圖片的檔名用於簽署 (解鎖用)
         const unlockableFiles = displayProducts
             .filter(p => purchasedIds.has(p.id) || isAdmin)
             .map(p => p.image_url?.split(',')[0]) 
@@ -133,7 +132,6 @@ async function renderProductGrid(grid, keyword) {
             if (isUnlocked && signedMap[firstFileName]) {
                 displayImg = signedMap[firstFileName];
             } else {
-                // 從 previews 儲存桶獲取清晰縮圖
                 const { data } = window.supabaseClient.storage.from('previews').getPublicUrl(firstFileName);
                 displayImg = data.publicUrl;
             }
@@ -142,13 +140,6 @@ async function renderProductGrid(grid, keyword) {
                 <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95">
                     <div class="aspect-square w-full overflow-hidden bg-gray-100 relative">
                         <img src="${displayImg}" class="w-full h-full object-cover transition-all duration-700">
-                        ${!isUnlocked ? `
-                            <div class="lock-overlay absolute inset-0 flex items-center justify-center bg-black/5">
-                                <div class="bg-white/90 p-2.5 rounded-full shadow-lg">
-                                    <i class="fa-solid fa-lock text-sexify text-sm"></i>
-                                </div>
-                            </div>
-                        ` : ''}
                     </div>
                     <div class="p-3">
                         <h3 class="font-bold text-[11px] text-gray-800 line-clamp-1">${p.name}</h3>
@@ -191,7 +182,7 @@ window.openProductModal = async function(productId) {
 };
 
 /**
- * 漫畫讀閱模式 (多圖高清垂直排列)
+ * 漫畫讀閱模式
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
@@ -224,7 +215,7 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗
+ * 購買詳情彈窗 (移除模糊與鎖頭圖示)
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
@@ -249,7 +240,7 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
                 </div>
                 <div class="p-6">
                     <h2 class="text-xl font-bold text-gray-900">${p.name}</h2>
-                    <p class="text-gray-400 text-xs mt-2">解鎖後可觀看全部 ${p.image_url?.split(',').length || 1} 張高清大圖</p>
+                    <p class="text-gray-400 text-xs mt-2">解鎖後可觀看全部 ${p.image_url?.split(',').length || 1} 張高清內容</p>
                     <div class="mt-6 flex items-center justify-between">
                         <span class="text-sexify font-black text-2xl">🪙 ${p.price}</span>
                         <div class="flex gap-2">
