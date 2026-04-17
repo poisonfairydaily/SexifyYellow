@@ -9,9 +9,11 @@
         .card { background: white; max-width: 500px; margin: auto; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         h2 { margin-top: 0; color: #333; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background: #000; color: white; cursor: pointer; font-weight: bold; border: none; }
-        #preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; filter: blur(10px); } /* 預設模糊保護隱私 */
-        #status { font-size: 14px; color: #666; text-align: center; }
+        button { background: #000; color: white; cursor: pointer; font-weight: bold; border: none; transition: 0.3s; }
+        button:hover { background: #333; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; }
+        #status { font-size: 14px; color: #666; text-align: center; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -26,6 +28,79 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="admin.js"></script>
+
+    <script>
+        // --- 1. 設定區 (請務必填入你的正確資料) ---
+        const SUPABASE_URL = '你的_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = '你的_ANON_KEY';
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const uploadBtn = document.getElementById('upload-btn');
+        const statusText = document.getElementById('status');
+        const fileInput = document.getElementById('p-image');
+        const previewImg = document.getElementById('preview');
+
+        // --- 2. 預覽圖片功能 ---
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    previewImg.src = event.target.result;
+                    previewImg.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- 3. 核心上傳功能 ---
+        uploadBtn.addEventListener('click', async () => {
+            const name = document.getElementById('p-name').value;
+            const price = document.getElementById('p-price').value;
+            const file = fileInput.files[0];
+
+            if (!name || !price || !file) {
+                alert('請完整填寫名稱、價格並選擇圖片');
+                return;
+            }
+
+            // 開始執行
+            console.log("開始上傳流程...");
+            uploadBtn.disabled = true;
+            statusText.innerText = "處理中，請稍候...";
+
+            try {
+                // A. 上傳圖片到 Storage
+                const fileName = `${Date.now()}_${file.name}`;
+                const { data: storageData, error: storageError } = await supabase.storage
+                    .from('products')
+                    .upload(fileName, file);
+
+                if (storageError) throw storageError;
+
+                // B. 取得圖片公開網址 (或簽名網址)
+                const { data: urlData } = supabase.storage.from('products').getPublicUrl(fileName);
+                const imageUrl = urlData.publicUrl;
+
+                // C. 將資料寫入 Database
+                const { error: dbError } = await supabase
+                    .from('products')
+                    .insert([{ name, price: parseInt(price), image_url: imageUrl }]);
+
+                if (dbError) throw dbError;
+
+                alert('✅ 上架成功！');
+                location.reload(); // 成功後刷新頁面
+
+            } catch (err) {
+                console.error("錯誤細節:", err);
+                statusText.innerText = "錯誤: " + (err.message || "上傳失敗");
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        console.log("控制台已就緒，等待操作...");
+    </script>
 </body>
 </html>
