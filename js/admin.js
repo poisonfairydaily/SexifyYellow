@@ -1,71 +1,22 @@
 /**
- * admin.js - 商戶後台邏輯核心 (高品質多圖上傳 + AI 審核連線優化版)
+ * admin.js - 商戶後台 (高品質上傳 + AI 審核報告存儲)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const loginSection = document.getElementById('login-section');
-const adminSection = document.getElementById('admin-section');
-
-// --- 🔐 權限檢查與初始化 ---
-window.onload = async () => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-        const { data: profile } = await supabaseClient.from('profiles').select('is_admin').eq('id', session.user.id).single();
-        if (profile?.is_admin) { showAdmin(); } 
-        else { alert("權限不足"); await supabaseClient.auth.signOut(); location.reload(); }
-    } else { showLogin(); }
-};
-
-function showLogin() { loginSection.style.display = 'block'; }
-function showAdmin() { adminSection.style.display = 'block'; }
-
-// --- 🔑 登入與登出 ---
-document.getElementById('login-btn').addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) { document.getElementById('login-status').innerText = "❌ " + error.message; } 
-    else { location.reload(); }
-});
-
-document.getElementById('logout-btn-trigger').addEventListener('click', async () => {
-    await supabaseClient.auth.signOut();
-    location.reload();
-});
-
-// --- 🖼️ 多圖預覽 ---
-document.getElementById('p-image').addEventListener('change', function(e) {
-    const files = e.target.files;
-    const container = document.getElementById('preview-container');
-    container.innerHTML = ''; 
-    Array.from(files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = document.createElement('img');
-            img.src = event.target.result;
-            img.className = 'preview-img';
-            container.appendChild(img);
-        };
-        reader.readAsDataURL(file);
-    });
-});
-
-// --- 🛠️ 工具：檔案轉 Base64 ---
+// --- 🛠️ 工具函數：檔案轉 Base64 ---
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]); 
+        reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = error => reject(error);
     });
 }
 
-/**
- * 🎨 核心：生成高品質預覽圖
- */
+// --- 🎨 核心：生成高品質預覽圖 ---
 async function generatePreviewBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -93,75 +44,66 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
     const status = document.getElementById('status');
     const btn = document.getElementById('upload-btn');
 
-    if (!name || !price || files.length === 0) return alert("資訊不完整");
+    if (!name || !price || files.length === 0) return alert("請填寫完整資訊");
 
     btn.disabled = true;
-    status.innerText = `⏳ 準備中，共 ${files.length} 張圖片...`;
+    status.innerText = "⏳ 正在啟動 AI 審核與上傳...";
 
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
         let uploadedFileNames = [];
+        let lastAiReport = null; // 儲存最後一張圖的 AI 報告
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            status.innerText = `🔍 正在由 AI 審核第 ${i+1}/${files.length} 張...`;
+            status.innerText = `🔍 AI 正在掃描第 ${i+1}/${files.length} 張...`;
 
-            // 1️⃣ AI 審核 (關鍵修正點)
+            // 1. AI 審核
             const base64Str = await fileToBase64(file);
-            
             const { data: audit, error: auditError } = await supabaseClient.functions.invoke('vision-audit', {
-                body: { imageBase64: base64Str },
-                headers: {
-                    // 強制傳入當前使用者的 Token
-                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-                }
+                body: { imageBase64: base64Str }
             });
 
-            // 如果連線失敗，打印詳細錯誤到 Console 方便偵錯
-            if (auditError) {
-                console.error("AI 審核連線詳情:", auditError);
-                throw new Error("AI 審核連線失敗，請檢查網頁控制台 (F12)");
-            }
+            if (auditError) throw new Error("AI 連線失敗，請檢查 Edge Function 狀態");
+            
+            // 存儲本次報告供資料庫使用
+            lastAiReport = audit.details;
 
             if (!audit.safe) {
-                alert(`❌ 攔截！圖片 "${file.name}" ${audit.reason}。`);
+                alert(`❌ 攔截！圖片 "${file.name}" ${audit.reason}`);
                 continue; 
             }
 
-            // 2️⃣ 處理上傳
-            status.innerText = `⏳ 審核通過！正在上傳第 ${i+1}/${files.length} 張...`;
-            const safeName = file.name.replace(/[, ]/g, '_');
-            const fileName = `${Date.now()}_${i}_${safeName}`;
+            // 2. 處理並上傳
+            status.innerText = `⏳ 上傳中 (${i+1}/${files.length})...`;
+            const fileName = `${Date.now()}_${i}_${file.name.replace(/[, ]/g, '_')}`;
             const previewBlob = await generatePreviewBlob(file);
 
-            const { error: err1 } = await supabaseClient.storage.from('products').upload(fileName, file);
-            if (err1) throw err1;
-
-            const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
-            if (err2) throw err2;
+            await supabaseClient.storage.from('products').upload(fileName, file);
+            await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
             
             uploadedFileNames.push(fileName);
         }
 
-        if (uploadedFileNames.length === 0) throw new Error("無有效圖片上傳");
+        if (uploadedFileNames.length === 0) throw new Error("沒有圖片通過審核");
 
-        // 3️⃣ 資料庫寫入
-        const finalImagesString = uploadedFileNames.join(',');
+        // 3. 寫入資料庫 (含 AI 報告)
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: name,
             price: parseInt(price),
-            image_url: finalImagesString,
+            image_url: uploadedFileNames.join(','),
             creator_id: user.id,
-            status: 'approved' 
+            status: 'approved', 
+            ai_report: lastAiReport // ✨ 存入最後一張掃描的詳細數據
         }]);
 
         if (dbError) throw dbError;
-        alert(`🎉 成功上傳 ${uploadedFileNames.length} 張相片！`);
+        alert("🎉 上架成功！");
         location.reload();
 
     } catch (err) {
-        console.error("上傳過程錯誤:", err);
-        status.innerText = "❌ 失敗：" + err.message;
+        console.error(err);
+        status.innerText = "❌ 錯誤：" + err.message;
         btn.disabled = false;
     }
 });
