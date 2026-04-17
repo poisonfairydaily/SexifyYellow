@@ -1,12 +1,12 @@
 /**
- * shop.js - 專業商城最終版 (安全防護 + 檢舉機制 + 滾動頁碼)
+ * shop.js - 專業商城最終修復版 (修復已購買商品點擊無效問題)
  */
 
 let cart = []; 
 let currentView = 'all'; // 'all', 'cart', 'owned'
 let currentKeyword = ''; 
 
-// --- 🛡️ 安全核心：防止 XSS 攻擊的文字過濾器 ---
+// --- 🛡️ 安全核心：防止 XSS 攻擊 ---
 function escapeHTML(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -93,7 +93,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格 (安全加固版)
+ * 3. 渲染網格
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -120,7 +120,6 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
-        // 預簽名與 Public URL 邏輯保持不變...
         const unlockableFiles = displayProducts
             .filter(p => purchasedIds.has(p.id) || isAdmin)
             .map(p => p.image_url?.split(',')[0]) 
@@ -162,7 +161,36 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * 4. 漫畫讀閱模式 (優化：即時滾動計數器)
+ * ✨ 4. 商品入口 (修復關鍵：正確處理已購買與未購買狀態)
+ */
+window.openProductModal = async function(productId) {
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
+    if (!p) return;
+
+    // 檢查是否有購買紀錄或是管理員
+    const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).single() : { data: null };
+    const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single() : { data: null };
+    const isUnlocked = order || profile?.is_admin;
+
+    let modal = document.getElementById('product-modal-container');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'product-modal-container';
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'block';
+
+    // ✨ 判斷：如果已解鎖且在「庫存」分頁，直接開漫畫；否則開購買彈窗
+    if (isUnlocked && currentView === 'owned') {
+        renderMangaViewer(modal, p);
+    } else {
+        renderPurchaseModal(modal, p, isUnlocked);
+    }
+};
+
+/**
+ * 漫畫讀閱模式
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
@@ -221,7 +249,7 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗 (安全加固版)
+ * 購買詳情彈窗
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
@@ -268,7 +296,7 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
 }
 
 /**
- * 檢舉、購買、購物車邏輯 (均已套用安全防護)
+ * 檢舉、購買、購物車邏輯
  */
 window.reportProduct = async function(productId) {
     const reason = prompt("請說明檢舉原因：");
