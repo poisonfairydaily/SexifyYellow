@@ -1,5 +1,5 @@
 /**
- * shop.js - 專業商城最終版 (含創作者審核過濾邏輯)
+ * shop.js - 專業商城最終版 (含檢舉機制 + 頁碼計數器)
  */
 
 let cart = []; 
@@ -92,13 +92,7 @@ async function renderProductGrid(grid, keyword) {
     
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        
-        // ✨ 核心修改：只顯示狀態為 'approved' 的商品
-        let query = window.supabaseClient
-            .from('products')
-            .select('*')
-            .eq('status', 'approved'); 
-            
+        let query = window.supabaseClient.from('products').select('*').eq('status', 'approved');
         if (keyword) query = query.ilike('name', `%${keyword}%`);
         const { data: products } = await query.order('created_at', { ascending: false });
 
@@ -132,7 +126,6 @@ async function renderProductGrid(grid, keyword) {
         grid.innerHTML = displayProducts.map(p => {
             const firstFileName = p.image_url?.split(',')[0];
             const isUnlocked = purchasedIds.has(p.id) || isAdmin;
-            
             let displayImg;
             if (isUnlocked && signedMap[firstFileName]) {
                 displayImg = signedMap[firstFileName];
@@ -187,31 +180,35 @@ window.openProductModal = async function(productId) {
 };
 
 /**
- * 漫畫讀閱模式
+ * ✨ 漫畫讀閱模式 (優化：頁碼計數器)
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
-    const { data: sData } = await window.supabaseClient.storage
-        .from('products')
-        .createSignedUrls(fileNames, 7200);
+    const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(fileNames, 7200);
 
-    const imgTags = sData ? sData.map(item => `
-        <img src="${item.signedUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto 1px; display:block;">
+    const imgTags = sData ? sData.map((item, idx) => `
+        <div class="relative">
+            <img src="${item.signedUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto 1px; display:block;">
+            <div class="text-[9px] text-gray-600 text-center py-1">PAGE ${idx + 1} / ${fileNames.length}</div>
+        </div>
     `).join('') : '<p class="text-white text-center py-20">載入圖片中...</p>';
 
     modal.innerHTML = `
         <div class="fixed inset-0 bg-black z-[5000] overflow-hidden flex flex-col">
-            <div onclick="window.closeProductModal()" class="manga-close" style="position:fixed; top:20px; right:20px; z-index:9999; background:rgba(0,0,0,0.5); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; cursor:pointer; backdrop-filter:blur(5px);">
-                <i class="fa-solid fa-xmark text-xl"></i>
+            <div class="fixed top-5 left-5 z-[9999] flex gap-3">
+                <div onclick="window.closeProductModal()" class="bg-white/10 text-white w-10 h-10 rounded-full flex items-center justify-center cursor-pointer backdrop-blur-md">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </div>
+                <div onclick="window.reportProduct('${p.id}')" class="bg-red-500/20 text-red-500 px-4 rounded-full flex items-center justify-center cursor-pointer backdrop-blur-md text-[10px] font-bold border border-red-500/30">
+                    檢舉內容
+                </div>
             </div>
             <div class="flex-1 overflow-y-auto pt-4">
                 <div class="text-center py-6">
                     <h2 class="text-white font-bold text-lg">${p.name}</h2>
                     <p class="text-gray-500 text-[10px] mt-1">HD FULL GALLERY (${fileNames.length}P)</p>
                 </div>
-                <div class="bg-black">
-                    ${imgTags}
-                </div>
+                <div class="bg-black">${imgTags}</div>
                 <div class="text-center text-gray-700 text-[10px] py-10">THE END</div>
             </div>
         </div>
@@ -220,12 +217,11 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗
+ * 購買詳情彈窗 (新增：檢舉按鈕)
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
     let displayImg;
-    
     if (isUnlocked) {
         const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(firstFileName, 600);
         displayImg = data?.signedUrl;
@@ -239,6 +235,9 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
             <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden relative shadow-2xl" onclick="event.stopPropagation()">
                 <div class="relative aspect-square">
                     <img src="${displayImg}" class="w-full h-full object-cover">
+                    <div class="absolute top-4 left-4 flex gap-2">
+                        <div onclick="window.reportProduct('${p.id}')" class="bg-black/20 text-white/70 px-3 py-1.5 rounded-full text-[9px] backdrop-blur-md cursor-pointer hover:bg-red-500 hover:text-white transition-all">檢舉</div>
+                    </div>
                     <div onclick="window.closeProductModal()" class="absolute top-4 right-4 bg-black/10 text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer">
                         <i class="fa-solid fa-xmark"></i>
                     </div>
@@ -263,6 +262,28 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
     `;
     document.body.style.overflow = 'hidden';
 }
+
+/**
+ * ✨ 新功能：檢舉邏輯
+ */
+window.reportProduct = async function(productId) {
+    const reason = prompt("請說明檢舉原因（例如：侵權、內容不適、畫質極差）：");
+    if (!reason) return;
+
+    try {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) return alert("請先登入帳號後再進行檢舉");
+
+        const { error } = await window.supabaseClient.from('reports').insert([{
+            product_id: productId,
+            reporter_id: user.id,
+            reason: reason
+        }]);
+
+        if (error) throw error;
+        alert("📢 感謝您的檢舉，管理員將儘速審核。");
+    } catch (e) { alert("檢舉失敗，請稍後再試"); }
+};
 
 /**
  * 5. 安全購買 RPC
