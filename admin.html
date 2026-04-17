@@ -56,28 +56,28 @@
     const loginSection = document.getElementById('login-section');
     const adminSection = document.getElementById('admin-section');
 
-window.onload = async () => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    
-    if (session) {
-        // 直接從資料庫獲取最真實的權限狀態
-        const { data: profile, error } = await supabaseClient
-            .from('profiles') // 這裡請確保名稱與你 SQL 建立的相同
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single();
+    window.onload = async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
         
-        if (profile && profile.is_admin === true) {
-            showAdmin();
+        if (session) {
+            // 從資料庫 profiles 表格獲取 admin 狀態
+            const { data: profile } = await supabaseClient
+                .from('profiles')
+                .select('is_admin')
+                .eq('id', session.user.id)
+                .single();
+            
+            if (profile && profile.is_admin === true) {
+                showAdmin();
+            } else {
+                alert("權限不足：您不是管理員。");
+                await supabaseClient.auth.signOut();
+                location.reload();
+            }
         } else {
-            alert("權限不足：您不是管理員。");
-            await supabaseClient.auth.signOut();
-            location.reload();
+            showLogin();
         }
-    } else {
-        showLogin();
-    }
-};
+    };
 
     function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
     function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
@@ -127,37 +127,40 @@ window.onload = async () => {
         status.innerText = "⏳ 正在處理中...";
 
         try {
-            // 1. 生成唯一檔名防止覆蓋
+            // 1. 生成不含特殊字元的唯一檔名
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            // 2. 上傳到 Supabase Storage (Bucket 名稱需為 products)
+            // 2. 上傳到 Supabase Storage (確認 Bucket 名稱為 products)
             const { data: uploadData, error: uploadError } = await supabaseClient.storage
                 .from('products')
                 .upload(fileName, file);
 
             if (uploadError) throw uploadError;
 
-            // 3. 取得圖片的公開網址
-            const { data: { publicUrl } } = supabaseClient.storage
+            // 3. 核心修正：取得圖片的完整公開網址
+            const { data: publicUrlData } = supabaseClient.storage
                 .from('products')
                 .getPublicUrl(fileName);
+            
+            const finalImageUrl = publicUrlData.publicUrl;
+            console.log("生成的網址為:", finalImageUrl); // 可以在開發者工具查看
 
-            // 4. 將完整資訊存入資料庫
+            // 4. 將完整網址存入資料庫
             const { error: dbError } = await supabaseClient
                 .from('products')
                 .insert([{
                     name: name,
                     price: parseInt(price),
-                    image_url: publicUrl // 儲存可以直接顯示的網址
+                    image_url: finalImageUrl 
                 }]);
 
             if (dbError) throw dbError;
 
-            alert("✅ 上架成功！");
+            alert("✅ 上架成功！圖片網址已修復。");
             location.reload();
         } catch (err) {
-            console.error(err);
+            console.error("錯誤詳情:", err);
             status.innerText = "❌ 錯誤：" + err.message;
             btn.disabled = false;
         }
