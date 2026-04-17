@@ -73,9 +73,24 @@ function convertToWebP(file) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
+
+                // --- 設定尺寸限制 (Size Restrict) ---
+                const MAX_WIDTH = 1200; // 即使原圖是 4K，我們也縮到 1200px 寬
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height = (MAX_WIDTH / width) * height;
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                // ----------------------------------
+
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 0.8 代表品質 (Quality)，這會大大影響檔案 Byte 大小
                 canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.8);
             };
         };
