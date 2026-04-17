@@ -1,9 +1,17 @@
 /**
- * dashboard.js - 終極診斷版
+ * dashboard.js - 終極管理中控台 (多圖顯示 + 安全防護版)
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// --- 🛡️ 安全核心：防止 XSS 攻擊的文字過濾器 ---
+function escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
 
 window.onload = async () => {
     const listContainer = document.getElementById('audit-list');
@@ -85,9 +93,16 @@ function renderTable(products) {
 
     products.forEach(p => {
         const report = p.ai_report || {};
-        const firstImg = p.image_url?.split(',')[0] || '';
-        const imgUrl = `${SUPABASE_URL}/storage/v1/object/public/previews/${firstImg}`;
         
+        // ✨ 修改 1：處理多圖顯示
+        const allFiles = p.image_url?.split(',') || [];
+        const imagesHtml = allFiles.map(fileName => {
+            // 注意：這裡使用 previews bucket 以節省載入頻寬
+            const imgUrl = `${SUPABASE_URL}/storage/v1/object/public/previews/${fileName.trim()}`;
+            return `<img src="${imgUrl}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; background:#f5f5f5;">`;
+        }).join('');
+        
+        // 檢舉數提取
         let reportCount = 0;
         if (p.reports && p.reports.length > 0) {
             reportCount = p.reports[0].count;
@@ -102,9 +117,13 @@ function renderTable(products) {
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid #eee";
         tr.innerHTML = `
-            <td style="padding: 15px;"><img src="${imgUrl}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; background:#f5f5f5;"></td>
             <td style="padding: 15px;">
-                <div style="font-weight:bold; color:#333; font-size:14px;">${p.name}</div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 190px;">
+                    ${imagesHtml}
+                </div>
+            </td>
+            <td style="padding: 15px;">
+                <div style="font-weight:bold; color:#333; font-size:14px;">${escapeHTML(p.name)}</div>
                 <div style="margin-top:5px;"><span style="font-size:10px; background:#f0f0f0; color:#666; padding:2px 6px; border-radius:4px;">${p.status}</span></div>
                 ${reportAlert}
             </td>
