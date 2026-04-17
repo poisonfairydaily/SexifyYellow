@@ -93,7 +93,8 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        let query = window.supabaseClient.from('products').select('*');
+        // 只有 status 為 'approved' 的商品會出現在商城
+let query = window.supabaseClient.from('products').select('*').eq('status', 'approved');
         if (keyword) query = query.ilike('name', `%${keyword}%`);
         const { data: products } = await query.order('created_at', { ascending: false });
 
