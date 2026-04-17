@@ -1,5 +1,5 @@
 /**
- * admin.js - 商戶後台邏輯核心 (高品質多圖批量上傳版)
+ * admin.js - 商戶後台邏輯核心 (高品質多圖批量上傳 + 創作者標記版)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -76,7 +76,7 @@ document.getElementById('p-image').addEventListener('change', function(e) {
 });
 
 /**
- * 🎨 核心：生成高品質預覽圖 (移除模糊，強化清晰度)
+ * 🎨 核心：生成高品質預覽圖
  */
 async function generatePreviewBlob(file) {
     return new Promise((resolve) => {
@@ -85,34 +85,21 @@ async function generatePreviewBlob(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
-            // 🚀 解析度設定為 1200px (視網膜等級清晰度)
             const max_size = 1200; 
-            
             let width = img.width;
             let height = img.height;
-            
             if (width > height) {
                 if (width > max_size) { height *= max_size / width; width = max_size; }
             } else {
                 if (height > max_size) { width *= max_size / height; height = max_size; }
             }
-            
             canvas.width = width;
             canvas.height = height;
-
-            // ✨ 強制啟動高品質縮放算法 (防止模糊的關鍵)
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-
-            // 確保無濾鏡
             ctx.filter = 'none'; 
             ctx.drawImage(img, 0, 0, width, height);
-            
-            // 🚀 JPEG 品質設為 0.92 (高畫質與容量的甜點位)
-            canvas.toBlob((blob) => { 
-                resolve(blob); 
-            }, 'image/jpeg', 0.92); 
+            canvas.toBlob((blob) => { resolve(blob); }, 'image/jpeg', 0.92); 
         };
     });
 }
@@ -131,38 +118,42 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
     status.innerText = `⏳ 正在啟動批量上傳，共 ${files.length} 張圖片...`;
 
     try {
+        // ✨ 獲取當前登入使用者的 ID (即創作者 ID)
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) throw new Error("尚未登入或登入已過期");
+
         let uploadedFileNames = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             status.innerText = `⏳ 正在處理第 ${i+1}/${files.length} 張：${file.name}`;
             
-            // 安全檔名處理
             const safeName = file.name.replace(/[, ]/g, '_');
             const fileName = `${Date.now()}_${i}_${safeName}`;
 
-            // 1. 生成高品質縮圖
             const previewBlob = await generatePreviewBlob(file);
 
-            // 2. 上傳高清原圖 (Private Bucket)
+            // 上傳原圖
             const { error: err1 } = await supabaseClient.storage.from('products').upload(fileName, file);
             if (err1) throw err1;
 
-            // 3. 上傳高品質預覽圖 (Public Bucket)
+            // 上傳高品質預覽圖
             const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
             if (err2) throw err2;
             
             uploadedFileNames.push(fileName);
         }
 
-        // 4. 同步到資料庫
         const finalImagesString = uploadedFileNames.join(',');
         status.innerText = "⏳ 正在同步到資料庫...";
         
+        // ✨ 寫入資料庫時加入 creator_id
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: name,
             price: parseInt(price),
             image_url: finalImagesString,
-            preview_url: finalImagesString 
+            preview_url: finalImagesString,
+            creator_id: user.id,   // 標記創作者
+            status: 'approved'     // 目前管理員上傳預設直接通過
         }]);
 
         if (dbError) throw dbError;
