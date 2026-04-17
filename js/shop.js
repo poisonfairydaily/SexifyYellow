@@ -5,7 +5,7 @@
 
 const IMAGE_CONFIG = {
     source: 'R2', 
-    workerUrl: 'https://sexifyyellow.poisonfairydaily.workers.dev/' // 需確保此為新建立的 Worker
+    workerUrl: 'https://sexifyyellow.poisonfairydaily.workers.dev' // 需確保此為新建立的 Worker
 };
 
 let cart = []; 
