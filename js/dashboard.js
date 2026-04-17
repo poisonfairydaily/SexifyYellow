@@ -1,5 +1,5 @@
 /**
- * dashboard.js - 正式營運版 (支援軟刪除 is_archived + AI 審核)
+ * dashboard.js - 營運管理後台 (支援軟刪除、物理刪除與 AI 深度提醒)
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
@@ -52,11 +52,10 @@ async function loadAuditList() {
     listContainer.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:50px;">🚀 正在載入活躍商品列表...</td></tr>';
 
     try {
-        // ✨ 修改點：增加 .eq('is_archived', false)，不顯示已下架商品
         const { data: products, error } = await supabaseClient
             .from('products')
             .select('*, reports(count)')
-            .eq('is_archived', false) 
+            .eq('is_archived', false) // 預設只顯示未封存的商品
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -89,26 +88,41 @@ function renderTable(products) {
         let reportCount = 0;
         if (p.reports && p.reports.length > 0) reportCount = p.reports[0].count;
 
+        // AI 狀態顏色判定
         const getClr = (v) => (v === 'LIKELY' || v === 'VERY_LIKELY') ? '#ff4d4f' : '#8c8c8c';
+        
+        // ✨ AI 疑慮高亮：如果 AI 判定為「有可能 (POSSIBLE)」，則背景變黃提醒人工細看
+        const isSuspicious = Object.values(report).some(v => v === 'POSSIBLE' || v === 'LIKELY' || v === 'VERY_LIKELY');
 
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid #eee";
+        if (isSuspicious) tr.style.backgroundColor = "#fffbe6"; // 警戒淺黃色
+
         tr.innerHTML = `
             <td style="padding: 15px;"><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 190px;">${imagesHtml}</div></td>
             <td style="padding: 15px;">
                 <div style="font-weight:bold;">${escapeHTML(p.name)}</div>
-                <div style="margin-top:5px;"><span style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${p.status}</span></div>
-                ${reportCount > 0 ? `<div style="color:#ff4d4f; font-size:11px;">⚠️ 檢舉: ${reportCount}</div>` : ''}
+                <div style="margin-top:5px;">
+                    <span style="font-size:10px; background:#f0f0f0; padding:2px 6px; border-radius:4px;">${p.status}</span>
+                    ${p.is_official ? '<span style="font-size:10px; background:#e6f7ff; color:#1890ff; padding:2px 6px; border-radius:4px; margin-left:4px;">官方</span>' : ''}
+                </div>
+                ${reportCount > 0 ? `<div style="color:#ff4d4f; font-size:11px; margin-top:4px;">⚠️ 被用戶檢舉: ${reportCount} 次</div>` : ''}
             </td>
             <td style="padding: 15px; font-weight:bold; color:#ff2442;">🪙 ${p.price}</td>
             <td style="padding: 15px; font-size: 11px; font-family: monospace;">
                 <div style="color: ${getClr(report.violence)}">💀 暴力: ${report.violence || 'N/A'}</div>
                 <div style="color: ${getClr(report.racy)}">👙 挑逗: ${report.racy || 'N/A'}</div>
+                <div style="color: ${getClr(report.medical)}">🏥 醫療: ${report.medical || 'N/A'}</div>
             </td>
             <td style="padding: 15px;">
                 <div style="display:flex; flex-direction:column; gap:8px;">
-                    <button onclick="updateStatus('${p.id}', 'approved')" style="background:#52c41a; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">通過</button>
-                    <button onclick="archiveProduct('${p.id}')" style="background:#ff4d4f; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">下架封存</button>
+                    <button onclick="updateStatus('${p.id}', 'approved')" style="background:#52c41a; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">通過</button>
+                    <button onclick="archiveProduct('${p.id}')" style="background:#faad14; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">下架封存</button>
+                    
+                    <button onclick="hardDeleteProduct('${p.id}', '${p.image_url}')" 
+                            style="background:none; color:#ff4d4f; border:1px solid #ff4d4f; padding:6px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:bold;">
+                            徹底刪除 (違規)
+                    </button>
                 </div>
             </td>
         `;
@@ -116,36 +130,66 @@ function renderTable(products) {
     });
 }
 
-// --- 🔍 4. 燈箱與封存功能 ---
+// --- 🔍 4. 功能函數 ---
+
+// 燈箱效果
 window.openLightbox = function(url) {
     let overlay = document.getElementById('audit-lightbox');
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'audit-lightbox';
-        overlay.className = 'lightbox-overlay'; // 配合 CSS 使用
         overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:none; align-items:center; justify-content:center; cursor:zoom-out;";
         overlay.onclick = () => overlay.style.display = 'none';
         document.body.appendChild(overlay);
     }
-    overlay.innerHTML = `<img src="${url}" style="max-width:90%; max-height:90%; border-radius:8px;">`;
+    overlay.innerHTML = `<img src="${url}" style="max-width:90%; max-height:90%; border-radius:8px; box-shadow: 0 0 20px rgba(0,0,0,0.5);">`;
     overlay.style.display = 'flex';
 };
 
-// ✨ 核心功能：下架封存 (Soft Delete)
+// 軟刪除 (下架)
 window.archiveProduct = async (id) => {
-    const ok = confirm("確定要下架此商品嗎？\n下架後商品將不再商城顯示，但歷史訂單資料會被保留。");
+    const ok = confirm("確定要下架此商品嗎？\n下架後商品將不再顯示，但會保留歷史交易紀錄。");
     if (!ok) return;
 
     const { error } = await supabaseClient
         .from('products')
-        .update({ is_archived: true }) // 將封存標記設為 true
+        .update({ is_archived: true })
         .eq('id', id);
 
     if (error) alert("下架失敗: " + error.message);
     else loadAuditList();
 };
 
-// --- ⚙️ 5. 更新審核狀態 ---
+// ✨ 徹底刪除 (用於清理血腥、醫療違規內容)
+window.hardDeleteProduct = async (id, imageUrls) => {
+    const ok = confirm("🚨 🚨 🚨 極度警告 🚨 🚨 🚨\n\n此操作將會「永遠刪除」該商品及其所有圖片檔案。\n這通常用於處理嚴重的違規內容 (如血腥、違法醫療)。\n此操作無法撤銷，確定執行嗎？");
+    if (!ok) return;
+
+    try {
+        // 1. 從資料庫刪除 (如有設 CASCADE，關聯的訂單也會被刪除)
+        const { error: dbError } = await supabaseClient
+            .from('products')
+            .delete()
+            .eq('id', id);
+        
+        if (dbError) throw dbError;
+
+        // 2. 從 Storage 清理圖片實體檔案
+        const fileNames = imageUrls.split(',').map(name => name.trim());
+        if (fileNames.length > 0) {
+            await supabaseClient.storage.from('products').remove(fileNames);
+            await supabaseClient.storage.from('previews').remove(fileNames);
+        }
+
+        alert("🗑️ 商品及其檔案已徹底清除。");
+        loadAuditList();
+
+    } catch (err) {
+        alert("刪除失敗: " + err.message);
+    }
+};
+
+// 更新審核狀態
 window.updateStatus = async (id, newStatus) => {
     const { error } = await supabaseClient.from('products').update({ status: newStatus }).eq('id', id);
     if (error) alert("操作失敗: " + error.message);
