@@ -1,18 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>測試頁面</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商戶後台管理</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .card { background: white; max-width: 500px; margin: auto; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #333; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #000; color: white; cursor: pointer; font-weight: bold; border: none; }
+        #preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; filter: blur(10px); } /* 預設模糊保護隱私 */
+        #status { font-size: 14px; color: #666; text-align: center; }
+    </style>
 </head>
-<body style="background: red; color: white; padding: 50px;">
-    <h1>如果你看到這個紅色畫面，代表 HTML 檔案路徑是對的！</h1>
-    <p>如果看不到，請檢查你的 GitHub 檔案名稱是否真的是 admin.html</p>
-
-    <div style="background: white; color: black; padding: 20px;">
-        <h2>上架測試表單</h2>
-        <input type="text" placeholder="測試輸入框">
-        <button>這是一個按鈕</button>
+<body>
+    <div class="card">
+        <h2>上架新商品</h2>
+        <input type="text" id="p-name" placeholder="商品名稱">
+        <input type="number" id="p-price" placeholder="價格">
+        <input type="file" id="p-image" accept="image/*">
+        <img id="preview" src="" alt="預覽圖">
+        <button id="upload-btn">確認上架</button>
+        <p id="status"></p>
     </div>
 
-    </body>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="admin.js"></script>
+</body>
 </html>
