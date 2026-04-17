@@ -1,10 +1,30 @@
 /**
- * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉、我的內容)
+ * shop.js - 整合式商城核心邏輯 (完整版：包含購物車、搜尋、RPC 購買與支付跳轉、我的內容、簽名網址)
  */
 
 let cart = []; // 購物車陣列
 let isCartView = false; 
 let currentKeyword = ''; 
+
+/**
+ * 🆕 新增：獲取簽名網址的核心輔助函數
+ */
+async function getSignedUrlSafe(path) {
+    if (!path) return 'https://via.placeholder.com/300?text=No+Image';
+    if (path.startsWith('http')) return path; // 兼容舊版完整網址
+
+    try {
+        const { data, error } = await window.supabaseClient.storage
+            .from('products')
+            .createSignedUrl(path, 3600); // 3600秒 (1小時) 效期
+        
+        if (error || !data) throw error;
+        return data.signedUrl;
+    } catch (e) {
+        console.error("獲取圖片網址失敗:", e.message);
+        return 'https://via.placeholder.com/300?text=Image+Error';
+    }
+}
 
 /**
  * 0. 支付與充值介面邏輯
@@ -165,7 +185,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染商品網格 (從 Supabase 抓取)
+ * 3. 渲染商品網格 (從 Supabase 抓取 + 處理簽名網址)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -182,10 +202,15 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
+        // 批量轉換圖片網址
+        for (let p of products) {
+            p.displayImage = await getSignedUrlSafe(p.image_url);
+        }
+
         grid.innerHTML = products.map(p => `
             <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
                 <div class="aspect-square w-full overflow-hidden bg-gray-50">
-                    <img src="${p.image_url || 'https://via.placeholder.com/300'}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                    <img src="${p.displayImage}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
                 </div>
                 <div class="p-3">
                     <h3 class="font-bold text-xs text-gray-800 mb-1 line-clamp-1">${p.name}</h3>
@@ -202,11 +227,14 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * 4. 商品詳情模態視窗
+ * 4. 商品詳情模態視窗 (處理簽名網址)
  */
 window.openProductModal = async function(productId) {
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
     if (!p) return;
+
+    // 轉換圖片網址
+    const displayImage = await getSignedUrlSafe(p.image_url);
 
     let modal = document.getElementById('product-modal-container');
     if (!modal) {
@@ -219,15 +247,15 @@ window.openProductModal = async function(productId) {
         <div class="fixed inset-0 bg-black/70 z-[3500] flex items-center justify-center p-4 backdrop-blur-md" onclick="closeProductModal()">
             <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden relative shadow-2xl" onclick="event.stopPropagation()">
                 <button onclick="closeProductModal()" class="absolute top-4 right-4 bg-black/20 text-white rounded-full w-9 h-9 flex items-center justify-center z-10"><i class="fa-solid fa-xmark"></i></button>
-                <img src="${p.image_url}" class="w-full aspect-square object-cover">
+                <img src="${displayImage}" class="w-full aspect-square object-cover">
                 <div class="p-6">
                     <h2 class="text-xl font-extrabold text-gray-900">${p.name}</h2>
                     <p class="text-gray-500 text-sm mt-2">${p.description || '暫無描述'}</p>
                     <div class="mt-4 pt-4 border-t border-gray-50">
                         <span class="text-sexify font-black text-2xl">🪙 ${p.price}</span>
                         <div class="flex gap-2 mt-4">
-                            <button onclick="addToCart('${p.id}', '${p.name}', ${p.price}, '${p.image_url}')" class="flex-1 bg-orange-50 text-orange-500 font-bold py-3.5 rounded-2xl text-sm">加入清單</button>
-                            <button onclick="executeSecurePurchase('${p.id}', '${p.name}')" class="flex-[1.5] bg-sexify text-white font-bold py-3.5 rounded-2xl text-sm">立即購買</button>
+                            <button onclick="addToCart('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${p.price}, '${displayImage}')" class="flex-1 bg-orange-50 text-orange-500 font-bold py-3.5 rounded-2xl text-sm">加入清單</button>
+                            <button onclick="executeSecurePurchase('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="flex-[1.5] bg-sexify text-white font-bold py-3.5 rounded-2xl text-sm">立即購買</button>
                         </div>
                     </div>
                 </div>
@@ -364,9 +392,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderShop();
 });
 
-
 /**
- * 8. 我的內容 (已購商品庫存)
+ * 8. 我的內容 (已購商品庫存) - 包含簽名網址處理
  */
 
 window.toggleMyOrders = function() {
@@ -409,15 +436,22 @@ window.renderMyOrders = async function() {
         return;
     }
 
+    // 處理庫存內的圖片網址轉換
+    for (let order of data) {
+        if (order.products) {
+            order.products.displayImage = await getSignedUrlSafe(order.products.image_url);
+        }
+    }
+
     // 這裡換成了深色、更緊湊的 UI
     container.innerHTML = data.map(order => {
-        const p = order.products || { name: '未知商品', image_url: '', description: '無描述' };
+        const p = order.products || { name: '未知商品', displayImage: '', description: '無描述' };
         
         return `
-            <div onclick="window.showItemDetail('${p.name}', '${p.image_url}', '${(p.description || '').replace(/'/g, "\\'")}')" 
+            <div onclick="window.showItemDetail('${p.name.replace(/'/g, "\\'")}', '${p.displayImage}', '${(p.description || '').replace(/'/g, "\\'")}')" 
                  class="bg-white/[0.03] border border-white/10 p-3 rounded-2xl flex gap-4 items-center cursor-pointer active:scale-[0.98] transition-all hover:bg-white/[0.05]">
                 
-                <img src="${p.image_url}" class="w-14 h-14 object-cover rounded-xl bg-gray-800 shadow-lg">
+                <img src="${p.displayImage}" class="w-14 h-14 object-cover rounded-xl bg-gray-800 shadow-lg">
                 
                 <div class="flex-1 min-w-0">
                     <h3 class="text-white text-sm font-bold truncate">${p.name}</h3>
