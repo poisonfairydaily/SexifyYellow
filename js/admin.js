@@ -1,5 +1,5 @@
 /**
- * admin.js - 商戶後台邏輯核心 (高品質多圖上傳 + AI 審核版)
+ * admin.js - 商戶後台邏輯核心 (高品質多圖上傳 + AI 審核連線優化版)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -53,12 +53,12 @@ document.getElementById('p-image').addEventListener('change', function(e) {
     });
 });
 
-// --- 🛠️ 工具：檔案轉 Base64 (AI 審核需要) ---
+// --- 🛠️ 工具：檔案轉 Base64 ---
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]); // 只要純 Base64 字串
+        reader.onload = () => resolve(reader.result.split(',')[1]); 
         reader.onerror = error => reject(error);
     });
 }
@@ -85,7 +85,7 @@ async function generatePreviewBlob(file) {
     });
 }
 
-// --- 🚀 核心：批量上傳邏輯 (含 AI 審核) ---
+// --- 🚀 核心：批量上傳邏輯 ---
 document.getElementById('upload-btn').addEventListener('click', async () => {
     const name = document.getElementById('p-name').value;
     const price = document.getElementById('p-price').value;
@@ -106,38 +106,46 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
             const file = files[i];
             status.innerText = `🔍 正在由 AI 審核第 ${i+1}/${files.length} 張...`;
 
-            // 1️⃣ 第一關：呼叫 Edge Function 進行 AI 審核
+            // 1️⃣ AI 審核 (關鍵修正點)
             const base64Str = await fileToBase64(file);
+            
             const { data: audit, error: auditError } = await supabaseClient.functions.invoke('vision-audit', {
-                body: { imageBase64: base64Str }
+                body: { imageBase64: base64Str },
+                headers: {
+                    // 強制傳入當前使用者的 Token
+                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                }
             });
 
-            if (auditError) throw new Error("AI 審核連線失敗");
-            if (!audit.safe) {
-                alert(`❌ 攔截！圖片 "${file.name}" ${audit.reason}。這張圖將被跳過。`);
-                continue; // 違規，跳過這張
+            // 如果連線失敗，打印詳細錯誤到 Console 方便偵錯
+            if (auditError) {
+                console.error("AI 審核連線詳情:", auditError);
+                throw new Error("AI 審核連線失敗，請檢查網頁控制台 (F12)");
             }
 
-            // 2️⃣ 第二關：審核通過後才處理圖片與上傳
-            status.innerText = `⏳ 審核通過！正在處理與上傳第 ${i+1}/${files.length} 張...`;
+            if (!audit.safe) {
+                alert(`❌ 攔截！圖片 "${file.name}" ${audit.reason}。`);
+                continue; 
+            }
+
+            // 2️⃣ 處理上傳
+            status.innerText = `⏳ 審核通過！正在上傳第 ${i+1}/${files.length} 張...`;
             const safeName = file.name.replace(/[, ]/g, '_');
             const fileName = `${Date.now()}_${i}_${safeName}`;
             const previewBlob = await generatePreviewBlob(file);
 
-            // 上傳原圖 (Private)
             const { error: err1 } = await supabaseClient.storage.from('products').upload(fileName, file);
             if (err1) throw err1;
 
-            // 上傳預覽圖 (Public)
             const { error: err2 } = await supabaseClient.storage.from('previews').upload(fileName, previewBlob);
             if (err2) throw err2;
             
             uploadedFileNames.push(fileName);
         }
 
-        if (uploadedFileNames.length === 0) throw new Error("沒有任何圖片通過審核上傳。");
+        if (uploadedFileNames.length === 0) throw new Error("無有效圖片上傳");
 
-        // 3️⃣ 同步到資料庫
+        // 3️⃣ 資料庫寫入
         const finalImagesString = uploadedFileNames.join(',');
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: name,
@@ -148,10 +156,11 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
         }]);
 
         if (dbError) throw dbError;
-        alert(`🎉 上架完成！已成功上傳 ${uploadedFileNames.length} 張相片。`);
+        alert(`🎉 成功上傳 ${uploadedFileNames.length} 張相片！`);
         location.reload();
+
     } catch (err) {
-        console.error(err);
+        console.error("上傳過程錯誤:", err);
         status.innerText = "❌ 失敗：" + err.message;
         btn.disabled = false;
     }
