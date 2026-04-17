@@ -8,14 +8,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .preview-grid::-webkit-scrollbar { display: none; }
+        .preview-grid::-webkit-scrollbar, .custom-scroll::-webkit-scrollbar { display: none; }
         .upload-card { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.9); }
         .sexify-gradient { background: linear-gradient(135deg, #ff2442 0%, #ff5263 100%); }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
 
-    <div class="upload-card w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 border border-white">
+    <div class="upload-card w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 border border-white my-8">
         <div class="text-center mb-8">
             <h1 class="text-2xl font-black text-gray-900 tracking-tight">發布作品</h1>
             <p class="text-gray-400 text-sm mt-1">分享你的創作，讓世界看見</p>
@@ -57,7 +57,20 @@
         <button id="upload-btn" class="sexify-gradient w-full text-white font-bold py-4 rounded-2xl mt-8 shadow-lg shadow-red-200 active:scale-95 transition-transform">
             立即投稿
         </button>
-    </div>
+
+        <div class="mt-10 pt-8 border-t border-gray-100">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-black text-gray-900 tracking-tight">我的作品清單</h2>
+                <button onclick="loadMyProducts()" class="text-gray-300 hover:text-red-500 transition-colors p-2">
+                    <i class="fa-solid fa-rotate-right text-sm"></i>
+                </button>
+            </div>
+            
+            <div id="my-products-list" class="space-y-4 max-h-[400px] overflow-y-auto custom-scroll pr-1">
+                <p class="text-center text-gray-400 text-[10px] py-10 tracking-widest uppercase">載入作品中...</p>
+            </div>
+        </div>
+        </div>
 
     <script src="js/creator.js"></script>
 </body>
