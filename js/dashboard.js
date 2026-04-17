@@ -1,15 +1,43 @@
 /**
- * dashboard.js - 管理員審核中控台
+ * dashboard.js - 管理員審核中控台 (含安全門禁版)
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// --- 🔐 門禁核心：頁面載入時立即檢查權限 ---
+window.onload = async () => {
+    // 1. 取得當前登入狀態
+    const { data: { session } } = await supabaseClient.auth.getSession();
+
+    if (!session) {
+        alert("請先登入管理員帳號");
+        window.location.href = 'index.html'; 
+        return;
+    }
+
+    // 2. 檢查 profiles 表中的 is_admin 權限
+    const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+    if (profileError || !profile?.is_admin) {
+        alert("權限不足：你不是管理員！");
+        window.location.href = 'index.html';
+        return;
+    }
+
+    // 3. 權限驗證成功，執行原本的載入功能
+    loadAuditList();
+};
+
 async function loadAuditList() {
     const listContainer = document.getElementById('audit-list');
     listContainer.innerHTML = '<tr><td colspan="5">載入中...</td></tr>';
 
-    // 抓取待審核商品 (也可去掉 .eq 改為看全部)
+    // 抓取所有商品（包含待審核與已通過）
     const { data: products, error } = await supabaseClient
         .from('products')
         .select('*')
@@ -31,7 +59,7 @@ async function loadAuditList() {
         tr.style.borderBottom = "1px solid #eee";
         tr.innerHTML = `
             <td style="padding: 10px;"><img src="${imgUrl}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 5px;"></td>
-            <td><strong>${p.name}</strong><br><small style="color:gray">${p.status}</small></td>
+            <td><strong>${p.name}</strong><br><small style="color:gray">狀態: ${p.status}</small></td>
             <td>$${p.price}</td>
             <td style="font-size: 12px; font-family: monospace;">
                 <div style="color: ${getClr(report.violence)}">💀 暴力: ${report.violence || 'N/A'}</div>
@@ -50,8 +78,10 @@ async function loadAuditList() {
 // 更新狀態函式
 window.updateStatus = async (id, newStatus) => {
     const { error } = await supabaseClient.from('products').update({ status: newStatus }).eq('id', id);
-    if (error) alert("操作失敗");
-    else loadAuditList();
+    if (error) {
+        console.error(error);
+        alert("操作失敗，可能是權限不足或網路問題");
+    } else {
+        loadAuditList(); // 重新整理清單
+    }
 };
-
-window.onload = loadAuditList;
