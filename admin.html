@@ -3,189 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sexify 後台管理 - 發佈商品</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>商戶安全後台</title>
     <style>
-        /* 預設隱藏 body，防止未授權用戶閃見內容 */
-        body { display: none; }
-        .bg-sexify { background-color: #ff2442; }
+        :root { --primary: #000; --bg: #f5f5f7; --card: #fff; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
+        .container { width: 100%; max-width: 400px; }
+        .card { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h2 { text-align: center; margin-bottom: 25px; font-weight: 700; }
+        label { display: block; margin-bottom: 5px; font-size: 13px; color: #666; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #eee; border-radius: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
+        button:disabled { background: #ccc; }
+        #admin-section, #login-section { display: none; }
+        #preview { width: 100%; border-radius: 10px; margin-top: 10px; display: none; object-fit: cover; max-height: 200px; }
+        .logout-btn { background: transparent; color: #ff3b30; border: 1px solid #ff3b30; margin-top: 10px; }
+        #status { text-align: center; font-size: 13px; margin-top: 15px; color: #888; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
 
-    <nav class="bg-white border-b sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-black italic tracking-tighter text-[#ff2442]">SEXIFY ADMIN</h1>
-            <button onclick="window.location.href='index.html'" class="text-sm font-bold text-gray-500 hover:text-gray-800">返回首頁</button>
-        </div>
-    </nav>
+<div class="container">
+    <div id="login-section" class="card">
+        <h2>商戶登入</h2>
+        <input type="email" id="login-email" placeholder="管理員信箱">
+        <input type="password" id="login-password" placeholder="密碼">
+        <button id="login-btn">進入系統</button>
+        <p id="login-status"></p>
+    </div>
 
-    <main class="max-w-xl mx-auto py-12 px-6">
-        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-gray-200/50 border border-gray-100">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-red-50 text-[#ff2442] rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
-                </div>
-                <h2 class="text-2xl font-black text-gray-900">發佈新產品</h2>
-                <p class="text-sm text-gray-400 mt-1">上傳相片至 R2 並同步至數據庫</p>
-            </div>
-            
-            <div class="space-y-5">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">商品名稱</label>
-                    <input type="text" id="p-name" placeholder="例如: 限定私密寫真集" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-sm outline-none focus:border-[#ff2442] transition">
-                </div>
+    <div id="admin-section" class="card">
+        <h2>上架商品</h2>
+        <label>商品名稱</label>
+        <input type="text" id="p-name" placeholder="請輸入名稱">
+        <label>價格</label>
+        <input type="number" id="p-price" placeholder="價格">
+        <label>圖片</label>
+        <input type="file" id="p-image" accept="image/*">
+        <img id="preview" src="" alt="預覽">
+        <button id="upload-btn">確認上架</button>
+        <button onclick="handleLogout()" class="logout-btn">登出系統</button>
+        <p id="status"></p>
+    </div>
+</div>
 
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">售價 (🪙 金幣)</label>
-                    <input type="number" id="p-price" placeholder="500" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-sm outline-none focus:border-[#ff2442] transition">
-                </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">商品描述</label>
-                    <textarea id="p-desc" placeholder="簡單介紹一下這個內容..." class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-sm outline-none focus:border-[#ff2442] transition min-h-[100px]"></textarea>
-                </div>
+    const loginSection = document.getElementById('login-section');
+    const adminSection = document.getElementById('admin-section');
 
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">上傳相片</label>
-                    <div class="relative">
-                        <input type="file" id="p-file" accept="image/*" class="hidden">
-                        <label for="p-file" class="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition">
-                            <i class="fa-solid fa-image text-gray-300 text-3xl mb-2"></i>
-                            <span id="file-name-display" class="text-xs text-gray-400 font-medium">點擊選擇檔案 (僅限圖片)</span>
-                        </label>
-                    </div>
-                </div>
-                
-                <button onclick="handleUpload()" id="upload-btn" class="w-full bg-[#ff2442] text-white font-black py-4 rounded-2xl shadow-lg shadow-red-200 active:scale-95 transition mt-4 disabled:opacity-50 disabled:pointer-events-none">
-                    確認並發佈到商城
-                </button>
-            </div>
-
-            <p id="status-msg" class="mt-6 text-center text-xs font-bold text-gray-400 min-h-[1rem]"></p>
-        </div>
-    </main>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="js/supabase-config.js"></script>
-
-    <script>
-        // --- 1. 檔案選取顯示 ---
-        const fileInput = document.getElementById('p-file');
-        const fileDisplay = document.getElementById('file-name-display');
-        fileInput.onchange = () => {
-            if (fileInput.files.length > 0) {
-                fileDisplay.innerText = `已選取: ${fileInput.files[0].name}`;
-                fileDisplay.classList.add('text-sexify');
+    window.onload = async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            // 注意：若尚未設定 admin role，可先移除此判斷直接顯示 showAdmin() 進行測試
+            const userRole = session.user.app_metadata.role;
+            if (userRole === 'admin') {
+                showAdmin();
+            } else {
+                alert("抱歉，您沒有管理員權限！");
+                await supabaseClient.auth.signOut();
+                location.reload();
             }
-        };
-
-        // --- 2. 安全檢查：管理員權限驗證 ---
-        async function checkAdminAccess() {
-            try {
-                if (!window.supabaseClient) {
-                    console.error("Supabase Client 未定義，請檢查腳本載入順序");
-                    return;
-                }
-
-                const { data: { session }, error: sessionError } = await window.supabaseClient.auth.getSession();
-                
-                if (sessionError || !session) {
-                    alert("請先登入帳號！");
-                    window.location.href = 'index.html';
-                    return;
-                }
-
-                // 去 profiles 表檢查 is_admin 欄位
-                const { data: profile, error: profileError } = await window.supabaseClient
-                    .from('profiles')
-                    .select('is_admin')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (profileError || profile?.is_admin !== true) {
-                    alert("權限不足：您不是管理員！");
-                    window.location.href = 'index.html';
-                    return;
-                }
-
-                // 通過檢查，顯示 body
-                document.body.style.display = 'block'; 
-                console.log("管理員權限驗證通過");
-
-            } catch (err) {
-                console.error("安全檢查發生錯誤:", err);
-                window.location.href = 'index.html';
-            }
+        } else {
+            showLogin();
         }
+    };
 
-        // --- 3. 核心上傳邏輯 ---
-        async function handleUpload() {
-            const name = document.getElementById('p-name').value;
-            const price = document.getElementById('p-price').value;
-            const desc = document.getElementById('p-desc').value;
-            const status = document.getElementById('status-msg');
-            const btn = document.getElementById('upload-btn');
+    function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
+    function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
 
-            if (!name || !price || !fileInput.files[0]) {
-                alert("請填寫商品名稱、價格並選擇相片");
-                return;
-            }
+    document.getElementById('login-btn').addEventListener('click', async () => {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const btn = document.getElementById('login-btn');
+        btn.disabled = true;
 
-            btn.disabled = true;
-            status.innerText = "🔐 正在取得授權門票...";
-
-            try {
-                // A. 取得 JWT Token
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                const token = session.access_token;
-
-                status.innerText = "🚀 正在上傳相片到 R2...";
-
-                const file = fileInput.files[0];
-                const fileName = `${Date.now()}-${file.name}`;
-                // 💡 確保這是你的 Cloudflare Worker 網址
-                const workerUrl = `https://sexifyyellow.poisonfairydaily.workers.dev/?key=${encodeURIComponent(fileName)}`;
-
-                // B. 發送 PUT 請求給 Worker (帶上 Authorization Header)
-                const uploadRes = await fetch(workerUrl, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: file
-                });
-
-                if (!uploadRes.ok) {
-                    const errorText = await uploadRes.text();
-                    throw new Error(`R2 上傳失敗: ${errorText}`);
-                }
-
-                status.innerText = "💾 相片已入庫，正在同步資料庫...";
-
-                // C. 寫入 Supabase Products 表
-                const { error: insertError } = await window.supabaseClient.from('products').insert([
-                    { 
-                        name: name, 
-                        price: parseInt(price), 
-                        description: desc, 
-                        image_url: fileName 
-                    }
-                ]);
-
-                if (insertError) throw insertError;
-
-                status.innerText = "🎉 商品發佈成功！正在重整...";
-                setTimeout(() => location.reload(), 1500);
-
-            } catch (err) {
-                console.error("發佈失敗:", err);
-                status.innerText = `❌ 錯誤: ${err.message}`;
-                btn.disabled = false;
-            }
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            document.getElementById('login-status').innerText = "❌ 登入失敗：" + error.message;
+            btn.disabled = false;
+        } else {
+            location.reload();
         }
+    });
 
-        // 當 HTML 文件讀取完畢後執行安全檢查
-        document.addEventListener('DOMContentLoaded', checkAdminAccess);
-    </script>
+    async function handleLogout() {
+        await supabaseClient.auth.signOut();
+        location.reload();
+    }
+
+    document.getElementById('p-image').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                document.getElementById('preview').src = event.target.result;
+                document.getElementById('preview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById('upload-btn').addEventListener('click', async () => {
+        const name = document.getElementById('p-name').value;
+        const price = document.getElementById('p-price').value;
+        const file = document.getElementById('p-image').files[0];
+        const status = document.getElementById('status');
+        const btn = document.getElementById('upload-btn');
+
+        if (!name || !price || !file) return alert("請填寫完整資訊");
+
+        btn.disabled = true;
+        status.innerText = "⏳ 正在處理中...";
+
+        try {
+            // 1. 生成唯一檔名防止覆蓋
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}.${fileExt}`;
+
+            // 2. 上傳到 Supabase Storage (Bucket 名稱需為 products)
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('products')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            // 3. 取得圖片的公開網址
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('products')
+                .getPublicUrl(fileName);
+
+            // 4. 將完整資訊存入資料庫
+            const { error: dbError } = await supabaseClient
+                .from('products')
+                .insert([{
+                    name: name,
+                    price: parseInt(price),
+                    image_url: publicUrl // 儲存可以直接顯示的網址
+                }]);
+
+            if (dbError) throw dbError;
+
+            alert("✅ 上架成功！");
+            location.reload();
+        } catch (err) {
+            console.error(err);
+            status.innerText = "❌ 錯誤：" + err.message;
+            btn.disabled = false;
+        }
+    });
+</script>
+
 </body>
 </html>
