@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>創作者投稿中心</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* 你可以沿用之前的 Xiaohongshu 風格 CSS */
+        .upload-card { max-width: 500px; margin: 40px auto; padding: 20px; border: 1px solid #eee; border-radius: 15px; }
+        .preview-img { width: 100px; height: 100px; object-fit: cover; margin: 5px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="upload-card">
+        <h2>✨ 投稿新作品</h2>
+        <input type="text" id="p-name" placeholder="作品名稱">
+        <input type="number" id="p-price" placeholder="價格">
+        <input type="file" id="p-image" multiple accept="image/*">
+        <div id="preview-container"></div>
+        <p id="status" style="font-size: 14px; color: #666;"></p>
+        <button id="upload-btn" style="width: 100%; background: #ff2442; color: white; border: none; padding: 10px; border-radius: 20px; cursor: pointer;">立即投稿</button>
+    </div>
+
+    <script src="js/creator.js"></script>
+</body>
+</html>
