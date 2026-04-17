@@ -1,5 +1,5 @@
 /**
- * shop.js - 專業商城最終版 (清晰預覽 + 無鎖頭模式)
+ * shop.js - 專業商城最終版 (含創作者審核過濾邏輯)
  */
 
 let cart = []; 
@@ -85,7 +85,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格 (移除模糊與鎖頭圖層)
+ * 3. 渲染網格 (只抓取 approved 商品)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -93,8 +93,12 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        // 只有 status 為 'approved' 的商品會出現在商城
-let query = window.supabaseClient.from('products').select('*').eq('status', 'approved');
+        // ✨ 核心修改：只顯示狀態為 'approved' 的商品
+        let query = window.supabaseClient
+            .from('products')
+            .select('*')
+            .eq('status', 'approved'); 
+            
         if (keyword) query = query.ilike('name', `%${keyword}%`);
         const { data: products } = await query.order('created_at', { ascending: false });
 
@@ -104,7 +108,7 @@ let query = window.supabaseClient.from('products').select('*').eq('status', 'app
         const purchasedIds = new Set(orders?.map(o => o.product_id) || []);
         const isAdmin = profile?.is_admin || false;
 
-        let displayProducts = products;
+        let displayProducts = products || [];
         if (currentView === 'owned') {
             displayProducts = products.filter(p => purchasedIds.has(p.id));
         }
@@ -216,7 +220,7 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗 (移除模糊與鎖頭圖示)
+ * 購買詳情彈窗
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
