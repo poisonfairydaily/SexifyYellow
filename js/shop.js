@@ -1,42 +1,89 @@
 /**
- * shop.js - 整合式商城核心邏輯 (修復 CORS 與 400 報錯版本)
+ * shop.js - 完整修復版本
+ * 1. 對接 Cloudflare Worker (R2 圖片)
+ * 2. 強化餘額同步 (即時監聽模式)
  */
+
+// --- 1. 配置區域 ---
+const IMAGE_CONFIG = {
+    source: 'R2', 
+    workerUrl: 'https://sexifyyellow.poisonfairydaily.workers.dev/' 
+};
 
 let cart = []; 
 let isCartView = false; 
 let currentKeyword = ''; 
+let balanceSubscription = null; // 用於存放即時監聽器
 
 /**
- * 修正後的簽名網址輔助函數
+ * 圖片處理：對接 Worker
  */
 async function getSignedUrlSafe(path) {
     if (!path) return 'https://via.placeholder.com/300?text=No+Image';
-    
-    // 如果路徑已經是完整網址且包含 http，直接回傳（但這可能引發 CORS 錯誤，建議刪除資料庫中的舊網址）
-    if (path.startsWith('http')) {
-        return path; 
-    }
+    if (path.startsWith('http')) return path; 
 
-    try {
-        // 確保 path 沒有多餘的斜槓
+    if (IMAGE_CONFIG.source === 'R2') {
         const cleanPath = path.trim();
-        const { data, error } = await window.supabaseClient.storage
-            .from('products')
-            .createSignedUrl(cleanPath, 3600);
-        
-        if (error) {
-            console.warn(`簽名失敗 [${cleanPath}]:`, error.message);
-            return 'https://via.placeholder.com/300?text=Sign+Error';
-        }
-        
-        return data.signedUrl;
-    } catch (e) {
-        return 'https://via.placeholder.com/300?text=System+Error';
+        return `${IMAGE_CONFIG.workerUrl}?key=${encodeURIComponent(cleanPath)}`;
     }
+    return path;
 }
 
 /**
- * 0. 支付與充值介面邏輯
+ * 餘額顯示修復：使用即時監聽 (Realtime)
+ */
+window.refreshBalanceUI = async function() {
+    try {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) {
+            console.log("用戶未登入，跳過餘額同步");
+            return;
+        }
+
+        // 1. 首次獲取餘額
+        const { data, error } = await window.supabaseClient
+            .from('profiles')
+            .select('balance')
+            .eq('id', user.id)
+            .single();
+
+        if (!error && data) {
+            updateBalanceDOM(data.balance);
+        }
+
+        // 2. 建立即時監聽 (如果還沒建立)
+        if (!balanceSubscription) {
+            balanceSubscription = window.supabaseClient
+                .channel('balance-changes')
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'profiles',
+                    filter: `id=eq.${user.id}` 
+                }, payload => {
+                    updateBalanceDOM(payload.new.balance);
+                })
+                .subscribe();
+        }
+    } catch (err) {
+        console.error("餘額同步系統故障:", err);
+    }
+};
+
+function updateBalanceDOM(balance) {
+    const balanceDisplay = document.getElementById('user-balance');
+    if (balanceDisplay) {
+        // 確保 balance 為數字且格式化
+        const val = parseFloat(balance || 0);
+        balanceDisplay.innerText = val.toLocaleString(); 
+    }
+}
+
+// 每 30 秒做一次強制校準備援 (原本是 10 秒太頻繁)
+setInterval(window.refreshBalanceUI, 30000);
+
+/**
+ * 支付邏輯
  */
 window.toggleRechargeArea = function() {
     const drawer = document.getElementById('recharge-drawer');
@@ -50,20 +97,6 @@ window.toggleRechargeArea = function() {
         if (icon) icon.classList.replace('fa-xmark', 'fa-plus');
     }
 };
-
-window.refreshBalanceUI = async function() {
-    try {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (!user) return;
-        const { data, error } = await window.supabaseClient
-            .from('profiles').select('balance').eq('id', user.id).single();
-        if (error) throw error;
-        const balanceDisplay = document.getElementById('user-balance');
-        if (balanceDisplay) balanceDisplay.innerText = data.balance !== null ? data.balance : 0;
-    } catch (err) { console.error("餘額同步失敗"); }
-};
-
-setInterval(window.refreshBalanceUI, 10000);
 
 window.payNow = async function() {
     const amount = parseFloat(document.getElementById('rechargeAmount').value);
@@ -80,7 +113,7 @@ window.payNow = async function() {
 };
 
 /**
- * 1. 頂部頁籤
+ * 商城渲染邏輯
  */
 function ensureShopTabs() {
     const grid = document.getElementById('shop-grid');
@@ -100,9 +133,6 @@ function ensureShopTabs() {
 
 window.switchView = (toCart) => { isCartView = toCart; renderShop(currentKeyword); };
 
-/**
- * 2. 渲染邏輯
- */
 window.renderShop = async function(filterKeyword = '') {
     const grid = document.getElementById('shop-grid');
     if (!grid) return;
@@ -130,7 +160,7 @@ window.renderShop = async function(filterKeyword = '') {
                 const img = await getSignedUrlSafe(p.image_url);
                 html += `
                     <div onclick="openProductModal('${p.id}')" class="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm active:scale-95 transition-all">
-                        <img src="${img}" class="w-full aspect-square object-cover">
+                        <img src="${img}" class="w-full aspect-square object-cover" onerror="this.src='https://via.placeholder.com/300?text=Load+Error'">
                         <div class="p-3">
                             <h3 class="font-bold text-xs truncate">${p.name}</h3>
                             <div class="mt-2 text-sexify font-black text-sm">🪙 ${p.price}</div>
@@ -152,7 +182,7 @@ window.openProductModal = async function(productId) {
     modal.innerHTML = `
         <div class="fixed inset-0 bg-black/70 z-[3500] flex items-center justify-center p-4 backdrop-blur-md" onclick="this.innerHTML=''">
             <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden relative shadow-2xl" onclick="event.stopPropagation()">
-                <img src="${img}" class="w-full aspect-square object-cover">
+                <img src="${img}" class="w-full aspect-square object-cover" onerror="this.src='https://via.placeholder.com/300?text=Load+Error'">
                 <div class="p-6">
                     <h2 class="text-xl font-extrabold text-gray-900">${p.name}</h2>
                     <p class="text-gray-500 text-sm mt-2">${p.description || ''}</p>
@@ -169,10 +199,11 @@ window.executeSecurePurchase = async function(id, name) {
     if (!confirm(`確定購買 ${name}？`)) return;
     const { data, error } = await window.supabaseClient.rpc('process_purchase', { p_item_id: id, p_quantity: 1 });
     if (data?.success) {
-        alert("🎉 購買成功！");
-        window.location.reload();
+        showNotification("🎉 購買成功！");
+        window.refreshBalanceUI(); // 購買後立即更新餘額
+        if (!isCartView) renderShop(currentKeyword);
     } else {
-        alert("餘額不足或其他錯誤");
+        alert("餘額不足或購買失敗");
     }
 };
 
@@ -194,11 +225,13 @@ function renderCartInline(grid) {
 }
 
 async function checkoutCart() {
+    showNotification("批量購買中...");
     for (const item of cart) {
         await window.supabaseClient.rpc('process_purchase', { p_item_id: item.id, p_quantity: 1 });
     }
     cart = [];
-    alert("批量購買完成");
+    alert("結帳完成");
+    window.refreshBalanceUI();
     renderShop();
 }
 
@@ -210,7 +243,6 @@ function showNotification(msg) {
     setTimeout(() => n.remove(), 2000);
 }
 
-// 我的內容部分
 window.toggleMyOrders = () => {
     const el = document.getElementById('my-orders-view');
     el.classList.toggle('hidden');
@@ -219,22 +251,27 @@ window.toggleMyOrders = () => {
 
 window.renderMyOrders = async function() {
     const container = document.getElementById('orders-list-container');
-    container.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-white"></i>';
+    container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-white"></i></div>';
     const { data } = await window.supabaseClient.from('orders').select('*, products(*)').order('purchased_at', {ascending: false});
     if (!data?.length) { container.innerHTML = '<div class="text-white/50 py-20 text-center">空空如也</div>'; return; }
     
     let html = '';
     for (const o of data) {
         const p = o.products;
+        if(!p) continue;
         const img = await getSignedUrlSafe(p.image_url);
         html += `
             <div class="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/10 items-center">
-                <img src="${img}" class="w-12 h-12 rounded-xl object-cover">
+                <img src="${img}" class="w-12 h-12 rounded-xl object-cover" onerror="this.src='https://via.placeholder.com/300?text=Load+Error'">
                 <div class="flex-1"><div class="text-white text-sm font-bold">${p.name}</div></div>
-                <button onclick="window.showItemDetail('${p.name}','${img}','${p.description||""}')" class="text-sexify text-xs font-bold">查看</button>
+                <button onclick="window.showItemDetail('${p.name.replace(/'/g,"")}','${img}','${(p.description||"").replace(/'/g,"")}')" class="text-sexify text-xs font-bold">查看</button>
             </div>`;
     }
     container.innerHTML = html;
 };
 
-document.addEventListener('DOMContentLoaded', () => renderShop());
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+    renderShop();
+    window.refreshBalanceUI();
+});
