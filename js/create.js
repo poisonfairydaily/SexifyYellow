@@ -39,6 +39,9 @@ function fileToBase64(file) {
 }
 
 // --- 🎨 核心：生成高品質預覽圖 ---
+/**
+ * 修改後的圖片處理函數：強制轉為 WebP 並壓縮
+ */
 async function generatePreviewBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -46,18 +49,33 @@ async function generatePreviewBlob(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
+            
+            // 設定最大寬度（例如 1200px），避免有人上傳 8K 圖爆掉你的容量
             const max_size = 1200; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > height) {
+                if (width > max_size) { height *= max_size / width; width = max_size; }
+            } else {
+                if (height > max_size) { width *= max_size / height; height = max_size; }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            
+            // 高品質縮放
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9); 
+            
+            // ✨ 關鍵：轉成 image/webp，品質設為 0.8 (這已經非常清晰且體積極小)
+            canvas.toBlob((blob) => {
+                resolve(blob);
+            }, 'image/webp', 0.8); 
         };
     });
 }
-
 // --- 🚀 投稿主邏輯 ---
 uploadBtn.addEventListener('click', async () => {
     const name = document.getElementById('p-name').value;
