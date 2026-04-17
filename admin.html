@@ -57,14 +57,24 @@
     const adminSection = document.getElementById('admin-section');
 
     // --- 初始化檢查登入狀態 ---
-    window.onload = async () => {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session) {
-            showAdmin();
+window.onload = async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
+    if (session) {
+        // 取得使用者標籤
+        const userRole = session.user.app_metadata.role;
+        
+        if (userRole === 'admin') {
+            showAdmin(); // 是管理員，顯示上架介面
         } else {
-            showLogin();
+            alert("抱歉，您沒有管理員權限！");
+            await supabaseClient.auth.signOut();
+            location.reload();
         }
-    };
+    } else {
+        showLogin();
+    }
+};
 
     function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
     function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
