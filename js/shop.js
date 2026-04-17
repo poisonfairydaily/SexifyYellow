@@ -1,5 +1,6 @@
 /**
- * shop.js - 專業商城最終修復版 (修復已購買商品點擊無效問題)
+ * shop.js - 專業商城正式營運版
+ * 整合：下架過濾 (is_archived) + 安全防護 + 漫畫閱讀器
  */
 
 let cart = []; 
@@ -93,14 +94,19 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格
+ * 3. 渲染網格 (✨ 已加入 is_archived 過濾)
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
     
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        let query = window.supabaseClient.from('products').select('*').eq('status', 'approved');
+        
+        // ✨ 正式營運過濾邏輯：審核必須通過 (approved) 且 未被封存 (is_archived = false)
+        let query = window.supabaseClient.from('products').select('*')
+            .eq('status', 'approved')
+            .eq('is_archived', false); 
+
         if (keyword) query = query.ilike('name', `%${keyword}%`);
         const { data: products } = await query.order('created_at', { ascending: false });
 
@@ -111,8 +117,12 @@ async function renderProductGrid(grid, keyword) {
         const isAdmin = profile?.is_admin || false;
 
         let displayProducts = products || [];
+        
+        // 如果是庫存頁面，則顯示已購買的商品（即便該商品已被管理員封存，用戶仍有權觀看）
         if (currentView === 'owned') {
-            displayProducts = products.filter(p => purchasedIds.has(p.id));
+            // 從所有產品中找已購買的，包含被封存的（確保用戶權益）
+            const { data: ownedProducts } = await window.supabaseClient.from('products').select('*').in('id', Array.from(purchasedIds));
+            displayProducts = ownedProducts || [];
         }
 
         if (displayProducts.length === 0) {
@@ -120,6 +130,7 @@ async function renderProductGrid(grid, keyword) {
             return;
         }
 
+        // 預簽名邏輯
         const unlockableFiles = displayProducts
             .filter(p => purchasedIds.has(p.id) || isAdmin)
             .map(p => p.image_url?.split(',')[0]) 
@@ -161,14 +172,13 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * ✨ 4. 商品入口 (修復關鍵：正確處理已購買與未購買狀態)
+ * 4. 商品入口 (處理已購買與未購買)
  */
 window.openProductModal = async function(productId) {
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     const { data: p } = await window.supabaseClient.from('products').select('*').eq('id', productId).single();
     if (!p) return;
 
-    // 檢查是否有購買紀錄或是管理員
     const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).single() : { data: null };
     const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single() : { data: null };
     const isUnlocked = order || profile?.is_admin;
@@ -181,7 +191,6 @@ window.openProductModal = async function(productId) {
     }
     modal.style.display = 'block';
 
-    // ✨ 判斷：如果已解鎖且在「庫存」分頁，直接開漫畫；否則開購買彈窗
     if (isUnlocked && currentView === 'owned') {
         renderMangaViewer(modal, p);
     } else {
@@ -231,7 +240,6 @@ async function renderMangaViewer(modal, p) {
 
     document.body.style.overflow = 'hidden';
 
-    // 滾動監測
     const viewport = document.getElementById('manga-viewport');
     const pageCounter = document.getElementById('page-counter');
     const pageContainers = document.querySelectorAll('.manga-page-container');
