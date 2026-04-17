@@ -1,5 +1,5 @@
 /**
- * admin.js - 管理員專用：WebP 轉換 + AI 安全審核 + 權限鎖定
+ * admin.js - 管理員專用：WebP 轉換 + AI 安全審核 + 安全防護
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -10,6 +10,14 @@ const loginSec = document.getElementById('login-section');
 const adminSec = document.getElementById('admin-section');
 const statusText = document.getElementById('status');
 const previewContainer = document.getElementById('preview-container');
+
+// --- 🛡️ 安全核心：防止 XSS 攻擊的文字過濾器 ---
+function escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
 
 // --- 🔐 1. 初始化門禁檢查 ---
 window.onload = async () => {
@@ -51,7 +59,8 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     const password = document.getElementById('login-password').value;
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
-        document.getElementById('login-status').innerText = "❌ " + error.message;
+        // 使用 textContent 確保安全
+        document.getElementById('login-status').textContent = "❌ " + error.message;
     } else {
         location.reload();
     }
@@ -71,6 +80,7 @@ document.getElementById('p-image').addEventListener('change', (e) => {
             const img = document.createElement('img');
             img.src = ev.target.result;
             img.className = 'preview-img';
+            // 安全起見，預覽圖容器使用 appendChild 而非 innerHTML
             previewContainer.appendChild(img);
         };
         reader.readAsDataURL(file);
@@ -101,19 +111,20 @@ async function generateWebPBlob(file) {
             canvas.width = width; canvas.height = height;
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); // 0.85 品質最佳平衡
+            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
         };
     });
 }
 
 // --- 🚀 4. 上架主邏輯 ---
 document.getElementById('upload-btn').addEventListener('click', async () => {
-    const name = document.getElementById('p-name').value;
+    // 獲取輸入並修剪空白
+    const rawName = document.getElementById('p-name').value.trim();
     const price = document.getElementById('p-price').value;
     const files = document.getElementById('p-image').files;
     const btn = document.getElementById('upload-btn');
 
-    if (!name || !price || files.length === 0) return alert("請填寫標題、價格與圖片");
+    if (!rawName || !price || files.length === 0) return alert("請填寫標題、價格與圖片");
 
     btn.disabled = true;
     statusText.innerText = "⏳ 啟動 AI 審核與 WebP 轉換...";
@@ -137,7 +148,7 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
             lastAiReport = audit.details;
 
             if (!audit.safe) {
-                alert(`❌ 攔截：圖片 "${file.name}" ${audit.reason}`);
+                alert(`❌ 攔截：圖片 "${escapeHTML(file.name)}" ${audit.reason}`);
                 continue; 
             }
 
@@ -145,8 +156,8 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
             statusText.innerText = `📦 正在壓縮第 ${i+1}/${files.length} 張...`;
             const webpBlob = await generateWebPBlob(file);
             
-            // 檔名優化 (移除舊副檔名)
-            const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[, ]/g, '_');
+            // 檔名優化 (過濾特殊字元)
+            const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
             const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
             // C. 上傳 Storage
@@ -159,13 +170,13 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
 
         if (uploadedFileNames.length === 0) throw new Error("沒有有效的圖片可供上傳");
 
-        // D. 寫入資料庫
+        // D. 寫入資料庫 (寫入前不轉義，保持原始資料純淨，顯示時才轉義)
         const { error: dbError } = await supabaseClient.from('products').insert([{
-            name: name,
+            name: rawName,
             price: parseInt(price),
             image_url: uploadedFileNames.join(','),
             creator_id: user.id,
-            status: 'approved', // 管理員上傳預設通過
+            status: 'approved', 
             ai_report: lastAiReport
         }]);
 
@@ -176,7 +187,7 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
 
     } catch (err) {
         console.error(err);
-        statusText.innerText = "❌ 出錯了：" + err.message;
+        statusText.textContent = "❌ 出錯了：" + err.message;
         btn.disabled = false;
     }
 });
