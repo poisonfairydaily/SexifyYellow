@@ -83,22 +83,34 @@ async function generateBlurBlob(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const max_size = 400;
+            
+            // 1. 提升解析度：從 400 改成 800 或 1000
+            // 這樣在手機上看起來會非常清晰，且檔案大小依然比原圖小很多
+            const max_size = 1000; 
+            
             let width = img.width;
             let height = img.height;
+            
             if (width > height) {
                 if (width > max_size) { height *= max_size / width; width = max_size; }
             } else {
                 if (height > max_size) { width *= max_size / height; height = max_size; }
             }
+            
             canvas.width = width;
             canvas.height = height;
+
+            // 確保沒有模糊濾鏡
+            ctx.filter = 'none'; 
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => { resolve(blob); }, 'image/jpeg', 0.7);
+            
+            // 2. 提升 JPEG 品質：從 0.7 改成 0.9
+            canvas.toBlob((blob) => { 
+                resolve(blob); 
+            }, 'image/jpeg', 0.9); 
         };
     });
 }
-
 // --- 🚀 核心：批量上傳邏輯 ---
 document.getElementById('upload-btn').addEventListener('click', async () => {
     const name = document.getElementById('p-name').value;
