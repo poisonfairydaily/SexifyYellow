@@ -127,24 +127,29 @@ window.onload = async () => {
         btn.disabled = true;
         status.innerText = "⏳ 正在安全上傳中...";
 
-        try {
-            const fileName = `${Date.now()}_${file.name}`;
-            const { error: sErr } = await supabaseClient.storage.from('products').upload(fileName, file);
-            if (sErr) throw sErr;
+// --- 修改後的上傳邏輯片段 ---
+try {
+    const fileName = `${Date.now()}_${file.name}`;
+    // A. 上傳圖片
+    const { data: sData, error: sErr } = await supabaseClient.storage
+        .from('products')
+        .upload(fileName, file);
+    if (sErr) throw sErr;
 
-            const { data: { publicUrl } } = supabaseClient.storage.from('products').getPublicUrl(fileName);
+    // B. 注意：這裡不需要 getPublicUrl 了
+    // 直接將「檔案路徑 (fileName)」存入資料庫即可
+    const { error: dbErr } = await supabaseClient.from('products').insert([{
+        name: name,
+        price: parseInt(price),
+        image_url: fileName // 現在這裡存的是檔案名稱/路徑，而不是完整網址
+    }]);
 
-            const { error: dbErr } = await supabaseClient.from('products').insert([{
-                name, price: parseInt(price), image_url: publicUrl
-            }]);
-            if (dbErr) throw dbErr;
-
-            alert("✅ 商戶驗證成功，商品已上架！");
-            location.reload();
-        } catch (err) {
-            status.innerText = "❌ 錯誤：" + err.message;
-            btn.disabled = false;
-        }
+    if (dbErr) throw dbErr;
+    alert("✅ 上架成功！");
+    location.reload();
+} catch (err) {
+    status.innerText = "❌ 錯誤：" + err.message;
+}
     });
 </script>
 
