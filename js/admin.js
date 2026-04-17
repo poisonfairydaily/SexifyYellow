@@ -1,5 +1,5 @@
 /**
- * admin.js - 管理員專用：WebP 轉換 + AI 安全審核 + 安全防護
+ * admin.js - 管理員專用：WebP 轉換 + AI 安全審核 + 官方身份自動標記
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -11,7 +11,7 @@ const adminSec = document.getElementById('admin-section');
 const statusText = document.getElementById('status');
 const previewContainer = document.getElementById('preview-container');
 
-// --- 🛡️ 安全核心：防止 XSS 攻擊的文字過濾器 ---
+// --- 🛡️ 0. 安全核心：防止 XSS 攻擊 ---
 function escapeHTML(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -29,7 +29,6 @@ window.onload = async () => {
             return;
         }
 
-        // 從 profiles 檢查是否為 admin
         const { data: profile, error: pError } = await supabaseClient
             .from('profiles')
             .select('is_admin')
@@ -43,7 +42,6 @@ window.onload = async () => {
             return;
         }
 
-        // 驗證成功
         adminSec.style.display = 'block';
         console.log("✅ 管理員驗證成功");
 
@@ -59,7 +57,6 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     const password = document.getElementById('login-password').value;
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
-        // 使用 textContent 確保安全
         document.getElementById('login-status').textContent = "❌ " + error.message;
     } else {
         location.reload();
@@ -71,7 +68,7 @@ document.getElementById('logout-btn-trigger').addEventListener('click', async ()
     location.reload();
 });
 
-// --- 🖼️ 3. 多圖預覽與轉換工具 ---
+// --- 🖼️ 3. 預覽與轉換工具 ---
 document.getElementById('p-image').addEventListener('change', (e) => {
     previewContainer.innerHTML = '';
     Array.from(e.target.files).forEach(file => {
@@ -80,7 +77,7 @@ document.getElementById('p-image').addEventListener('change', (e) => {
             const img = document.createElement('img');
             img.src = ev.target.result;
             img.className = 'preview-img';
-            // 安全起見，預覽圖容器使用 appendChild 而非 innerHTML
+            img.style = "width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin: 4px; border: 1px solid #eee;";
             previewContainer.appendChild(img);
         };
         reader.readAsDataURL(file);
@@ -96,7 +93,6 @@ function fileToBase64(file) {
     });
 }
 
-// 強制轉 WebP 的核心函數
 async function generateWebPBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -116,9 +112,8 @@ async function generateWebPBlob(file) {
     });
 }
 
-// --- 🚀 4. 上架主邏輯 ---
+// --- 🚀 4. 上架主邏輯 (含自動官方標記) ---
 document.getElementById('upload-btn').addEventListener('click', async () => {
-    // 獲取輸入並修剪空白
     const rawName = document.getElementById('p-name').value.trim();
     const price = document.getElementById('p-price').value;
     const files = document.getElementById('p-image').files;
@@ -127,18 +122,22 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
     if (!rawName || !price || files.length === 0) return alert("請填寫標題、價格與圖片");
 
     btn.disabled = true;
-    statusText.innerText = "⏳ 啟動 AI 審核與 WebP 轉換...";
+    statusText.innerText = "⏳ 管理員身分確認，準備上傳...";
 
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        // 再次確認管理員權限 (安全性增強)
+        const { data: profile } = await supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (!profile?.is_admin) throw new Error("您無權從此介面上傳商品");
+
         let uploadedFileNames = [];
         let lastAiReport = null;
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            statusText.innerText = `🔍 正在掃描第 ${i+1}/${files.length} 張...`;
+            statusText.innerText = `🔍 AI 掃描中 (${i+1}/${files.length})...`;
 
-            // A. AI 審核
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
@@ -148,20 +147,18 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
             lastAiReport = audit.details;
 
             if (!audit.safe) {
-                alert(`❌ 攔截：圖片 "${escapeHTML(file.name)}" ${audit.reason}`);
+                alert(`❌ 管理員警告：圖片 "${escapeHTML(file.name)}" 偵測到違規 (${audit.reason})，但管理員可手動判斷。`);
+                // 管理員介面通常允許強制上傳，但這裡我們維持安全標準，若要強制可改為 continue
                 continue; 
             }
 
-            // B. 轉 WebP
-            statusText.innerText = `📦 正在壓縮第 ${i+1}/${files.length} 張...`;
+            statusText.innerText = `📦 轉換 WebP (${i+1}/${files.length})...`;
             const webpBlob = await generateWebPBlob(file);
             
-            // 檔名優化 (過濾特殊字元)
             const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
             const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
-            // C. 上傳 Storage
-            statusText.innerText = `🚀 正在上傳第 ${i+1}/${files.length} 張...`;
+            statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
             await supabaseClient.storage.from('products').upload(fileName, webpBlob);
             await supabaseClient.storage.from('previews').upload(fileName, webpBlob);
             
@@ -170,19 +167,21 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
 
         if (uploadedFileNames.length === 0) throw new Error("沒有有效的圖片可供上傳");
 
-        // D. 寫入資料庫 (寫入前不轉義，保持原始資料純淨，顯示時才轉義)
+        // ✨ 寫入資料庫：自動標記 status 為 approved 且 is_official 為 true
         const { error: dbError } = await supabaseClient.from('products').insert([{
             name: rawName,
             price: parseInt(price),
             image_url: uploadedFileNames.join(','),
             creator_id: user.id,
-            status: 'approved', 
-            ai_report: lastAiReport
+            status: 'approved', // 管理員上傳自動通過
+            is_official: true,  // ✨ 自動標記為官方商品
+            ai_report: lastAiReport,
+            is_archived: false
         }]);
 
         if (dbError) throw dbError;
 
-        alert("🎉 批量上架完成！");
+        alert("🎉 官方商品已成功發布！");
         location.reload();
 
     } catch (err) {
