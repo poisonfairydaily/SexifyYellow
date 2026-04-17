@@ -3,126 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>商戶後台管理</title>
+    <title>商戶安全後台</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f9f9f9; padding: 20px; }
-        .card { background: white; max-width: 450px; margin: 40px auto; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-        h2 { margin-top: 0; color: #1a1a1a; text-align: center; }
-        label { display: block; margin-top: 15px; font-size: 14px; color: #666; }
-        input, button { width: 100%; padding: 14px; margin: 8px 0; border-radius: 12px; border: 1px solid #eee; box-sizing: border-box; font-size: 16px; }
-        input:focus { outline: none; border-color: #000; }
-        button { background: #000; color: white; cursor: pointer; font-weight: 600; border: none; transition: all 0.2s; margin-top: 20px; }
-        button:hover { background: #333; transform: translateY(-1px); }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; border: 1px solid #eee; }
-        #status { font-size: 14px; color: #888; text-align: center; margin-top: 15px; line-height: 1.6; }
+        :root { --primary: #000; --bg: #f5f5f7; --card: #fff; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
+        .container { width: 100%; max-width: 400px; }
+        .card { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h2 { text-align: center; margin-bottom: 25px; font-weight: 700; }
+        label { display: block; margin-bottom: 5px; font-size: 13px; color: #666; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #eee; border-radius: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
+        button:disabled { background: #ccc; }
+        #admin-section, #login-section { display: none; }
+        #preview { width: 100%; border-radius: 10px; margin-top: 10px; display: none; }
+        .logout-btn { background: transparent; color: #ff3b30; border: 1px solid #ff3b30; margin-top: 10px; }
+        #status { text-align: center; font-size: 13px; margin-top: 15px; color: #888; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>上架新商品</h2>
-        
-        <label>商品名稱</label>
-        <input type="text" id="p-name" placeholder="例如：黃色蕾絲連身裙">
-        
-        <label>價格 (TWD)</label>
-        <input type="number" id="p-price" placeholder="990">
-        
-        <label>商品圖片 (建議小於 500KB)</label>
-        <input type="file" id="p-image" accept="image/*">
-        <img id="preview" src="" alt="預覽圖">
-        
-        <button id="upload-btn">確認上架商品</button>
-        <p id="status"></p>
+
+<div class="container">
+    <div id="login-section" class="card">
+        <h2>商戶登入</h2>
+        <input type="email" id="login-email" placeholder="管理員信箱">
+        <input type="password" id="login-password" placeholder="密碼">
+        <button id="login-btn">進入系統</button>
+        <p id="login-status"></p>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <div id="admin-section" class="card">
+        <h2>上架商品</h2>
+        <label>商品名稱</label>
+        <input type="text" id="p-name" placeholder="請輸入名稱">
+        <label>價格</label>
+        <input type="number" id="p-price" placeholder="價格">
+        <label>圖片</label>
+        <input type="file" id="p-image" accept="image/*">
+        <img id="preview" src="" alt="預覽">
+        <button id="upload-btn">確認上架</button>
+        <button onclick="handleLogout()" class="logout-btn">登出系統</button>
+        <p id="status"></p>
+    </div>
+</div>
 
-    <script>
-        // --- 1. 設定區 ---
-        const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
-        
-        // 使用專屬變數名稱避免衝突
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const uploadBtn = document.getElementById('upload-btn');
-        const statusText = document.getElementById('status');
-        const fileInput = document.getElementById('p-image');
-        const previewImg = document.getElementById('preview');
+    const loginSection = document.getElementById('login-section');
+    const adminSection = document.getElementById('admin-section');
 
-        // --- 2. 預覽圖片功能 ---
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    previewImg.src = event.target.result;
-                    previewImg.style.display = 'block';
-                }
-                reader.readAsDataURL(file);
-            }
-        });
+    // --- 初始化檢查登入狀態 ---
+    window.onload = async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            showAdmin();
+        } else {
+            showLogin();
+        }
+    };
 
-        // --- 3. 核心上傳功能 ---
-        uploadBtn.addEventListener('click', async () => {
-            const name = document.getElementById('p-name').value;
-            const price = document.getElementById('p-price').value;
-            const file = fileInput.files[0];
+    function showLogin() { loginSection.style.display = 'block'; adminSection.style.display = 'none'; }
+    function showAdmin() { loginSection.style.display = 'none'; adminSection.style.display = 'block'; }
 
-            if (!name || !price || !file) {
-                alert('請完整填寫名稱、價格並選擇圖片');
-                return;
-            }
+    // --- 登入邏輯 ---
+    document.getElementById('login-btn').addEventListener('click', async () => {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const btn = document.getElementById('login-btn');
+        btn.disabled = true;
 
-            // 開始流程
-            uploadBtn.disabled = true;
-            statusText.style.color = "#888";
-            statusText.innerText = "⏳ 正在處理中...";
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            document.getElementById('login-status').innerText = "❌ 登入失敗：" + error.message;
+            btn.disabled = false;
+        } else {
+            location.reload();
+        }
+    });
 
-            try {
-                // Step A: 上傳圖片到 Storage
-                statusText.innerText = "⏳ 正在上傳圖片至 Storage...";
-                const fileName = `${Date.now()}_${file.name}`;
-                const { data: storageData, error: storageError } = await supabaseClient.storage
-                    .from('products')
-                    .upload(fileName, file);
+    // --- 登出邏輯 ---
+    async function handleLogout() {
+        await supabaseClient.auth.signOut();
+        location.reload();
+    }
 
-                if (storageError) throw new Error("圖片上傳失敗: " + storageError.message);
+    // --- 圖片預覽 ---
+    document.getElementById('p-image').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                document.getElementById('preview').src = event.target.result;
+                document.getElementById('preview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
 
-                // Step B: 取得圖片公開網址
-                const { data: urlData } = supabaseClient.storage.from('products').getPublicUrl(fileName);
-                const imageUrl = urlData.publicUrl;
+    // --- 上架邏輯 ---
+    document.getElementById('upload-btn').addEventListener('click', async () => {
+        const name = document.getElementById('p-name').value;
+        const price = document.getElementById('p-price').value;
+        const file = document.getElementById('p-image').files[0];
+        const status = document.getElementById('status');
+        const btn = document.getElementById('upload-btn');
 
-                // Step C: 將資料寫入 Database
-                statusText.innerText = "⏳ 圖片上傳成功，正在寫入資料庫...";
-                const { error: dbError } = await supabaseClient
-                    .from('products')
-                    .insert([{ 
-                        name: name, 
-                        price: parseInt(price), 
-                        image_url: imageUrl 
-                    }]);
+        if (!name || !price || !file) return alert("請填寫完整資訊");
 
-                if (dbError) throw new Error("資料庫寫入失敗: " + dbError.message);
+        btn.disabled = true;
+        status.innerText = "⏳ 正在安全上傳中...";
 
-                // 完成
-                statusText.style.color = "green";
-                statusText.innerText = "✅ 商品已成功上架！頁面即將重新整理...";
-                
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
+        try {
+            const fileName = `${Date.now()}_${file.name}`;
+            const { error: sErr } = await supabaseClient.storage.from('products').upload(fileName, file);
+            if (sErr) throw sErr;
 
-            } catch (err) {
-                console.error("Debug Detail:", err);
-                statusText.style.color = "red";
-                statusText.innerText = "❌ 發生錯誤：" + err.message;
-                uploadBtn.disabled = false;
-            }
-        });
-        
-        console.log("後台系統初始化完成。");
-    </script>
+            const { data: { publicUrl } } = supabaseClient.storage.from('products').getPublicUrl(fileName);
+
+            const { error: dbErr } = await supabaseClient.from('products').insert([{
+                name, price: parseInt(price), image_url: publicUrl
+            }]);
+            if (dbErr) throw dbErr;
+
+            alert("✅ 商戶驗證成功，商品已上架！");
+            location.reload();
+        } catch (err) {
+            status.innerText = "❌ 錯誤：" + err.message;
+            btn.disabled = false;
+        }
+    });
+</script>
+
 </body>
 </html>
