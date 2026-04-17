@@ -152,3 +152,37 @@ input[type="radio"]:checked + label p { color: var(--sexify) !important; }
     background: rgba(0, 0, 0, 0.2);
     backdrop-blur: 2px;
 }
+/* 漫畫模式讀閱器 */
+.manga-viewer {
+    width: 100%;
+    height: 100vh;
+    overflow-y: auto; /* 支援垂直捲動 */
+    background: #111; /* 深色背景看圖更舒服 */
+    padding: 20px 0;
+}
+
+.manga-page {
+    width: 100%;
+    max-width: 800px; /* 限制寬度避免在大螢幕上太散 */
+    margin: 0 auto 10px auto;
+    display: block;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+/* 關閉按鈕加強版 */
+.manga-close {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    color: white;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+    cursor: pointer;
+}
