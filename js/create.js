@@ -138,3 +138,38 @@ window.publishPost = async function() {
         publishBtn.disabled = false;
     }
 }
+
+// ✨ 新增功能：刪除貼文
+window.deletePost = async function(postId) {
+    // 再次確認是否刪除
+    if (!confirm('確定要刪除這篇貼文嗎？此動作無法復原。')) {
+        return;
+    }
+
+    // 1. 驗證身分
+    const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
+    if (authError || !user) {
+        return alert('請先登入！');
+    }
+
+    try {
+        // 2. 從 Supabase 刪除資料 (加入 user_id 條件確保只能刪除自己的貼文)
+        const { error } = await window.supabaseClient
+            .from('posts')
+            .delete()
+            .eq('id', postId)
+            .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        alert('🗑️ 貼文已成功刪除！');
+        
+        // 3. 重新渲染畫面以移除該貼文 (假設你的首頁或個人頁面有這兩個函數)
+        if (typeof renderDiscovery === 'function') renderDiscovery();
+        if (typeof renderProfile === 'function') renderProfile(); 
+
+    } catch (err) {
+        console.error("刪除貼文失敗:", err);
+        alert('刪除失敗: ' + err.message);
+    }
+}
