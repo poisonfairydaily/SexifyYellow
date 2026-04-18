@@ -361,7 +361,7 @@ window.openEditProfile = async function() {
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
         
-        // ✨ 頭像防破圖：加入 crossOrigin 允許跨域讀取，才能在 Canvas 上調整
+        // ✨ 頭像防破圖：加入 crossOrigin="anonymous" 允許跨域讀取，才能在 Canvas 上調整並轉存
         isAvatarChanged = false;
         if (profile.avatar_url && profile.avatar_url.startsWith('http')) {
             const img = new Image();
