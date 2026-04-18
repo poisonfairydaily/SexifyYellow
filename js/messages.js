@@ -1,6 +1,6 @@
 // ==========================================
-// js/messages.js - R2 儲存整合版
-// 優化：將多媒體上傳轉向 Cloudflare Worker (R2)
+// js/messages.js - R2 儲存 + 實時在線狀態版
+// 優化：R2 上傳、實時 Presence 狀態、日期分隔線
 // ==========================================
 
 window.activeRoomId = null;
@@ -12,7 +12,7 @@ let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
 
-// ✨ 配置：請更換為你的 Worker 網址 (末尾不加 /)
+// ✨ 配置：Worker 網址
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 
 function safeText(str) {
@@ -41,6 +41,22 @@ function scrollToBottom() {
         setTimeout(() => {
             container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
         }, 150);
+    }
+}
+
+// ✨ 更新 UI 在線狀態
+function updateOnlineStatusUI(isOnline) {
+    const statusText = document.querySelector('#chat-modal span.uppercase');
+    if (!statusText) return;
+
+    if (isOnline) {
+        statusText.innerHTML = '● Online';
+        statusText.classList.remove('text-gray-400');
+        statusText.classList.add('text-green-500');
+    } else {
+        statusText.innerHTML = '● Offline';
+        statusText.classList.remove('text-green-500');
+        statusText.classList.add('text-gray-400');
     }
 }
 
@@ -184,15 +200,48 @@ async function loadMessages() {
     if (!error) drawMessages(data);
 }
 
+// ✨ 核心修復：Realtime Presence 線上偵測
 function setupChatRealtime() {
     if (!window.activeRoomId) return;
     if (window.roomChannel) window.roomChannel.unsubscribe();
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `room_id=eq.${window.activeRoomId}` }, async () => {
+
+    // 建立頻道並啟用 Presence
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, {
+        config: { presence: { key: window.activeChatTarget } }
+    });
+
+    window.roomChannel
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: `room_id=eq.${window.activeRoomId}` 
+        }, async () => {
             await loadMessages();
             scrollToBottom();
         })
-        .subscribe();
+        // 監聽線上狀態同步
+        .on('presence', { event: 'sync' }, () => {
+            const state = window.roomChannel.presenceState();
+            const isOnline = !!state[window.activeChatTarget];
+            updateOnlineStatusUI(isOnline);
+        })
+        .on('presence', { event: 'join' }, ({ key }) => {
+            if (key === window.activeChatTarget) updateOnlineStatusUI(true);
+        })
+        .on('presence', { event: 'leave' }, ({ key }) => {
+            if (key === window.activeChatTarget) updateOnlineStatusUI(false);
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                const myId = await getValidUserId();
+                // 追蹤我自己的連線
+                await window.roomChannel.track({
+                    user_id: myId,
+                    online_at: new Date().toISOString(),
+                });
+            }
+        });
 }
 
 window.deleteMessage = async function(msgId, senderId) {
@@ -206,13 +255,13 @@ window.deleteMessage = async function(msgId, senderId) {
 };
 
 window.closeChat = function() {
+    if (window.roomChannel) window.roomChannel.unsubscribe();
     window.activeRoomId = null;
     const modal = document.getElementById('chat-modal');
     modal.classList.add('translate-x-full');
     setTimeout(() => modal.classList.add('hidden'), 300);
 };
 
-// ✨ 修復：使用 Worker (R2) 上傳語音
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
     if (!window.isRecording) {
@@ -224,23 +273,17 @@ window.toggleVoiceRecord = async function() {
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const myId = await getValidUserId();
-                
                 const formData = new FormData();
-                const fileName = `voice_${myId}_${Date.now()}.webm`;
-                formData.append('file', audioBlob, fileName);
+                formData.append('file', audioBlob, `voice_${myId}_${Date.now()}.webm`);
 
                 try {
-                    const response = await fetch(`${WORKER_URL}/`, {
-                        method: 'POST',
-                        body: formData
-                    });
+                    const response = await fetch(`${WORKER_URL}/`, { method: 'POST', body: formData });
                     const result = await response.json();
                     if (result.url) {
                         window.selectedMediaUrl = result.url;
                         await window.handleSendAction();
                     }
                 } catch (e) { alert('語音上傳失敗'); }
-                
                 stream.getTracks().forEach(track => track.stop());
             };
             mediaRecorder.start();
@@ -254,29 +297,17 @@ window.toggleVoiceRecord = async function() {
     }
 };
 
-// ✨ 修復：使用 Worker (R2) 上傳相片/影片
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
-
     try {
-        const response = await fetch(`${WORKER_URL}/`, {
-            method: 'POST',
-            body: formData
-        });
-
+        const response = await fetch(`${WORKER_URL}/`, { method: 'POST', body: formData });
         const result = await response.json();
         if (result.url) {
             window.selectedMediaUrl = result.url;
             await window.handleSendAction();
-        } else {
-            throw new Error('Upload failed');
         }
-    } catch (e) { 
-        console.error(e);
-        alert('媒體上傳失敗'); 
-    }
+    } catch (e) { alert('媒體上傳失敗'); }
 };
