@@ -1,12 +1,23 @@
 // ==========================================
 // js/profile.js - R2 儲存整合 + 安全強化完整版
-// 1. 儲存：頭像與橫幅全面遷移至 Cloudflare R2 (節省 Supabase 空間)
-// 2. 壓縮：前端自動壓縮圖片，優化 R2 儲存效率
-// 3. 安全：私密欄位與公開資料分表處理
 // ==========================================
 
 // ✨ 配置：指向你的 Cloudflare Worker
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
+
+// 內部工具：防止 XSS 攻擊
+window.escapeHTML = function(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, function(m) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[m];
+    });
+};
 
 // 內部工具：獲取當前真實經過驗證的 User ID
 async function getAuthenticatedUserId() {
@@ -23,7 +34,6 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
-        // 檔名規則：類型_ID_時間戳.jpg (方便追蹤與 Lifecycle 管理)
         const fileName = `${type}_${myId}_${Date.now()}.jpg`;
         formData.append('file', blob, fileName);
 
@@ -50,7 +60,7 @@ window.previewImage = function(input, imgId) {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                const MAX_SIZE = 800; // 壓縮尺寸以節省 R2 空間
+                const MAX_SIZE = 800;
 
                 if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
@@ -65,7 +75,6 @@ window.previewImage = function(input, imgId) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 const displayImg = document.getElementById(imgId);
-                // 壓縮質量設定為 0.7 達到體積與畫質平衡
                 displayImg.src = canvas.toDataURL('image/jpeg', 0.7);
                 displayImg.classList.remove('hidden');
             };
@@ -89,7 +98,6 @@ window.openPersonalCenter = async function() {
         const myId = await getAuthenticatedUserId();
         if (!myId) return;
 
-        // 同時從 profiles 和 user_private_data 讀取
         const [profRes, privRes] = await Promise.all([
             window.supabaseClient.from('profiles').select('gender').eq('id', myId).single(),
             window.supabaseClient.from('user_private_data').select('birthday, contact_email').eq('id', myId).maybeSingle()
@@ -118,7 +126,6 @@ window.closePersonalCenter = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 儲存至分表
 window.savePersonalCenter = async function() {
     const btn = document.getElementById('save-personal-btn');
     const myId = await getAuthenticatedUserId();
@@ -132,7 +139,6 @@ window.savePersonalCenter = async function() {
     
     try {
         const updatePublic = window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
-        
         const updatePrivate = window.supabaseClient.from('user_private_data').upsert({
             id: myId,
             contact_email: newEmail,
@@ -174,7 +180,7 @@ window.renderProfile = async function() {
         
         const profile = profileRes.data;
         const myPosts = postsRes.data || [];
-        const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
+        const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
         const bannerUrl = profile.banner_url || '';
 
         const editName = document.getElementById('edit-display-name');
@@ -228,7 +234,6 @@ window.renderProfile = async function() {
     }
 }
 
-// ✨ 修改：儲存資料時將 Base64 圖片引向 R2
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -240,7 +245,6 @@ window.saveProfileData = async function() {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
-        // 判斷是否為新選取的圖片 (Base64)
         if (avatarSrc.startsWith('data:image')) {
             avatarSrc = await uploadToR2(avatarSrc, 'avatar');
         }
@@ -259,7 +263,6 @@ window.saveProfileData = async function() {
         if (error) throw error;
 
         localStorage.setItem('myChatName', updateData.display_name);
-        
         if(typeof closeEditProfile === 'function') closeEditProfile();
         renderProfile();
     } catch (err) {
@@ -272,7 +275,10 @@ window.saveProfileData = async function() {
 // 他人主頁
 window.viewOtherProfile = async function(userId) {
     const myId = await getAuthenticatedUserId();
-    if (userId === myId) return switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
+    if (userId === myId) {
+        if (typeof switchTab === 'function') switchTab('profile-tab', document.querySelectorAll('.nav-btn')[3]);
+        return;
+    }
 
     const modal = document.getElementById('other-profile-modal');
     if(!modal) return;
@@ -285,7 +291,7 @@ window.viewOtherProfile = async function(userId) {
         const { data: user, error } = await window.supabaseClient.from('profiles').select('*').eq('id', userId).single();
         if (error) throw error;
 
-        const avatar = user.avatar_url || `https://ui-avatars.com/api/?name=${user.display_name}&background=random`;
+        const avatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.display_name)}&background=random`;
         document.getElementById('other-header-name').innerText = user.display_name;
         document.getElementById('other-display-name').innerText = user.display_name;
         document.getElementById('other-username').innerText = `@${user.username}`;
@@ -302,27 +308,23 @@ window.viewOtherProfile = async function(userId) {
         };
 
         const followBtn = document.getElementById('other-follow-btn');
-        
         const { data: subData } = await window.supabaseClient.from('subscriptions').select('id').eq('subscriber_id', myId).eq('creator_id', userId);
         const isSubbed = subData && subData.length > 0;
 
         if (isSubbed) {
             followBtn.innerText = "已追蹤";
-            followBtn.classList.add('bg-gray-200', 'text-gray-700');
-            followBtn.classList.remove('bg-sexify', 'text-white');
+            followBtn.className = "bg-gray-200 text-gray-700 px-6 py-2 rounded-full text-xs font-bold";
             followBtn.onclick = null;
         } else {
             followBtn.innerText = "追蹤";
-            followBtn.classList.add('bg-sexify', 'text-white');
-            followBtn.classList.remove('bg-gray-200', 'text-gray-700');
+            followBtn.className = "bg-sexify text-white px-6 py-2 rounded-full text-xs font-bold";
             followBtn.onclick = async () => {
                 followBtn.innerText = "處理中...";
                 try {
                     await window.supabaseClient.from('subscriptions').insert({ subscriber_id: myId, creator_id: userId });
                     await window.supabaseClient.from('notifications').insert({ user_id: userId, actor_id: myId, type: 'subscribe' });
                     followBtn.innerText = "已追蹤";
-                    followBtn.classList.replace('bg-sexify', 'bg-gray-200');
-                    followBtn.classList.replace('text-white', 'text-gray-700');
+                    followBtn.className = "bg-gray-200 text-gray-700 px-6 py-2 rounded-full text-xs font-bold";
                     followBtn.onclick = null;
                 } catch(e) { followBtn.innerText = "追蹤失敗"; }
             };
@@ -330,8 +332,9 @@ window.viewOtherProfile = async function(userId) {
 
         const { data: posts } = await window.supabaseClient.from('posts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
         const grid = document.getElementById('other-posts-grid');
-        if (!posts || posts.length === 0) grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
-        else {
+        if (!posts || posts.length === 0) {
+            grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400">尚無內容</div>`;
+        } else {
             grid.innerHTML = posts.map(p => `
                 <div class="masonry-item cursor-pointer bg-white p-2 border border-gray-100 rounded-xl mb-3 break-inside-avoid" onclick="viewPost('${p.id}')">
                     ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字</div>`}
@@ -377,27 +380,24 @@ window.switchFansTab = async function(tab) {
     list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-2xl"></i></div>`;
 
     if (tab === 'fans') {
-        btnFans.classList.replace('text-gray-400', 'text-sexify');
-        btnFans.classList.replace('border-transparent', 'border-sexify');
-        btnSubs.classList.replace('text-sexify', 'text-gray-400');
-        btnSubs.classList.replace('border-sexify', 'border-transparent');
+        btnFans.classList.add('text-sexify', 'border-sexify');
+        btnFans.classList.remove('text-gray-400', 'border-transparent');
+        btnSubs.classList.add('text-gray-400', 'border-transparent');
+        btnSubs.classList.remove('text-sexify', 'border-sexify');
 
         try {
             const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myId);
             if (error) throw error;
-
             if (!subs || subs.length === 0) {
                 list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前還沒有粉絲</div>`;
                 return;
             }
-
             const subIds = [...new Set(subs.map(s => s.subscriber_id).filter(Boolean))];
             let profMap = {};
             if (subIds.length > 0) {
                 const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', subIds);
                 if (profs) profs.forEach(p => profMap[p.id] = p);
             }
-
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.subscriber_id];
                 if(!user) return '';
@@ -409,32 +409,26 @@ window.switchFansTab = async function(tab) {
                     <div class="flex-1 overflow-hidden font-bold text-gray-800 text-sm truncate">${safeName}</div>
                 </div>`;
             }).join('');
-        } catch(e) {
-            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`;
-        }
-
+        } catch(e) { list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`; }
     } else {
-        btnSubs.classList.replace('text-gray-400', 'text-sexify');
-        btnSubs.classList.replace('border-transparent', 'border-sexify');
-        btnFans.classList.replace('text-sexify', 'text-gray-400');
-        btnFans.classList.replace('border-sexify', 'border-transparent');
+        btnSubs.classList.add('text-sexify', 'border-sexify');
+        btnSubs.classList.remove('text-gray-400', 'border-transparent');
+        btnFans.classList.add('text-gray-400', 'border-transparent');
+        btnFans.classList.remove('text-sexify', 'border-sexify');
 
         try {
             const { data: subs, error } = await window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myId);
             if (error) throw error;
-
             if (!subs || subs.length === 0) {
                 list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">尚未訂閱任何用戶</div>`;
                 return;
             }
-
             const creatorIds = [...new Set(subs.map(s => s.creator_id).filter(Boolean))];
             let profMap = {};
             if (creatorIds.length > 0) {
                 const { data: profs } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', creatorIds);
                 if (profs) profs.forEach(p => profMap[p.id] = p);
             }
-
             list.innerHTML = subs.map(sub => {
                 const user = profMap[sub.creator_id];
                 if(!user) return '';
@@ -447,9 +441,7 @@ window.switchFansTab = async function(tab) {
                     <button onclick="event.stopPropagation(); unfollowUserFromList('${sub.id}', this)" class="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-full font-bold active:scale-90 transition">取消追蹤</button>
                 </div>`;
             }).join('');
-        } catch(e) {
-            list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`;
-        }
+        } catch(e) { list.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>`; }
     }
 }
 
@@ -458,9 +450,8 @@ window.unfollowUserFromList = async function(subscriptionId, btn) {
     try {
         const { error } = await window.supabaseClient.from('subscriptions').delete().eq('id', subscriptionId);
         if(error) throw error;
-        btn.parentElement.classList.add('opacity-0', 'scale-95');
-        setTimeout(() => btn.parentElement.remove(), 200);
-    } catch(e) {
-        alert("取消失敗");
-    }
+        const item = btn.closest('.flex');
+        item.classList.add('opacity-0', 'scale-95');
+        setTimeout(() => item.remove(), 200);
+    } catch(e) { alert("取消失敗"); }
 }
