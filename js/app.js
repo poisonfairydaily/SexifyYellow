@@ -136,12 +136,20 @@ function toggleSearch(show) {
     const overlay = document.getElementById('search-overlay');
     if (!overlay) return;
     if (show) {
-        overlay.classList.add('active');
-        setTimeout(() => document.getElementById('searchInput').focus(), 100);
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        setTimeout(() => {
+            overlay.classList.remove('translate-y-full');
+            document.getElementById('searchInput').focus();
+        }, 10);
     } else {
-        overlay.classList.remove('active');
-        document.getElementById('searchInput').value = '';
-        document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
+        overlay.classList.add('translate-y-full');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
+        }, 300);
     }
 }
 
@@ -196,10 +204,11 @@ function closeEditProfile() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 收藏、訂單
+// 收藏、訂單與聯絡
 function openBookmarksModal() {
     toggleSettings();
     const modal = document.getElementById('bookmarks-modal');
+    if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
@@ -207,7 +216,7 @@ function openBookmarksModal() {
     const list = document.getElementById('bookmarks-list');
     let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
     if(bookmarks.length === 0) {
-        list.innerHTML = `<div class="text-center py-20 text-gray-400">目前沒有收藏貼文</div>`;
+        list.innerHTML = `<div class="text-center py-20 text-gray-400 font-bold">目前沒有收藏貼文</div>`;
         return;
     }
     list.innerHTML = bookmarks.map(b => `
@@ -223,6 +232,7 @@ function openBookmarksModal() {
 }
 function closeBookmarksModal() {
     const modal = document.getElementById('bookmarks-modal');
+    if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
@@ -230,12 +240,14 @@ function closeBookmarksModal() {
 function openOrdersModal() {
     toggleSettings();
     const modal = document.getElementById('orders-modal');
+    if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 }
 function closeOrdersModal() {
     const modal = document.getElementById('orders-modal');
+    if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
@@ -243,12 +255,14 @@ function closeOrdersModal() {
 function openContactModal() {
     toggleSettings();
     const modal = document.getElementById('contact-modal');
+    if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
 }
 function closeContactModal() {
     const modal = document.getElementById('contact-modal');
+    if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
