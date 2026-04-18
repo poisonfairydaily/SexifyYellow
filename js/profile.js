@@ -2,7 +2,7 @@
 // js/profile.js - R2 儲存整合 + 安全強化完整最終版
 // ==========================================
 
-// ✨ 修復：避免重複宣告 WORKER_URL
+// ✨ 修復：避免重複宣告 WORKER_URL 導致 SyntaxError
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
@@ -36,9 +36,11 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
+        // 檔名規則：類型_ID_時間戳.jpg
         const fileName = `${type}_${myId}_${Date.now()}.jpg`;
         formData.append('file', blob, fileName);
 
+        // 使用 window.WORKER_URL 以配合全域宣告
         const response = await fetch(`${window.WORKER_URL}/`, {
             method: 'POST',
             body: formData
@@ -238,7 +240,6 @@ window.renderProfile = async function() {
     }
 }
 
-// ✨ 修改：儲存資料時將 Base64 圖片引向 R2
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
