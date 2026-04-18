@@ -1,5 +1,5 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + 安全強化完整版
+// js/profile.js - R2 儲存整合 + 安全強化完整最終版
 // ==========================================
 
 // ✨ 配置：指向你的 Cloudflare Worker
@@ -8,7 +8,7 @@ const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 // 內部工具：防止 XSS 攻擊
 window.escapeHTML = function(str) {
     if (!str) return '';
-    return str.replace(/[&<>"']/g, function(m) {
+    return String(str).replace(/[&<>"']/g, function(m) {
         return {
             '&': '&amp;',
             '<': '&lt;',
@@ -34,6 +34,7 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
+        // 檔名規則：類型_ID_時間戳.jpg
         const fileName = `${type}_${myId}_${Date.now()}.jpg`;
         formData.append('file', blob, fileName);
 
@@ -162,6 +163,8 @@ window.savePersonalCenter = async function() {
 // 2. 個人專頁與編輯資料
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
+    if (!container) return;
+
     const myId = await getAuthenticatedUserId();
     if (!myId) { 
         container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`; 
@@ -234,6 +237,7 @@ window.renderProfile = async function() {
     }
 }
 
+// ✨ 修改：儲存資料時將 Base64 圖片引向 R2
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -263,6 +267,7 @@ window.saveProfileData = async function() {
         if (error) throw error;
 
         localStorage.setItem('myChatName', updateData.display_name);
+        
         if(typeof closeEditProfile === 'function') closeEditProfile();
         renderProfile();
     } catch (err) {
