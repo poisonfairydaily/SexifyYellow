@@ -1,15 +1,44 @@
 // ==========================================
-// js/profile.js - 個人檔案與安全性強化（分表相容版）
-// 1. 安全性：所有私密欄位 (Birthday, Email) 改從 user_private_data 讀寫
-// 2. 效能：合併讀取 profiles 與 user_private_data
-// 3. 原生體驗：保留 Masonry 佈局與所有彈窗動畫
+// js/profile.js - R2 儲存整合 + 安全強化完整版
+// 1. 儲存：頭像與橫幅全面遷移至 Cloudflare R2 (節省 Supabase 空間)
+// 2. 壓縮：前端自動壓縮圖片，優化 R2 儲存效率
+// 3. 安全：私密欄位與公開資料分表處理
 // ==========================================
+
+// ✨ 配置：指向你的 Cloudflare Worker
+const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 
 // 內部工具：獲取當前真實經過驗證的 User ID
 async function getAuthenticatedUserId() {
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) return null;
     return user.id;
+}
+
+// ✨ 修改：將圖片上傳至 R2 而非 Supabase Storage
+async function uploadToR2(base64Str, type = 'avatar') {
+    try {
+        const myId = await getAuthenticatedUserId();
+        const res = await fetch(base64Str);
+        const blob = await res.blob();
+        
+        const formData = new FormData();
+        // 檔名規則：類型_ID_時間戳.jpg (方便追蹤與 Lifecycle 管理)
+        const fileName = `${type}_${myId}_${Date.now()}.jpg`;
+        formData.append('file', blob, fileName);
+
+        const response = await fetch(`${WORKER_URL}/`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.url) return result.url;
+        throw new Error("Worker 回傳網址失敗");
+    } catch (err) {
+        console.error("R2 Upload Error:", err);
+        throw err;
+    }
 }
 
 window.previewImage = function(input, imgId) {
@@ -21,7 +50,7 @@ window.previewImage = function(input, imgId) {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                const MAX_SIZE = 800;
+                const MAX_SIZE = 800; // 壓縮尺寸以節省 R2 空間
 
                 if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
@@ -36,6 +65,7 @@ window.previewImage = function(input, imgId) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 const displayImg = document.getElementById(imgId);
+                // 壓縮質量設定為 0.7 達到體積與畫質平衡
                 displayImg.src = canvas.toDataURL('image/jpeg', 0.7);
                 displayImg.classList.remove('hidden');
             };
@@ -43,19 +73,6 @@ window.previewImage = function(input, imgId) {
         }
         reader.readAsDataURL(input.files[0]);
     }
-}
-
-async function uploadBase64ToSupabase(base64Str, path) {
-    try {
-        const res = await fetch(base64Str);
-        const blob = await res.blob();
-        
-        const { data, error } = await window.supabaseClient.storage.from('media').upload(path, blob, { upsert: true, contentType: blob.type });
-        if (error) throw error;
-        
-        const { data: publicData } = window.supabaseClient.storage.from('media').getPublicUrl(path);
-        return publicData.publicUrl;
-    } catch (err) { throw err; }
 }
 
 // 1. 個人中心 - 讀取分表資料
@@ -114,10 +131,8 @@ window.savePersonalCenter = async function() {
     const newBirthday = document.getElementById('pc-birthday').value;
     
     try {
-        // 更新公開表 (profiles)
         const updatePublic = window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
         
-        // 更新私密表 (user_private_data)
         const updatePrivate = window.supabaseClient.from('user_private_data').upsert({
             id: myId,
             contact_email: newEmail,
@@ -162,7 +177,6 @@ window.renderProfile = async function() {
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.display_name}&background=random`;
         const bannerUrl = profile.banner_url || '';
 
-        // 更新編輯欄位
         const editName = document.getElementById('edit-display-name');
         const editBio = document.getElementById('edit-bio');
         if(editName) editName.value = profile.display_name || '';
@@ -214,6 +228,7 @@ window.renderProfile = async function() {
     }
 }
 
+// ✨ 修改：儲存資料時將 Base64 圖片引向 R2
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -225,8 +240,13 @@ window.saveProfileData = async function() {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
-        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadBase64ToSupabase(avatarSrc, `avatars/${myId}_${Date.now()}.jpg`);
-        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadBase64ToSupabase(bannerSrc, `banners/${myId}_${Date.now()}.jpg`);
+        // 判斷是否為新選取的圖片 (Base64)
+        if (avatarSrc.startsWith('data:image')) {
+            avatarSrc = await uploadToR2(avatarSrc, 'avatar');
+        }
+        if (bannerSrc.startsWith('data:image')) {
+            bannerSrc = await uploadToR2(bannerSrc, 'banner');
+        }
 
         const updateData = {
             display_name: document.getElementById('edit-display-name').value.trim(),
@@ -382,7 +402,7 @@ window.switchFansTab = async function(tab) {
                 const user = profMap[sub.subscriber_id];
                 if(!user) return '';
                 const safeName = window.escapeHTML(user.display_name || '未命名用戶');
-                const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+                const safeAvatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}`;
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
                     <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
@@ -419,7 +439,7 @@ window.switchFansTab = async function(tab) {
                 const user = profMap[sub.creator_id];
                 if(!user) return '';
                 const safeName = window.escapeHTML(user.display_name || '未命名用戶');
-                const safeAvatar = window.escapeHTML(user.avatar_url || `https://ui-avatars.com/api/?name=${safeName}`);
+                const safeAvatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}`;
                 return `
                 <div class="flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer active:scale-95 transition" onclick="closeFansSubsModal(); viewOtherProfile('${user.id}')">
                     <img src="${safeAvatar}" class="w-12 h-12 rounded-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=U'">
