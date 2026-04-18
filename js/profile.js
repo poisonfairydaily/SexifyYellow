@@ -1,5 +1,5 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + 安全強化 + 編輯修復完整版
+// js/profile.js - R2 儲存整合 + 安全強化 + 編輯功能完整修復版
 // ==========================================
 
 // ✨ 修復：避免重複宣告 WORKER_URL 導致 SyntaxError
@@ -40,7 +40,6 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const fileName = `${type}_${myId}_${Date.now()}.jpg`;
         formData.append('file', blob, fileName);
 
-        // 使用 window.WORKER_URL 以配合全域宣告
         const response = await fetch(`${window.WORKER_URL}/`, {
             method: 'POST',
             body: formData
@@ -88,7 +87,7 @@ window.previewImage = function(input, imgId) {
     }
 }
 
-// 1. 個人中心 - 讀取分表資料
+// 1. 個人中心 - 讀取分表資料 (Email/生日)
 window.openPersonalCenter = async function() {
     try {
         if(typeof toggleSettings === 'function') toggleSettings(); 
@@ -163,7 +162,7 @@ window.savePersonalCenter = async function() {
     }
 }
 
-// 2. 個人專頁與編輯資料
+// 2. 個人專頁主渲染
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     if (!container) return;
@@ -226,7 +225,7 @@ window.renderProfile = async function() {
     }
 }
 
-// ✨ 補上缺失的：開啟編輯資料彈窗
+// ✨ 修復：開啟編輯資料彈窗邏輯
 window.openEditProfile = async function() {
     const modal = document.getElementById('edit-profile-modal');
     if (!modal) return;
@@ -235,7 +234,7 @@ window.openEditProfile = async function() {
         const myId = await getAuthenticatedUserId();
         if (!myId) return alert('請先登入');
 
-        // 從資料庫抓最新資料
+        // 讀取最新資料
         const { data: profile, error } = await window.supabaseClient
             .from('profiles')
             .select('*')
@@ -244,14 +243,14 @@ window.openEditProfile = async function() {
 
         if (error) throw error;
 
-        // 填入資料到輸入框
+        // 填入資料到編輯框
         const editName = document.getElementById('edit-display-name');
         const editBio = document.getElementById('edit-bio');
-        if(editName) editName.value = profile.display_name || '';
-        if(editBio) editBio.value = profile.bio || '';
+        if (editName) editName.value = profile.display_name || '';
+        if (editBio) editBio.value = profile.bio || '';
         
         const avatarPreview = document.getElementById('edit-avatar-preview');
-        if(avatarPreview) avatarPreview.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
+        if (avatarPreview) avatarPreview.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
         
         const bannerPreview = document.getElementById('edit-banner-preview');
         if (bannerPreview && profile.banner_url) {
@@ -259,7 +258,7 @@ window.openEditProfile = async function() {
             bannerPreview.classList.remove('hidden');
         }
 
-        // 顯示彈窗
+        // 顯示 Modal
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     } catch (err) {
@@ -268,7 +267,7 @@ window.openEditProfile = async function() {
     }
 };
 
-// ✨ 補上缺失的：關閉編輯資料彈窗
+// ✨ 修復：關閉編輯資料彈窗
 window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
     if (modal) {
@@ -277,6 +276,7 @@ window.closeEditProfile = function() {
     }
 };
 
+// 儲存個人資料修改
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -288,6 +288,7 @@ window.saveProfileData = async function() {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
+        // 若圖片是剛選擇的 Base64 格式，則上傳至 R2
         if (avatarSrc.startsWith('data:image')) {
             avatarSrc = await uploadToR2(avatarSrc, 'avatar');
         }
@@ -305,9 +306,10 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
+        // 更新本地存儲的聊天顯示名稱
         localStorage.setItem('myChatName', updateData.display_name);
         
-        // 儲存成功後，呼叫關閉彈窗，並重新整理畫面
+        // ✨ 修改：關閉編輯窗並重新渲染
         closeEditProfile();
         renderProfile();
     } catch (err) {
@@ -317,7 +319,7 @@ window.saveProfileData = async function() {
     }
 }
 
-// 他人主頁
+// 3. 他人主頁
 window.viewOtherProfile = async function(userId) {
     const myId = await getAuthenticatedUserId();
     if (userId === myId) {
@@ -397,7 +399,7 @@ window.closeOtherProfile = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 3. 粉絲與訂閱面板
+// 4. 粉絲與訂閱面板邏輯
 window.openFansSubsModal = function() {
     if(typeof toggleSettings === 'function') toggleSettings(); 
     const modal = document.getElementById('fans-subs-modal');
