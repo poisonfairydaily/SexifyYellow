@@ -1,6 +1,5 @@
 /**
  * dashboard.js - 營運管理後台 (支援軟刪除、物理刪除與 AI 深度提醒)
- * 修復版：優化燈箱預覽體驗與退出機制
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
@@ -83,7 +82,7 @@ function renderTable(products) {
         const allFiles = p.image_url?.split(',') || [];
         const imagesHtml = allFiles.map(fileName => {
             const imgUrl = `${SUPABASE_URL}/storage/v1/object/public/previews/${fileName.trim()}`;
-            return `<img src="${imgUrl}" onclick="openLightbox('${imgUrl}')" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; cursor: zoom-in;">`;
+            return `<img src="${imgUrl}" onclick="openLightbox('${imgUrl}')" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; cursor: zoom-in; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">`;
         }).join('');
         
         let reportCount = 0;
@@ -129,14 +128,14 @@ function renderTable(products) {
 
 // --- 🔍 4. 功能函數 ---
 
-// ✨ 修正版燈箱：解決預覽與退出問題
+// ✨ 完美版燈箱：動態生成、確保 opacity 顯示與 ESC 支援
 window.openLightbox = function(url) {
     let overlay = document.getElementById('audit-lightbox');
     
+    // 如果燈箱不存在，就建立一個新的
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'audit-lightbox';
-        // 使用 fixed 定位，z-index 設為最高
         overlay.style = `
             position: fixed; 
             top: 0; 
@@ -150,30 +149,47 @@ window.openLightbox = function(url) {
             justify-content: center; 
             cursor: pointer;
             backdrop-filter: blur(5px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         `;
         
-        // 點擊背景任何地方就關閉
+        // 點擊背景關閉動畫
         overlay.onclick = function() {
-            this.style.display = 'none';
-            document.body.style.overflow = 'auto'; // 恢復背景捲動
+            this.style.opacity = '0';
+            setTimeout(() => {
+                this.style.display = 'none';
+                document.body.style.overflow = 'auto'; // 恢復網頁捲動
+            }, 300);
         };
         
         document.body.appendChild(overlay);
+
+        // 綁定 ESC 鍵離開 (只綁定一次)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay.style.display === 'flex') {
+                overlay.click();
+            }
+        });
     }
 
-    // 注入大圖，使用 stopPropagation 防止點擊圖片時觸發父層關閉
+    // 每次開啟時更新內容
     overlay.innerHTML = `
         <div style="position:relative; max-width:90%; max-height:90%; display:flex; justify-content:center; align-items:center;">
             <img src="${url}" 
-                 style="max-width:100%; max-height:100%; border-radius:8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); cursor: default;"
+                 style="max-width:100%; max-height:100%; border-radius:8px; box-shadow: 0 0 40px rgba(0,0,0,0.6); cursor: default; transform: scale(0.95); transition: transform 0.3s ease;"
+                 onload="this.style.transform='scale(1)'"
                  onclick="event.stopPropagation();" 
                  onerror="this.src='https://placehold.co/600x400?text=圖片載入失敗';">
-            <div style="position:absolute; top:-40px; right:0; color:white; font-size:30px; font-family:sans-serif; font-weight:bold;">&times;</div>
+            <div style="position:absolute; top:-40px; right:-10px; color:white; font-size:35px; font-weight:bold;">&times;</div>
         </div>
     `;
 
+    // 顯示燈箱 (先設為 flex，再用 setTimeout 改變透明度觸發動畫)
     overlay.style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // 禁止背景捲動
+    setTimeout(() => {
+        overlay.style.opacity = '1';
+    }, 10);
+    document.body.style.overflow = 'hidden'; // 鎖住背景捲動
 };
 
 // 軟刪除 (下架)
