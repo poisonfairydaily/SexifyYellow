@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://static.cloudflareinsights.com; img-src 'self' data: blob: https://*.supabase.co https://placehold.co; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;">    
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://static.cloudflareinsights.com; img-src 'self' data: blob: https://*.supabase.co https://placehold.co; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;">    
     <title>管理員審核中控台</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -51,34 +51,6 @@
             transition: all 0.2s;
         }
         .btn-back:hover { background: #e8e8ed; }
-
-        /* ✨ 圖片放大 Lightbox 樣式 */
-        #audit-lightbox {
-            display: none; /* 預設隱藏 */
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 9999;
-            align-items: center; justify-content: center;
-            cursor: zoom-out; opacity: 0; transition: opacity 0.3s ease;
-        }
-        #audit-lightbox img {
-            max-width: 90%; max-height: 90%;
-            border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5);
-            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        #audit-lightbox.active { display: flex; opacity: 1; }
-        #audit-lightbox.active img { transform: scale(1); }
-
-        /* 縮圖網格樣式 */
-        .img-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 6px; width: 180px;
-        }
-        .img-grid img {
-            width: 55px; height: 55px; object-fit: cover;
-            border-radius: 8px; border: 1px solid #eee;
-            cursor: zoom-in; transition: opacity 0.2s;
-        }
-        .img-grid img:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -113,32 +85,6 @@
         </table>
     </div>
 </div>
-
-<div id="audit-lightbox" onclick="this.classList.remove('active')">
-    </div>
-
-<script>
-    // --- 🛡️ 安全防護：HTML 轉義函數 ---
-    // 雖然 dashboard.js 已有此函數，但在 HTML 這裡保留作為全域備援
-    window.escapeHTML = function(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    };
-
-    // --- 🔍 燈箱開關邏輯 ---
-    window.openLightbox = function(url) {
-        const lb = document.getElementById('audit-lightbox');
-        lb.innerHTML = `<img src="${url}" alt="放大檢視">`;
-        lb.classList.add('active');
-    };
-
-    // 支援 ESC 鍵關閉
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') document.getElementById('audit-lightbox').classList.remove('active');
-    });
-</script>
 
 <script src="js/dashboard.js"></script>
 
