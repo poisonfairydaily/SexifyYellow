@@ -1,6 +1,6 @@
 // ==========================================
-// js/messages.js - R2 儲存 + 實時在線狀態版
-// 優化：R2 上傳、實時 Presence 狀態、日期分隔線
+// js/messages.js - R2 儲存 + 實時在線狀態優化版
+// 優化內容：Presence 偵測修正、R2 上傳、自動滾動
 // ==========================================
 
 window.activeRoomId = null;
@@ -44,7 +44,7 @@ function scrollToBottom() {
     }
 }
 
-// ✨ 更新 UI 在線狀態
+// ✨ 更新 UI 在線狀態 (修正選擇器以匹配 HTML)
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
@@ -200,15 +200,13 @@ async function loadMessages() {
     if (!error) drawMessages(data);
 }
 
-// ✨ 核心修復：Realtime Presence 線上偵測
+// ✨ 核心修復：Realtime Presence 偵測
 function setupChatRealtime() {
     if (!window.activeRoomId) return;
     if (window.roomChannel) window.roomChannel.unsubscribe();
 
-    // 建立頻道並啟用 Presence
-    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId, {
-        config: { presence: { key: window.activeChatTarget } }
-    });
+    // 建立頻道名稱必須雙方一致
+    window.roomChannel = window.supabaseClient.channel('room_' + window.activeRoomId);
 
     window.roomChannel
         .on('postgres_changes', { 
@@ -220,22 +218,21 @@ function setupChatRealtime() {
             await loadMessages();
             scrollToBottom();
         })
-        // 監聽線上狀態同步
         .on('presence', { event: 'sync' }, () => {
             const state = window.roomChannel.presenceState();
-            const isOnline = !!state[window.activeChatTarget];
+            // 檢查池子裡是否有對方的 ID
+            const isOnline = Object.values(state).flat().some(p => p.user_id === window.activeChatTarget);
             updateOnlineStatusUI(isOnline);
         })
-        .on('presence', { event: 'join' }, ({ key }) => {
-            if (key === window.activeChatTarget) updateOnlineStatusUI(true);
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+            if (newPresences.some(p => p.user_id === window.activeChatTarget)) updateOnlineStatusUI(true);
         })
-        .on('presence', { event: 'leave' }, ({ key }) => {
-            if (key === window.activeChatTarget) updateOnlineStatusUI(false);
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+            if (leftPresences.some(p => p.user_id === window.activeChatTarget)) updateOnlineStatusUI(false);
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 const myId = await getValidUserId();
-                // 追蹤我自己的連線
                 await window.roomChannel.track({
                     user_id: myId,
                     online_at: new Date().toISOString(),
