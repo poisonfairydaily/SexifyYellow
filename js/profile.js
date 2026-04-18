@@ -1,5 +1,5 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + 安全強化完整最終版
+// js/profile.js - R2 儲存整合 + 安全強化 + 編輯修復完整版
 // ==========================================
 
 // ✨ 修復：避免重複宣告 WORKER_URL 導致 SyntaxError
@@ -189,20 +189,6 @@ window.renderProfile = async function() {
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
         const bannerUrl = profile.banner_url || '';
 
-        const editName = document.getElementById('edit-display-name');
-        const editBio = document.getElementById('edit-bio');
-        if(editName) editName.value = profile.display_name || '';
-        if(editBio) editBio.value = profile.bio || '';
-        
-        const avatarPreview = document.getElementById('edit-avatar-preview');
-        if(avatarPreview) avatarPreview.src = avatarUrl;
-        
-        const bannerPreview = document.getElementById('edit-banner-preview');
-        if (bannerPreview && bannerUrl) {
-            bannerPreview.src = bannerUrl;
-            bannerPreview.classList.remove('hidden');
-        }
-
         const bannerHtml = bannerUrl ? `<img src="${bannerUrl}" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
 
         let html = `
@@ -240,6 +226,57 @@ window.renderProfile = async function() {
     }
 }
 
+// ✨ 補上缺失的：開啟編輯資料彈窗
+window.openEditProfile = async function() {
+    const modal = document.getElementById('edit-profile-modal');
+    if (!modal) return;
+
+    try {
+        const myId = await getAuthenticatedUserId();
+        if (!myId) return alert('請先登入');
+
+        // 從資料庫抓最新資料
+        const { data: profile, error } = await window.supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('id', myId)
+            .single();
+
+        if (error) throw error;
+
+        // 填入資料到輸入框
+        const editName = document.getElementById('edit-display-name');
+        const editBio = document.getElementById('edit-bio');
+        if(editName) editName.value = profile.display_name || '';
+        if(editBio) editBio.value = profile.bio || '';
+        
+        const avatarPreview = document.getElementById('edit-avatar-preview');
+        if(avatarPreview) avatarPreview.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
+        
+        const bannerPreview = document.getElementById('edit-banner-preview');
+        if (bannerPreview && profile.banner_url) {
+            bannerPreview.src = profile.banner_url;
+            bannerPreview.classList.remove('hidden');
+        }
+
+        // 顯示彈窗
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    } catch (err) {
+        console.error(err);
+        alert("無法讀取個人資料");
+    }
+};
+
+// ✨ 補上缺失的：關閉編輯資料彈窗
+window.closeEditProfile = function() {
+    const modal = document.getElementById('edit-profile-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -269,7 +306,9 @@ window.saveProfileData = async function() {
         if (error) throw error;
 
         localStorage.setItem('myChatName', updateData.display_name);
-        if(typeof closeEditProfile === 'function') closeEditProfile();
+        
+        // 儲存成功後，呼叫關閉彈窗，並重新整理畫面
+        closeEditProfile();
         renderProfile();
     } catch (err) {
         alert("更新失敗：" + err.message);
