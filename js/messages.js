@@ -1,5 +1,6 @@
 // ==========================================
-// js/messages.js - 終極安全通訊版 (破圖修復版)
+// js/messages.js - R2 儲存整合版
+// 優化：將多媒體上傳轉向 Cloudflare Worker (R2)
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,7 +12,9 @@ let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
 
-// 安全工具：防止 XSS
+// ✨ 配置：請更換為你的 Worker 網址 (末尾不加 /)
+const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
+
 function safeText(str) {
     if (!str) return '';
     return str
@@ -32,7 +35,6 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_');
 }
 
-// 捲動到底部
 function scrollToBottom() {
     const container = document.getElementById('chat-messages');
     if (container) {
@@ -42,7 +44,6 @@ function scrollToBottom() {
     }
 }
 
-// 核心：處理發送
 window.handleSendAction = async function() {
     const input = document.getElementById('chat-input');
     const content = input.value.trim();
@@ -76,7 +77,6 @@ window.handleSendAction = async function() {
     }
 };
 
-// 繪製訊息內容
 function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
@@ -100,7 +100,7 @@ function drawMessages(messages) {
 
             const cleanContent = safeText(m.content);
             const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            const isAudio = safeImgUrl && safeImgUrl.endsWith('.webm');
+            const isAudio = safeImgUrl && (safeImgUrl.endsWith('.webm') || safeImgUrl.includes('voice_'));
 
             return `
                 ${dateSeparator}
@@ -116,7 +116,6 @@ function drawMessages(messages) {
     });
 }
 
-// 繪製訊息列表 (修復破圖關鍵點)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
@@ -141,8 +140,6 @@ window.renderMessages = async function() {
         const p = profMap[tid];
         const name = p?.display_name || '用戶';
         const lastMsg = safeText(m.content || (m.image_url ? '[媒體訊息]' : ''));
-        
-        // ✨ 修復破圖：對名稱進行 URI 編碼，並檢查 avatar_url 是否為空
         const finalAvatar = p?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
         
         return `
@@ -167,7 +164,6 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
     
     const avatarEl = document.getElementById('chat-target-avatar');
     if (avatarEl) {
-        // ✨ 修復點：如果 avatarUrl 是 undefined，則使用備用圖
         avatarEl.src = avatarUrl && avatarUrl !== 'undefined' ? avatarUrl : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}`;
     }
     
@@ -216,7 +212,7 @@ window.closeChat = function() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 };
 
-// 錄音與圖片上傳邏輯 (保持原有邏輯，但增加錯誤捕獲)
+// ✨ 修復：使用 Worker (R2) 上傳語音
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
     if (!window.isRecording) {
@@ -228,13 +224,23 @@ window.toggleVoiceRecord = async function() {
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const myId = await getValidUserId();
-                const fileName = `voice_${Date.now()}.webm`;
-                const { data, error } = await window.supabaseClient.storage.from('chat-media').upload(`${myId}/${fileName}`, audioBlob);
-                if (!error) {
-                    const { data: { publicUrl } } = window.supabaseClient.storage.from('chat-media').getPublicUrl(`${myId}/${fileName}`);
-                    window.selectedMediaUrl = publicUrl;
-                    await window.handleSendAction();
-                }
+                
+                const formData = new FormData();
+                const fileName = `voice_${myId}_${Date.now()}.webm`;
+                formData.append('file', audioBlob, fileName);
+
+                try {
+                    const response = await fetch(`${WORKER_URL}/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.url) {
+                        window.selectedMediaUrl = result.url;
+                        await window.handleSendAction();
+                    }
+                } catch (e) { alert('語音上傳失敗'); }
+                
                 stream.getTracks().forEach(track => track.stop());
             };
             mediaRecorder.start();
@@ -248,16 +254,29 @@ window.toggleVoiceRecord = async function() {
     }
 };
 
+// ✨ 修復：使用 Worker (R2) 上傳相片/影片
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
     if (!file) return;
-    const myId = await getValidUserId();
-    const fileName = `chat_${Date.now()}_${file.name}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-        const { data, error } = await window.supabaseClient.storage.from('chat-media').upload(`${myId}/${fileName}`, file);
-        if (error) throw error;
-        const { data: { publicUrl } } = window.supabaseClient.storage.from('chat-media').getPublicUrl(`${myId}/${fileName}`);
-        window.selectedMediaUrl = publicUrl;
-        await window.handleSendAction();
-    } catch (e) { alert('上傳失敗'); }
+        const response = await fetch(`${WORKER_URL}/`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.url) {
+            window.selectedMediaUrl = result.url;
+            await window.handleSendAction();
+        } else {
+            throw new Error('Upload failed');
+        }
+    } catch (e) { 
+        console.error(e);
+        alert('媒體上傳失敗'); 
+    }
 };
