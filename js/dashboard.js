@@ -1,5 +1,6 @@
 /**
  * dashboard.js - 營運管理後台 (支援軟刪除、物理刪除與 AI 深度提醒)
+ * 修復版：優化燈箱預覽體驗與退出機制
  */
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
@@ -55,7 +56,7 @@ async function loadAuditList() {
         const { data: products, error } = await supabaseClient
             .from('products')
             .select('*, reports(count)')
-            .eq('is_archived', false) // 預設只顯示未封存的商品
+            .eq('is_archived', false)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -88,15 +89,12 @@ function renderTable(products) {
         let reportCount = 0;
         if (p.reports && p.reports.length > 0) reportCount = p.reports[0].count;
 
-        // AI 狀態顏色判定
         const getClr = (v) => (v === 'LIKELY' || v === 'VERY_LIKELY') ? '#ff4d4f' : '#8c8c8c';
-        
-        // ✨ AI 疑慮高亮：如果 AI 判定為「有可能 (POSSIBLE)」，則背景變黃提醒人工細看
         const isSuspicious = Object.values(report).some(v => v === 'POSSIBLE' || v === 'LIKELY' || v === 'VERY_LIKELY');
 
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid #eee";
-        if (isSuspicious) tr.style.backgroundColor = "#fffbe6"; // 警戒淺黃色
+        if (isSuspicious) tr.style.backgroundColor = "#fffbe6";
 
         tr.innerHTML = `
             <td style="padding: 15px;"><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 190px;">${imagesHtml}</div></td>
@@ -118,7 +116,6 @@ function renderTable(products) {
                 <div style="display:flex; flex-direction:column; gap:8px;">
                     <button onclick="updateStatus('${p.id}', 'approved')" style="background:#52c41a; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">通過</button>
                     <button onclick="archiveProduct('${p.id}')" style="background:#faad14; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">下架封存</button>
-                    
                     <button onclick="hardDeleteProduct('${p.id}', '${p.image_url}')" 
                             style="background:none; color:#ff4d4f; border:1px solid #ff4d4f; padding:6px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:bold;">
                             徹底刪除 (違規)
@@ -132,18 +129,51 @@ function renderTable(products) {
 
 // --- 🔍 4. 功能函數 ---
 
-// 燈箱效果
+// ✨ 修正版燈箱：解決預覽與退出問題
 window.openLightbox = function(url) {
     let overlay = document.getElementById('audit-lightbox');
+    
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'audit-lightbox';
-        overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:none; align-items:center; justify-content:center; cursor:zoom-out;";
-        overlay.onclick = () => overlay.style.display = 'none';
+        // 使用 fixed 定位，z-index 設為最高
+        overlay.style = `
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.9); 
+            z-index: 10000; 
+            display: none; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+        `;
+        
+        // 點擊背景任何地方就關閉
+        overlay.onclick = function() {
+            this.style.display = 'none';
+            document.body.style.overflow = 'auto'; // 恢復背景捲動
+        };
+        
         document.body.appendChild(overlay);
     }
-    overlay.innerHTML = `<img src="${url}" style="max-width:90%; max-height:90%; border-radius:8px; box-shadow: 0 0 20px rgba(0,0,0,0.5);">`;
+
+    // 注入大圖，使用 stopPropagation 防止點擊圖片時觸發父層關閉
+    overlay.innerHTML = `
+        <div style="position:relative; max-width:90%; max-height:90%; display:flex; justify-content:center; align-items:center;">
+            <img src="${url}" 
+                 style="max-width:100%; max-height:100%; border-radius:8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); cursor: default;"
+                 onclick="event.stopPropagation();" 
+                 onerror="this.src='https://placehold.co/600x400?text=圖片載入失敗';">
+            <div style="position:absolute; top:-40px; right:0; color:white; font-size:30px; font-family:sans-serif; font-weight:bold;">&times;</div>
+        </div>
+    `;
+
     overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // 禁止背景捲動
 };
 
 // 軟刪除 (下架)
@@ -160,13 +190,12 @@ window.archiveProduct = async (id) => {
     else loadAuditList();
 };
 
-// ✨ 徹底刪除 (用於清理血腥、醫療違規內容)
+// 徹底刪除
 window.hardDeleteProduct = async (id, imageUrls) => {
-    const ok = confirm("🚨 🚨 🚨 極度警告 🚨 🚨 🚨\n\n此操作將會「永遠刪除」該商品及其所有圖片檔案。\n這通常用於處理嚴重的違規內容 (如血腥、違法醫療)。\n此操作無法撤銷，確定執行嗎？");
+    const ok = confirm("🚨 🚨 🚨 極度警告 🚨 🚨 🚨\n\n此操作將會「永遠刪除」該商品及其所有圖片檔案。\n此操作無法撤銷，確定執行嗎？");
     if (!ok) return;
 
     try {
-        // 1. 從資料庫刪除 (如有設 CASCADE，關聯的訂單也會被刪除)
         const { error: dbError } = await supabaseClient
             .from('products')
             .delete()
@@ -174,7 +203,6 @@ window.hardDeleteProduct = async (id, imageUrls) => {
         
         if (dbError) throw dbError;
 
-        // 2. 從 Storage 清理圖片實體檔案
         const fileNames = imageUrls.split(',').map(name => name.trim());
         if (fileNames.length > 0) {
             await supabaseClient.storage.from('products').remove(fileNames);
