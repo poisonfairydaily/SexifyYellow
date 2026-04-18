@@ -1,5 +1,5 @@
 // ==========================================
-// js/create.js - 解決卡頓壓縮版
+// js/create.js - Cloudflare R2 上傳版
 // ==========================================
 
 function openUploadModal() {
@@ -15,9 +15,13 @@ function closeUploadModal() {
     }, 300);
 }
 
+// 建立一個變數來儲存原始檔案，不要只存 Base64
+let selectedFile = null;
+
 function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
+    selectedFile = file; // 儲存原始檔案供上傳 Worker 使用
     
     const isVideo = file.type.startsWith('video/');
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
@@ -28,56 +32,20 @@ function handleFileSelect(e) {
     document.getElementById('media-placeholder').classList.add('hidden');
     
     const reader = new FileReader();
-    
-    if (isVideo) {
-        reader.onload = function(event) {
-            preview.src = event.target.result;
-            preview.classList.remove('hidden');
-            document.getElementById('media-preview-container').dataset.mediaType = 'video';
-        };
-        reader.readAsDataURL(file);
-    } else {
-        // 核心修復：相片 Canvas 壓縮，防止 Base64 過大導致 Supabase 拒絕並卡死
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const MAX_SIZE = 1000; // 限制最大寬高
-
-                if (width > height && width > MAX_SIZE) {
-                    height *= MAX_SIZE / width;
-                    width = MAX_SIZE;
-                } else if (height > MAX_SIZE) {
-                    width *= MAX_SIZE / height;
-                    height = MAX_SIZE;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // 壓縮品質為 70%
-                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                preview.src = compressedBase64;
-                preview.classList.remove('hidden');
-                document.getElementById('media-preview-container').dataset.mediaType = 'image';
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
+    reader.onload = function(event) {
+        preview.src = event.target.result;
+        preview.classList.remove('hidden');
+        document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
+    };
+    reader.readAsDataURL(file);
 }
 
 function resetUploadForm() {
+    selectedFile = null;
     const priceEl = document.getElementById('post-price');
     if (priceEl) priceEl.value = '';
-    
     const captionEl = document.getElementById('post-caption');
     if (captionEl) captionEl.value = '';
-    
     const viewFreeEl = document.getElementById('view-free');
     if (viewFreeEl) viewFreeEl.checked = true;
 
@@ -86,24 +54,42 @@ function resetUploadForm() {
     document.getElementById('media-placeholder').classList.remove('hidden');
     document.getElementById('media-preview-container').dataset.mediaType = ''; 
     document.getElementById('media-preview').src = '';
+    document.getElementById('video-preview').src = '';
 }
 
-// 原本：const userId = localStorage.getItem('userId');
-// 修改如下：
+// ✨ 核心功能：上傳檔案到 Cloudflare R2
+async function uploadToR2(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // 請換成你剛才部署成功的 Worker 網址
+    const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
+
+    const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) throw new Error('上傳到 R2 失敗');
+    
+    const result = await response.json();
+    return result.url; // 這裡回傳的是 https://pub-xxx.r2.dev/檔名.jpg
+}
 
 window.publishPost = async function() {
     const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
+    const originalBtnText = publishBtn.innerText;
+    
     publishBtn.innerText = "驗證身分中...";
     publishBtn.disabled = true;
 
-    // 安全修復：從 Supabase 取得真實 Session，不信任 LocalStorage
+    // 1. 安全檢查
     const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
     if (authError || !user) {
-        publishBtn.innerText = "發佈";
+        publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
-        return alert('請先登入後再發佈！或登入已過期。');
+        return alert('請先登入！');
     }
-    const realUserId = user.id; // 這才是安全的 ID
 
     const captionEl = document.getElementById('post-caption');
     const caption = captionEl ? captionEl.value.trim() : '';
@@ -112,24 +98,28 @@ window.publishPost = async function() {
     const viewPaidEl = document.getElementById('view-paid');
     const isPaid = viewPaidEl ? viewPaidEl.checked : false;
 
-    let mediaType = document.getElementById('media-preview-container').dataset.mediaType || 'text';
-    if (mediaType === 'text' && !caption) {
-        publishBtn.innerText = "發佈";
+    if (!selectedFile && !caption) {
+        publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
-        return alert('請輸入文字內容或上傳相片/影片！');
+        return alert('請輸入文字內容或上傳檔案！');
     }
 
-    let mediaUrl = '';
-    if (mediaType === 'image') mediaUrl = document.getElementById('media-preview').src;
-    if (mediaType === 'video') mediaUrl = document.getElementById('video-preview').src;
-
-    publishBtn.innerText = "發佈中...";
+    let finalMediaUrl = '';
 
     try {
+        // 2. 如果有選擇檔案，先執行 R2 上傳
+        if (selectedFile) {
+            publishBtn.innerText = "上傳媒體中...";
+            finalMediaUrl = await uploadToR2(selectedFile);
+            console.log("R2 上傳成功:", finalMediaUrl);
+        }
+
+        // 3. 寫入 Supabase 資料庫
+        publishBtn.innerText = "發佈中...";
         const { error } = await window.supabaseClient.from('posts').insert([{
-            user_id: realUserId, // 使用真實 ID
-            caption: escapeHTML(caption), // 順便防 XSS
-            media_url: mediaUrl,
+            user_id: user.id,
+            caption: window.escapeHTML(caption),
+            media_url: finalMediaUrl, // 存入 R2 的公開網址
             is_paid: isPaid,
             price: price
         }]);
@@ -138,13 +128,13 @@ window.publishPost = async function() {
 
         alert('✨ 發佈成功！');
         closeUploadModal();
-        
         if (typeof renderDiscovery === 'function') renderDiscovery();
+
     } catch (err) {
-        console.error("發佈失敗:", err);
-        alert('發佈失敗，請檢查網路連線。');
+        console.error("發佈流程失敗:", err);
+        alert('發佈失敗: ' + err.message);
     } finally {
-        publishBtn.innerText = "發佈";
+        publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
     }
 }
