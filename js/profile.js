@@ -1,37 +1,31 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 頭像縮放 + 安全強化最終完整版
+// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 頭像縮放平移 (Zoom & Pan) 完整版
 // ==========================================
 
-// ✨ 配置：R2 Uploader Worker 網址
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
 
-// ✨ 新增：暫存原始頭像圖片物件，供縮放使用
+// ✨ 全局狀態：儲存原始圖片物件，以及目前的縮放和位移數據
 let currentAvatarFileObj = null;
+let avatarState = { zoom: 1, x: 0, y: 0 };
 
-// 🛡️ 內部工具：防止 XSS 攻擊
 window.escapeHTML = function(str) {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, function(m) {
         return {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
         }[m];
     });
 };
 
-// 🔐 內部工具：獲取當前真實經過驗證的 User ID
 async function getAuthenticatedUserId() {
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) return null;
     return user.id;
 }
 
-// 🚀 ✨ 修改：將圖片上傳至 R2，並統一使用 .webp 命名
+// 🚀 將圖片上傳至 R2，統一使用 .webp 命名
 async function uploadToR2(base64Str, type = 'avatar') {
     try {
         const myId = await getAuthenticatedUserId();
@@ -39,7 +33,6 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
-        // 檔名規則：類型_ID_時間戳.webp
         const fileName = `${type}_${myId}_${Date.now()}.webp`;
         formData.append('file', blob, fileName);
 
@@ -57,27 +50,36 @@ async function uploadToR2(base64Str, type = 'avatar') {
     }
 }
 
-// 🖼️ ✨ 修改：圖片預覽並強制在 Canvas 轉換為 WebP (加入頭像縮放邏輯)
+// 🖼️ 圖片預覽載入 (區分頭像與一般背景圖)
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                // 如果是頭像，存入全域變數供縮放，並初始化為 1 倍
                 if (imgId === 'edit-avatar-preview') {
+                    // 若為頭像，儲存圖片物件並重設狀態
                     currentAvatarFileObj = img;
-                    const zoomSlider = document.getElementById('avatar-zoom-slider');
-                    if (zoomSlider) zoomSlider.value = 1;
-                    window.updateAvatarZoom(1); 
+                    avatarState = { zoom: 1, x: 0, y: 0 };
+                    
+                    // 重設 HTML 滑桿的值
+                    if (document.getElementById('avatar-zoom-slider')) document.getElementById('avatar-zoom-slider').value = 1;
+                    if (document.getElementById('avatar-x-slider')) document.getElementById('avatar-x-slider').value = 0;
+                    if (document.getElementById('avatar-y-slider')) document.getElementById('avatar-y-slider').value = 0;
+                    
+                    // 顯示控制面板
+                    const controls = document.getElementById('avatar-controls');
+                    if (controls) controls.classList.remove('hidden');
+
+                    // 套用預設變形
+                    window.applyAvatarTransform();
                 } else {
-                    // 背景圖或其他圖片，保持一般的壓縮邏輯
+                    // 背景圖的自動壓縮
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const MAX_SIZE = 1200; // 背景可以大一點
+                    const MAX_SIZE = 1200;
 
-                    // 等比例縮放
                     if (width > height && width > MAX_SIZE) {
                         height *= MAX_SIZE / width;
                         width = MAX_SIZE;
@@ -92,7 +94,6 @@ window.previewImage = function(input, imgId) {
                     ctx.drawImage(img, 0, 0, width, height);
                     
                     const displayImg = document.getElementById(imgId);
-                    // 這裡將格式改為 image/webp，品質設定為 0.8
                     displayImg.src = canvas.toDataURL('image/webp', 0.8);
                     displayImg.classList.remove('hidden');
                 }
@@ -103,39 +104,45 @@ window.previewImage = function(input, imgId) {
     }
 }
 
-// ✨ 新增：頭像縮放即時更新函式
-window.updateAvatarZoom = function(scaleValue) {
+// ✨ 更新頭像的變形狀態 (Zoom / X / Y)
+window.updateAvatarTransform = function(type, value) {
+    if (!currentAvatarFileObj) return;
+    avatarState[type] = parseFloat(value);
+    window.applyAvatarTransform();
+}
+
+// ✨ 實際繪製與裁切的邏輯 (合併 Zoom + X Offset + Y Offset)
+window.applyAvatarTransform = function() {
     if (!currentAvatarFileObj) return;
     
-    const scale = parseFloat(scaleValue);
     const canvas = document.createElement('canvas');
-    const size = 600; // 頭像統一輸出為 600x600 正方形
+    const size = 600; // 統一輸出 600x600 正方形
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
 
-    // 計算繪製比例 (Cover 模式並加上倍率)
     const imgWidth = currentAvatarFileObj.width;
     const imgHeight = currentAvatarFileObj.height;
-    const imgRatio = imgWidth / imgHeight;
+
+    // 1. 計算「蓋滿 (Cover)」畫布的基礎比例
+    const baseScale = Math.max(size / imgWidth, size / imgHeight);
     
-    let drawWidth, drawHeight;
-    if (imgRatio > 1) { // 橫圖
-        drawHeight = size * scale;
-        drawWidth = drawHeight * imgRatio;
-    } else { // 縱圖或正方形
-        drawWidth = size * scale;
-        drawHeight = drawWidth / imgRatio;
-    }
+    // 2. 乘上使用者的縮放倍率
+    const scale = baseScale * avatarState.zoom;
 
-    // 置中繪製
-    const x = (size - drawWidth) / 2;
-    const y = (size - drawHeight) / 2;
+    // 3. 計算實際繪製的長寬
+    const drawWidth = imgWidth * scale;
+    const drawHeight = imgHeight * scale;
 
+    // 4. 計算置中的座標，再加上使用者的 X/Y 偏移量
+    const x = ((size - drawWidth) / 2) + avatarState.x;
+    const y = ((size - drawHeight) / 2) + avatarState.y;
+
+    // 清空並繪製
     ctx.clearRect(0, 0, size, size);
     ctx.drawImage(currentAvatarFileObj, x, y, drawWidth, drawHeight);
 
-    // 更新到預覽圖
+    // 輸出到預覽圖
     const displayImg = document.getElementById('edit-avatar-preview');
     if (displayImg) {
         displayImg.src = canvas.toDataURL('image/webp', 0.8);
@@ -176,9 +183,7 @@ window.openPersonalCenter = async function() {
             const genderInput = document.getElementById('pc-gender');
             if(genderInput) genderInput.value = profRes.data.gender || 'Unspecified';
         }
-    } catch(e) {
-        console.error("無法載入個人中心資料", e);
-    }
+    } catch(e) { console.error("無法載入個人中心資料", e); }
 }
 
 window.closePersonalCenter = function() {
@@ -194,31 +199,21 @@ window.savePersonalCenter = async function() {
     if (!myId) return alert('請先登入');
 
     btn.innerText = "處理中..."; btn.disabled = true;
-
-    const newEmail = document.getElementById('pc-email').value.trim();
-    const newGender = document.getElementById('pc-gender').value;
-    const newBirthday = document.getElementById('pc-birthday').value;
     
     try {
-        const updatePublic = window.supabaseClient.from('profiles').update({ gender: newGender }).eq('id', myId);
+        const updatePublic = window.supabaseClient.from('profiles').update({ gender: document.getElementById('pc-gender').value }).eq('id', myId);
         const updatePrivate = window.supabaseClient.from('user_private_data').upsert({
             id: myId,
-            contact_email: newEmail,
-            birthday: newBirthday,
+            contact_email: document.getElementById('pc-email').value.trim(),
+            birthday: document.getElementById('pc-birthday').value,
             updated_at: new Date()
         });
 
-        const [res1, res2] = await Promise.all([updatePublic, updatePrivate]);
-        if (res1.error) throw res1.error;
-        if (res2.error) throw res2.error;
-
+        await Promise.all([updatePublic, updatePrivate]);
         alert('個人中心資料已更新！');
         closePersonalCenter();
-    } catch(e) {
-        alert('更新失敗: ' + e.message);
-    } finally {
-        btn.innerText = "儲存"; btn.disabled = false;
-    }
+    } catch(e) { alert('更新失敗: ' + e.message); } 
+    finally { btn.innerText = "儲存"; btn.disabled = false; }
 }
 
 // ------------------------------------------
@@ -243,13 +238,10 @@ window.renderProfile = async function() {
             window.supabaseClient.from('posts').select('*').eq('user_id', myId).order('created_at', { ascending: false })
         ]);
 
-        if (profileRes.error) throw profileRes.error;
-        
         const profile = profileRes.data;
         const myPosts = postsRes.data || [];
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
         
-        // ✨ 加入背景圖防破圖處理
         const bannerUrl = (profile.banner_url && profile.banner_url.startsWith('http')) ? profile.banner_url : null;
         const bannerHtml = bannerUrl 
             ? `<img src="${bannerUrl}" class="w-full h-40 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div class="hidden w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>` 
@@ -284,13 +276,9 @@ window.renderProfile = async function() {
         }
         container.innerHTML = html + `</div></div>`;
 
-    } catch (err) {
-        console.error(err);
-        container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`;
-    }
+    } catch (err) { container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`; }
 }
 
-// ✨ 開啟編輯資料彈窗邏輯
 window.openEditProfile = async function() {
     const modal = document.getElementById('edit-profile-modal');
     if (!modal) return;
@@ -299,19 +287,10 @@ window.openEditProfile = async function() {
         const myId = await getAuthenticatedUserId();
         if (!myId) return alert('請先登入');
 
-        const { data: profile, error } = await window.supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('id', myId)
-            .single();
+        const { data: profile } = await window.supabaseClient.from('profiles').select('*').eq('id', myId).single();
 
-        if (error) throw error;
-
-        // 填入資料到編輯框
-        const editName = document.getElementById('edit-display-name');
-        const editBio = document.getElementById('edit-bio');
-        if (editName) editName.value = profile.display_name || '';
-        if (editBio) editBio.value = profile.bio || '';
+        document.getElementById('edit-display-name').value = profile.display_name || '';
+        document.getElementById('edit-bio').value = profile.bio || '';
         
         const avatarPreview = document.getElementById('edit-avatar-preview');
         if (avatarPreview) avatarPreview.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
@@ -322,20 +301,16 @@ window.openEditProfile = async function() {
             bannerPreview.classList.remove('hidden');
         }
 
-        // ✨ 重設縮放狀態
+        // ✨ 清空狀態並隱藏控制面板 (直到用戶選了新圖片才顯示)
         currentAvatarFileObj = null; 
-        const zoomSlider = document.getElementById('avatar-zoom-slider');
-        if (zoomSlider) zoomSlider.value = 1;
+        const controls = document.getElementById('avatar-controls');
+        if (controls) controls.classList.add('hidden');
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-    } catch (err) {
-        console.error(err);
-        alert("無法讀取個人資料");
-    }
+    } catch (err) { alert("無法讀取個人資料"); }
 };
 
-// ✨ 關閉編輯資料彈窗
 window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
     if (modal) {
@@ -344,7 +319,6 @@ window.closeEditProfile = function() {
     }
 };
 
-// ✨ 儲存個人資料 (整合 R2 + WebP + 防破圖)
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
@@ -356,13 +330,8 @@ window.saveProfileData = async function() {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
-        // 若圖片是剛選擇的 WebP Base64 數據，則上傳至 R2
-        if (avatarSrc.startsWith('data:image')) {
-            avatarSrc = await uploadToR2(avatarSrc, 'avatar');
-        }
-        if (bannerSrc.startsWith('data:image')) {
-            bannerSrc = await uploadToR2(bannerSrc, 'banner');
-        }
+        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadToR2(avatarSrc, 'avatar');
+        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadToR2(bannerSrc, 'banner');
 
         const updateData = {
             display_name: document.getElementById('edit-display-name').value.trim(),
@@ -375,14 +344,10 @@ window.saveProfileData = async function() {
         if (error) throw error;
 
         localStorage.setItem('myChatName', updateData.display_name);
-        
         closeEditProfile();
         renderProfile();
-    } catch (err) {
-        alert("更新失敗：" + err.message);
-    } finally {
-        btn.innerText = "儲存"; btn.disabled = false;
-    }
+    } catch (err) { alert("更新失敗：" + err.message); } 
+    finally { btn.innerText = "儲存"; btn.disabled = false; }
 }
 
 // ------------------------------------------
@@ -398,7 +363,6 @@ window.viewOtherProfile = async function(userId) {
 
     const modal = document.getElementById('other-profile-modal');
     if(!modal) return;
-
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
