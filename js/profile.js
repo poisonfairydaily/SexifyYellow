@@ -1,13 +1,13 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + 安全強化 + 編輯功能完整修復版
+// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 安全強化最終完整版
 // ==========================================
 
-// ✨ 修復：避免重複宣告 WORKER_URL 導致 SyntaxError
+// ✨ 配置：R2 Uploader Worker 網址
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
 
-// 內部工具：防止 XSS 攻擊
+// 🛡️ 內部工具：防止 XSS 攻擊
 window.escapeHTML = function(str) {
     if (!str) return '';
     return String(str).replace(/[&<>"']/g, function(m) {
@@ -21,14 +21,14 @@ window.escapeHTML = function(str) {
     });
 };
 
-// 內部工具：獲取當前真實經過驗證的 User ID
+// 🔐 內部工具：獲取當前真實經過驗證的 User ID
 async function getAuthenticatedUserId() {
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) return null;
     return user.id;
 }
 
-// ✨ 修改：將圖片上傳至 R2 而非 Supabase Storage
+// 🚀 ✨ 修改：將圖片上傳至 R2，並統一使用 .webp 命名
 async function uploadToR2(base64Str, type = 'avatar') {
     try {
         const myId = await getAuthenticatedUserId();
@@ -36,8 +36,8 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
-        // 檔名規則：類型_ID_時間戳.jpg
-        const fileName = `${type}_${myId}_${Date.now()}.jpg`;
+        // 檔名規則：類型_ID_時間戳.webp
+        const fileName = `${type}_${myId}_${Date.now()}.webp`;
         formData.append('file', blob, fileName);
 
         const response = await fetch(`${window.WORKER_URL}/`, {
@@ -54,6 +54,7 @@ async function uploadToR2(base64Str, type = 'avatar') {
     }
 }
 
+// 🖼️ ✨ 修改：圖片預覽並強制在 Canvas 轉換為 WebP
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -65,6 +66,7 @@ window.previewImage = function(input, imgId) {
                 let height = img.height;
                 const MAX_SIZE = 800;
 
+                // 等比例縮放
                 if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
                     width = MAX_SIZE;
@@ -77,8 +79,10 @@ window.previewImage = function(input, imgId) {
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
+                
                 const displayImg = document.getElementById(imgId);
-                displayImg.src = canvas.toDataURL('image/jpeg', 0.7);
+                // ✨ 這裡將格式改為 image/webp，品質設定為 0.8
+                displayImg.src = canvas.toDataURL('image/webp', 0.8);
                 displayImg.classList.remove('hidden');
             };
             img.src = event.target.result;
@@ -87,7 +91,10 @@ window.previewImage = function(input, imgId) {
     }
 }
 
-// 1. 個人中心 - 讀取分表資料 (Email/生日)
+// ------------------------------------------
+// 1. 個人中心模組 (處理私密數據)
+// ------------------------------------------
+
 window.openPersonalCenter = async function() {
     try {
         if(typeof toggleSettings === 'function') toggleSettings(); 
@@ -162,7 +169,10 @@ window.savePersonalCenter = async function() {
     }
 }
 
-// 2. 個人專頁主渲染
+// ------------------------------------------
+// 2. 個人專頁與編輯資料模組
+// ------------------------------------------
+
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     if (!container) return;
@@ -225,7 +235,7 @@ window.renderProfile = async function() {
     }
 }
 
-// ✨ 修復：開啟編輯資料彈窗邏輯
+// ✨ 開啟編輯資料彈窗邏輯
 window.openEditProfile = async function() {
     const modal = document.getElementById('edit-profile-modal');
     if (!modal) return;
@@ -234,7 +244,6 @@ window.openEditProfile = async function() {
         const myId = await getAuthenticatedUserId();
         if (!myId) return alert('請先登入');
 
-        // 讀取最新資料
         const { data: profile, error } = await window.supabaseClient
             .from('profiles')
             .select('*')
@@ -258,7 +267,6 @@ window.openEditProfile = async function() {
             bannerPreview.classList.remove('hidden');
         }
 
-        // 顯示 Modal
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     } catch (err) {
@@ -267,7 +275,7 @@ window.openEditProfile = async function() {
     }
 };
 
-// ✨ 修復：關閉編輯資料彈窗
+// ✨ 關閉編輯資料彈窗
 window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
     if (modal) {
@@ -276,19 +284,19 @@ window.closeEditProfile = function() {
     }
 };
 
-// 儲存個人資料修改
+// ✨ 儲存個人資料 (整合 R2 + WebP)
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
     if (!myId) return alert('請登入');
 
-    btn.innerText = "處理中..."; btn.disabled = true;
+    btn.innerText = "轉檔上傳中..."; btn.disabled = true;
     
     try {
         let avatarSrc = document.getElementById('edit-avatar-preview').src;
         let bannerSrc = document.getElementById('edit-banner-preview').src;
 
-        // 若圖片是剛選擇的 Base64 格式，則上傳至 R2
+        // 若圖片是剛選擇的 WebP Base64 數據，則上傳至 R2
         if (avatarSrc.startsWith('data:image')) {
             avatarSrc = await uploadToR2(avatarSrc, 'avatar');
         }
@@ -306,10 +314,8 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        // 更新本地存儲的聊天顯示名稱
         localStorage.setItem('myChatName', updateData.display_name);
         
-        // ✨ 修改：關閉編輯窗並重新渲染
         closeEditProfile();
         renderProfile();
     } catch (err) {
@@ -319,7 +325,10 @@ window.saveProfileData = async function() {
     }
 }
 
-// 3. 他人主頁
+// ------------------------------------------
+// 3. 他人主頁模組
+// ------------------------------------------
+
 window.viewOtherProfile = async function(userId) {
     const myId = await getAuthenticatedUserId();
     if (userId === myId) {
@@ -399,7 +408,10 @@ window.closeOtherProfile = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 }
 
-// 4. 粉絲與訂閱面板邏輯
+// ------------------------------------------
+// 4. 粉絲與訂閱清單模組
+// ------------------------------------------
+
 window.openFansSubsModal = function() {
     if(typeof toggleSettings === 'function') toggleSettings(); 
     const modal = document.getElementById('fans-subs-modal');
@@ -503,7 +515,10 @@ window.unfollowUserFromList = async function(subscriptionId, btn) {
     } catch(e) { alert("取消失敗"); }
 }
 
+// ------------------------------------------
 // ✨ 初始化渲染
+// ------------------------------------------
+
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.renderProfile === 'function') {
         window.renderProfile();
