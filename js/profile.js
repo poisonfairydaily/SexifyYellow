@@ -2,8 +2,10 @@
 // js/profile.js - R2 儲存整合 + 安全強化完整最終版
 // ==========================================
 
-// ✨ 配置：指向你的 Cloudflare Worker
-const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
+// ✨ 修復：避免重複宣告 WORKER_URL
+if (typeof window.WORKER_URL === 'undefined') {
+    window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
+}
 
 // 內部工具：防止 XSS 攻擊
 window.escapeHTML = function(str) {
@@ -34,11 +36,10 @@ async function uploadToR2(base64Str, type = 'avatar') {
         const blob = await res.blob();
         
         const formData = new FormData();
-        // 檔名規則：類型_ID_時間戳.jpg
         const fileName = `${type}_${myId}_${Date.now()}.jpg`;
         formData.append('file', blob, fileName);
 
-        const response = await fetch(`${WORKER_URL}/`, {
+        const response = await fetch(`${window.WORKER_URL}/`, {
             method: 'POST',
             body: formData
         });
@@ -171,7 +172,7 @@ window.renderProfile = async function() {
         return; 
     }
 
-    container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
+    container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl text-sexify"></i></div>`;
 
     try {
         const [profileRes, postsRes] = await Promise.all([
@@ -267,7 +268,6 @@ window.saveProfileData = async function() {
         if (error) throw error;
 
         localStorage.setItem('myChatName', updateData.display_name);
-        
         if(typeof closeEditProfile === 'function') closeEditProfile();
         renderProfile();
     } catch (err) {
@@ -460,3 +460,10 @@ window.unfollowUserFromList = async function(subscriptionId, btn) {
         setTimeout(() => item.remove(), 200);
     } catch(e) { alert("取消失敗"); }
 }
+
+// ✨ 初始化渲染
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.renderProfile === 'function') {
+        window.renderProfile();
+    }
+});
