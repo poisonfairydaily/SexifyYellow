@@ -23,6 +23,13 @@
         /* 彈窗滑入動畫 */
         .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        /* ✨ 新增：頭像編輯器防止手機預設滑動干擾 */
+        #avatar-editor-container {
+            touch-action: none;
+            user-select: none;
+            cursor: move;
+        }
     </style>
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
@@ -78,6 +85,15 @@
                 <h2 class="font-black text-lg text-gray-900">設定與數據</h2>
                 <button onclick="toggleSettings()" class="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </header>
+            
+            <div class="p-5 border-b bg-white flex items-center gap-4">
+                <img id="sidebar-avatar" src="https://ui-avatars.com/api/?name=User" class="w-14 h-14 rounded-full object-cover shadow-sm border border-gray-100">
+                <div class="flex-1 overflow-hidden">
+                    <h3 id="sidebar-name" class="font-black text-lg truncate">載入中...</h3>
+                    <p class="text-xs text-gray-500 font-bold mt-0.5 truncate">@<span id="sidebar-username">...</span></p>
+                </div>
+            </div>
+
             <div class="flex-1 overflow-y-auto py-4 space-y-2 px-4">
                 <button onclick="openPersonalCenter()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
                     <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-id-card"></i></div>
@@ -183,45 +199,39 @@
                 <h3 class="font-black text-lg">編輯個人資料</h3>
                 <button onclick="closeEditProfile()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
+            
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 
-                <div class="flex flex-col items-center mb-4">
-                    <div class="relative group cursor-pointer" onclick="document.getElementById('avatar-input').click()">
-                        <img id="edit-avatar-preview" src="" class="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md">
-                        <div class="absolute inset-0 bg-black/20 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                            <i class="fa-solid fa-camera text-white"></i>
+                <div class="flex flex-col items-center mb-6">
+                    <div id="avatar-editor-container" class="relative w-48 h-48 rounded-full border-4 border-white shadow-xl bg-gray-100 overflow-hidden group">
+                        <canvas id="avatar-canvas" class="w-full h-full"></canvas>
+                        
+                        <div class="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center pointer-events-none">
+                            <i class="fa-solid fa-camera text-white text-xl"></i>
                         </div>
                     </div>
-                    <input type="file" id="avatar-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-avatar-preview')">
-                    <p class="text-[10px] text-gray-400 mt-2 font-bold uppercase">點擊更換頭像</p>
-
-                    <div id="avatar-controls" class="hidden mt-4 w-full max-w-[220px] bg-gray-50 p-4 rounded-2xl space-y-3 shadow-inner">
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase">縮放 (Zoom)</label>
-                                <i class="fa-solid fa-magnifying-glass text-gray-300 text-[10px]"></i>
-                            </div>
-                            <input type="range" id="avatar-zoom-slider" min="1" max="3" step="0.01" value="1" class="w-full accent-sexify" oninput="window.updateAvatarTransform('zoom', this.value)">
-                        </div>
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase">左右調整 (X)</label>
-                                <i class="fa-solid fa-arrows-left-right text-gray-300 text-[10px]"></i>
-                            </div>
-                            <input type="range" id="avatar-x-slider" min="-300" max="300" step="1" value="0" class="w-full accent-sexify" oninput="window.updateAvatarTransform('x', this.value)">
-                        </div>
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase">上下調整 (Y)</label>
-                                <i class="fa-solid fa-arrows-up-down text-gray-300 text-[10px]"></i>
-                            </div>
-                            <input type="range" id="avatar-y-slider" min="-300" max="300" step="1" value="0" class="w-full accent-sexify" oninput="window.updateAvatarTransform('y', this.value)">
-                        </div>
+                    
+                    <div class="mt-4 flex gap-4">
+                        <button onclick="document.getElementById('avatar-input').click()" class="text-[10px] bg-gray-100 text-gray-500 px-4 py-2 rounded-full font-black uppercase hover:bg-gray-200 transition">更換圖片</button>
+                        <button onclick="resetAvatarTransform()" class="text-[10px] bg-gray-100 text-gray-500 px-4 py-2 rounded-full font-black uppercase hover:bg-gray-200 transition">重置</button>
                     </div>
+                    <p class="text-[9px] text-gray-400 mt-2 font-bold uppercase">💡 拖曳圖片移動位置 / 滾輪縮放</p>
+                    <input type="file" id="avatar-input" class="hidden" accept="image/*" onchange="handleAvatarFileSelect(this)">
                 </div>
 
-                <input type="file" id="banner-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-banner-preview')">
-                <img id="edit-banner-preview" src="" class="hidden">
+                <div>
+                    <label class="block text-[11px] font-black text-gray-400 uppercase mb-2 ml-1">個人背景圖</label>
+                    <div class="relative w-full h-24 bg-gray-100 rounded-2xl overflow-hidden cursor-pointer group" onclick="document.getElementById('banner-input').click()">
+                        <img id="edit-banner-preview" src="" class="w-full h-full object-cover hidden">
+                        <div id="banner-placeholder" class="w-full h-full bg-gradient-to-r from-gray-200 to-gray-300 flex items-center justify-center">
+                            <i class="fa-solid fa-image text-gray-400 text-2xl"></i>
+                        </div>
+                        <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                            <span class="text-white text-[10px] font-bold">點擊更換</span>
+                        </div>
+                    </div>
+                    <input type="file" id="banner-input" class="hidden" accept="image/*" onchange="previewBannerImage(this)">
+                </div>
 
                 <div>
                     <label class="block text-[11px] font-black text-gray-400 uppercase mb-1 ml-1">顯示名稱</label>
@@ -232,6 +242,7 @@
                     <textarea id="edit-bio" rows="3" class="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-sexify outline-none resize-none"></textarea>
                 </div>
             </div>
+            
             <div class="p-6 pt-0">
                 <button id="save-profile-btn" onclick="saveProfileData()" class="w-full bg-sexify text-white font-black py-4 rounded-2xl active:scale-95 transition shadow-lg">儲存修改</button>
             </div>
@@ -279,7 +290,7 @@
 
     <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-500 h-screen overflow-hidden flex flex-col relative">
         <header class="bg-white/90 backdrop-blur-md px-4 py-3 flex justify-between items-center sticky top-0 z-50 border-b">
-            <button onclick="toggleSettings()" class="text-gray-700 w-8 active:scale-90 transition"><i class="fa-solid fa-bars text-xl"></i></button>
+            <button onclick="toggleSettings(); window.loadSidebarProfile();" class="text-gray-700 w-8 active:scale-90 transition"><i class="fa-solid fa-bars text-xl"></i></button>
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify flex-1 text-center">SEXIFY</h1>
             <div class="w-8 flex justify-end">
                 <button onclick="toggleNotifications()" class="text-gray-700 relative active:scale-90 transition">
@@ -359,6 +370,7 @@
     <script src="js/search.js"></script>
 
     <script>
+        // 商城儲值開關
         window.toggleRechargeArea = function() {
             const drawer = document.getElementById('recharge-drawer');
             if (drawer) {
@@ -367,6 +379,7 @@
             }
         };
 
+        // 關閉聊天室
         window.closeChat = function() {
             window.activeRoomId = null;
             const modal = document.getElementById('chat-modal');
@@ -376,8 +389,31 @@
             }
         };
 
+        // ✨ 新增：側邊欄自動抓取用戶資料邏輯
+        window.loadSidebarProfile = async function() {
+            try {
+                if (!window.supabaseClient) return;
+                const { data: { user } } = await window.supabaseClient.auth.getUser();
+                if (!user) return;
+                
+                const { data: profile } = await window.supabaseClient.from('profiles').select('display_name, username, avatar_url').eq('id', user.id).single();
+                if (profile) {
+                    const avatar = document.getElementById('sidebar-avatar');
+                    const name = document.getElementById('sidebar-name');
+                    const username = document.getElementById('sidebar-username');
+                    
+                    if (avatar) avatar.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
+                    if (name) name.innerText = profile.display_name || '未命名用戶';
+                    if (username) username.innerText = profile.username || 'unknown';
+                }
+            } catch (e) {
+                console.error('Sidebar Profile Load Error:', e);
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             if (window.refreshBalanceUI) window.refreshBalanceUI();
+            window.loadSidebarProfile(); // 初始載入一次
         });
     </script>
 </body>
