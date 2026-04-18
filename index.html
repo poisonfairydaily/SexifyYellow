@@ -183,7 +183,8 @@
                 <h3 class="font-black text-lg">編輯個人資料</h3>
                 <button onclick="closeEditProfile()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                
                 <div class="flex flex-col items-center mb-4">
                     <div class="relative group cursor-pointer" onclick="document.getElementById('avatar-input').click()">
                         <img id="edit-avatar-preview" src="" class="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md">
@@ -193,7 +194,32 @@
                     </div>
                     <input type="file" id="avatar-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-avatar-preview')">
                     <p class="text-[10px] text-gray-400 mt-2 font-bold uppercase">點擊更換頭像</p>
+
+                    <div id="avatar-controls" class="hidden mt-4 w-full max-w-[220px] bg-gray-50 p-4 rounded-2xl space-y-3 shadow-inner">
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase">縮放 (Zoom)</label>
+                                <i class="fa-solid fa-magnifying-glass text-gray-300 text-[10px]"></i>
+                            </div>
+                            <input type="range" id="avatar-zoom-slider" min="1" max="3" step="0.01" value="1" class="w-full accent-sexify" oninput="window.updateAvatarTransform('zoom', this.value)">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase">左右調整 (X)</label>
+                                <i class="fa-solid fa-arrows-left-right text-gray-300 text-[10px]"></i>
+                            </div>
+                            <input type="range" id="avatar-x-slider" min="-300" max="300" step="1" value="0" class="w-full accent-sexify" oninput="window.updateAvatarTransform('x', this.value)">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase">上下調整 (Y)</label>
+                                <i class="fa-solid fa-arrows-up-down text-gray-300 text-[10px]"></i>
+                            </div>
+                            <input type="range" id="avatar-y-slider" min="-300" max="300" step="1" value="0" class="w-full accent-sexify" oninput="window.updateAvatarTransform('y', this.value)">
+                        </div>
+                    </div>
                 </div>
+
                 <input type="file" id="banner-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-banner-preview')">
                 <img id="edit-banner-preview" src="" class="hidden">
 
@@ -247,8 +273,7 @@
                 </div>
                 <button onclick="closeFansSubsModal()" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button>
             </header>
-            <div id="fans-subs-list" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-50">
-                </div>
+            <div id="fans-subs-list" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-50"></div>
         </div>
     </div>
 
@@ -334,7 +359,6 @@
     <script src="js/search.js"></script>
 
     <script>
-        // 內嵌 UI 小邏輯
         window.toggleRechargeArea = function() {
             const drawer = document.getElementById('recharge-drawer');
             if (drawer) {
