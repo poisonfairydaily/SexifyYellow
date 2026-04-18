@@ -1,11 +1,14 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 安全強化最終完整版
+// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 頭像縮放 + 安全強化最終完整版
 // ==========================================
 
 // ✨ 配置：R2 Uploader Worker 網址
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
+
+// ✨ 新增：暫存原始頭像圖片物件，供縮放使用
+let currentAvatarFileObj = null;
 
 // 🛡️ 內部工具：防止 XSS 攻擊
 window.escapeHTML = function(str) {
@@ -54,40 +57,89 @@ async function uploadToR2(base64Str, type = 'avatar') {
     }
 }
 
-// 🖼️ ✨ 修改：圖片預覽並強制在 Canvas 轉換為 WebP
+// 🖼️ ✨ 修改：圖片預覽並強制在 Canvas 轉換為 WebP (加入頭像縮放邏輯)
 window.previewImage = function(input, imgId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const MAX_SIZE = 800;
+                // 如果是頭像，存入全域變數供縮放，並初始化為 1 倍
+                if (imgId === 'edit-avatar-preview') {
+                    currentAvatarFileObj = img;
+                    const zoomSlider = document.getElementById('avatar-zoom-slider');
+                    if (zoomSlider) zoomSlider.value = 1;
+                    window.updateAvatarZoom(1); 
+                } else {
+                    // 背景圖或其他圖片，保持一般的壓縮邏輯
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_SIZE = 1200; // 背景可以大一點
 
-                // 等比例縮放
-                if (width > height && width > MAX_SIZE) {
-                    height *= MAX_SIZE / width;
-                    width = MAX_SIZE;
-                } else if (height > MAX_SIZE) {
-                    width *= MAX_SIZE / height;
-                    height = MAX_SIZE;
+                    // 等比例縮放
+                    if (width > height && width > MAX_SIZE) {
+                        height *= MAX_SIZE / width;
+                        width = MAX_SIZE;
+                    } else if (height > MAX_SIZE) {
+                        width *= MAX_SIZE / height;
+                        height = MAX_SIZE;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const displayImg = document.getElementById(imgId);
+                    // 這裡將格式改為 image/webp，品質設定為 0.8
+                    displayImg.src = canvas.toDataURL('image/webp', 0.8);
+                    displayImg.classList.remove('hidden');
                 }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                const displayImg = document.getElementById(imgId);
-                // ✨ 這裡將格式改為 image/webp，品質設定為 0.8
-                displayImg.src = canvas.toDataURL('image/webp', 0.8);
-                displayImg.classList.remove('hidden');
             };
             img.src = event.target.result;
         }
         reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// ✨ 新增：頭像縮放即時更新函式
+window.updateAvatarZoom = function(scaleValue) {
+    if (!currentAvatarFileObj) return;
+    
+    const scale = parseFloat(scaleValue);
+    const canvas = document.createElement('canvas');
+    const size = 600; // 頭像統一輸出為 600x600 正方形
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // 計算繪製比例 (Cover 模式並加上倍率)
+    const imgWidth = currentAvatarFileObj.width;
+    const imgHeight = currentAvatarFileObj.height;
+    const imgRatio = imgWidth / imgHeight;
+    
+    let drawWidth, drawHeight;
+    if (imgRatio > 1) { // 橫圖
+        drawHeight = size * scale;
+        drawWidth = drawHeight * imgRatio;
+    } else { // 縱圖或正方形
+        drawWidth = size * scale;
+        drawHeight = drawWidth / imgRatio;
+    }
+
+    // 置中繪製
+    const x = (size - drawWidth) / 2;
+    const y = (size - drawHeight) / 2;
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(currentAvatarFileObj, x, y, drawWidth, drawHeight);
+
+    // 更新到預覽圖
+    const displayImg = document.getElementById('edit-avatar-preview');
+    if (displayImg) {
+        displayImg.src = canvas.toDataURL('image/webp', 0.8);
+        displayImg.classList.remove('hidden');
     }
 }
 
@@ -196,16 +248,19 @@ window.renderProfile = async function() {
         const profile = profileRes.data;
         const myPosts = postsRes.data || [];
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
-        const bannerUrl = profile.banner_url || '';
-
-        const bannerHtml = bannerUrl ? `<img src="${bannerUrl}" class="w-full h-40 object-cover">` : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
+        
+        // ✨ 加入背景圖防破圖處理
+        const bannerUrl = (profile.banner_url && profile.banner_url.startsWith('http')) ? profile.banner_url : null;
+        const bannerHtml = bannerUrl 
+            ? `<img src="${bannerUrl}" class="w-full h-40 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div class="hidden w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>` 
+            : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
 
         let html = `
             <div class="bg-white pb-4 shadow-sm relative">
                 ${bannerHtml}
                 <div class="px-5 relative -mt-12">
                     <div class="flex justify-between items-end mb-3">
-                        <img src="${avatarUrl}" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
+                        <img src="${avatarUrl}" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm" onerror="this.src='https://ui-avatars.com/api/?name=U'">
                         <button onclick="openEditProfile()" class="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm mb-2">編輯資料</button>
                     </div>
                     <div>
@@ -267,6 +322,11 @@ window.openEditProfile = async function() {
             bannerPreview.classList.remove('hidden');
         }
 
+        // ✨ 重設縮放狀態
+        currentAvatarFileObj = null; 
+        const zoomSlider = document.getElementById('avatar-zoom-slider');
+        if (zoomSlider) zoomSlider.value = 1;
+
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     } catch (err) {
@@ -284,7 +344,7 @@ window.closeEditProfile = function() {
     }
 };
 
-// ✨ 儲存個人資料 (整合 R2 + WebP)
+// ✨ 儲存個人資料 (整合 R2 + WebP + 防破圖)
 window.saveProfileData = async function() {
     const btn = document.getElementById('save-profile-btn');
     const myId = await getAuthenticatedUserId();
