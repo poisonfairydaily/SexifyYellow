@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - R2 儲存 + 錄音跨平台修復 + CORS 優化版
+// js/messages.js - Supabase Storage 原生儲存 + 錄音優化版
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,9 +11,28 @@ let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
 
-// 確保全域統一的 Worker 網址
-if (typeof window.WORKER_URL === 'undefined') {
-    window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
+// 內部工具：將檔案上傳至 Supabase Storage (media 桶)
+async function uploadMediaToSupabase(fileBlob, filePath) {
+    try {
+        const { data, error } = await window.supabaseClient.storage
+            .from('media')
+            .upload(filePath, fileBlob, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (error) throw error;
+
+        // 取得公開網址
+        const { data: publicData } = window.supabaseClient.storage
+            .from('media')
+            .getPublicUrl(filePath);
+
+        return publicData.publicUrl;
+    } catch (err) {
+        console.error("Supabase 上傳失敗:", err);
+        throw err;
+    }
 }
 
 // 純 CSS 頭像產生器 (解決 UI-Avatars 的 CORS 報錯)
@@ -173,7 +192,6 @@ window.renderMessages = async function() {
 };
 
 window.openChat = async function(targetUid, displayName, avatarUrl) {
-    // 修復：統一名稱調用 getValidUserId
     const myId = await getValidUserId(); 
     if (!myId) return;
     window.activeChatTarget = targetUid;
@@ -181,7 +199,6 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
     
     if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = safeText(displayName);
     
-    // 修復：正確對應 HTML 的 ID
     const avatarImg = document.getElementById('chat-target-avatar');
     if (avatarImg) {
         avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
@@ -242,10 +259,13 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
     if (!confirm('確定回收這條訊息？(相關媒體檔案也將從伺服器永久刪除)')) return;
     
     try {
-        if (mediaUrl && mediaUrl.includes(window.WORKER_URL)) {
-            const fileName = mediaUrl.split('/').pop();
-            await fetch(`${window.WORKER_URL}/${fileName}`, { method: 'DELETE' });
-            console.log("R2 檔案已連動刪除:", fileName);
+        // 如果有 Supabase Storage 的網址，同步刪除實體檔案
+        if (mediaUrl && mediaUrl.includes('/storage/v1/object/public/media/')) {
+            const filePath = mediaUrl.split('/storage/v1/object/public/media/')[1];
+            if (filePath) {
+                await window.supabaseClient.storage.from('media').remove([filePath]);
+                console.log("Supabase Storage 檔案已連動刪除:", filePath);
+            }
         }
 
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
@@ -265,7 +285,7 @@ window.closeChat = function() {
 };
 
 // ==========================================
-// 🎙️ 語音錄製核心邏輯 (跨平台兼容優化)
+// 🎙️ 語音錄製核心邏輯 (直接上傳 Supabase)
 // ==========================================
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
@@ -273,10 +293,8 @@ window.toggleVoiceRecord = async function() {
     
     if (!window.isRecording) {
         try {
-            // 請求麥克風權限
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            // 不強制指定 webm，讓瀏覽器 (尤其是 Safari) 自行決定最佳的封裝格式
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             
@@ -292,26 +310,23 @@ window.toggleVoiceRecord = async function() {
                 const audioBlob = new Blob(audioChunks, { type: mimeType });
                 const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 
-                const formData = new FormData();
-                formData.append('file', audioBlob, `voice_${myId}_${Date.now()}.${ext}`);
+                // 設定在 Supabase Storage 中的路徑
+                const filePath = `chat_media/voice_${myId}_${Date.now()}.${ext}`;
 
-                // UI 上傳狀態回饋
                 const originalPlaceholder = input.placeholder;
                 input.placeholder = "語音上傳中，請稍候...";
                 input.disabled = true;
 
                 try {
-                    const response = await fetch(`${window.WORKER_URL}/`, { method: 'POST', body: formData });
-                    const result = await response.json();
-                    if (result.url) {
-                        window.selectedMediaUrl = result.url;
+                    // 呼叫上方的 Supabase 上傳工具函數
+                    const publicUrl = await uploadMediaToSupabase(audioBlob, filePath);
+                    if (publicUrl) {
+                        window.selectedMediaUrl = publicUrl;
                         await window.handleSendAction();
-                    } else {
-                        throw new Error("Worker 未回傳 URL");
                     }
                 } catch (e) { 
-                    console.error("上傳錯誤:", e);
-                    alert('語音上傳失敗，請確認 Cloudflare Worker 的 CORS 設定是否正確。'); 
+                    console.error("語音上傳錯誤:", e);
+                    alert('語音上傳失敗，請確認網路連線與資料庫權限。'); 
                 } finally {
                     input.placeholder = originalPlaceholder;
                     input.disabled = false;
@@ -323,7 +338,6 @@ window.toggleVoiceRecord = async function() {
             mediaRecorder.start();
             window.isRecording = true;
             
-            // 改變 UI 為錄音中狀態
             if(btnIcon) {
                 btnIcon.classList.remove('fa-microphone');
                 btnIcon.classList.add('fa-stop', 'text-red-500', 'animate-pulse');
@@ -333,13 +347,11 @@ window.toggleVoiceRecord = async function() {
             alert('無法開啟麥克風。請確認：\n1. 您的網站使用 HTTPS 連線\n2. 已同意瀏覽器存取麥克風權限。'); 
         }
     } else {
-        // 停止錄音
         if(mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
         }
         window.isRecording = false;
         
-        // 恢復 UI 狀態
         if(btnIcon) {
             btnIcon.classList.add('fa-microphone');
             btnIcon.classList.remove('fa-stop', 'text-red-500', 'animate-pulse');
@@ -347,6 +359,9 @@ window.toggleVoiceRecord = async function() {
     }
 };
 
+// ==========================================
+// 🖼️ 圖片上傳邏輯 (直接上傳 Supabase)
+// ==========================================
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
     if (!file) return;
@@ -356,17 +371,20 @@ window.handleImageSelection = async function(input) {
     chatInput.placeholder = "圖片上傳中...";
     chatInput.disabled = true;
 
-    const formData = new FormData();
-    formData.append('file', file);
-    
     try {
-        const response = await fetch(`${window.WORKER_URL}/`, { method: 'POST', body: formData });
-        const result = await response.json();
-        if (result.url) {
-            window.selectedMediaUrl = result.url;
+        const myId = await getValidUserId();
+        // 抓取副檔名 (例如 .jpg, .png)
+        const ext = file.name.split('.').pop() || 'jpg';
+        const filePath = `chat_media/img_${myId}_${Date.now()}.${ext}`;
+
+        const publicUrl = await uploadMediaToSupabase(file, filePath);
+        
+        if (publicUrl) {
+            window.selectedMediaUrl = publicUrl;
             await window.handleSendAction();
         }
     } catch (e) { 
+        console.error("圖片上傳錯誤:", e);
         alert('媒體上傳失敗'); 
     } finally {
         chatInput.placeholder = originalPlaceholder;
