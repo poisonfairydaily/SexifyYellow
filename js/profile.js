@@ -1,14 +1,20 @@
 // ==========================================
-// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 頭像縮放平移 (Zoom & Pan) 完整版
+// js/profile.js - R2 儲存整合 + WebP 自動轉檔 + 頭像直覺手勢縮放平移 完整最終版
 // ==========================================
 
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
 
-// ✨ 全局狀態：儲存原始圖片物件，以及目前的縮放和位移數據
-let currentAvatarFileObj = null;
-let avatarState = { zoom: 1, x: 0, y: 0 };
+// ✨ 全局狀態：手勢操作與圖片暫存
+let currentAvatarImage = null; 
+let avatarTransform = { zoom: 1, x: 0, y: 0 }; 
+let isDragging = false;
+let lastMousePos = { x: 0, y: 0 };
+let lastTouchDist = 0;
+let isAvatarChanged = false; // 追蹤是否有修改，避免重複上傳
+
+const AVATAR_CANVAS_SIZE = 600; // 頭像統一輸出解析度
 
 window.escapeHTML = function(str) {
     if (!str) return '';
@@ -50,103 +56,166 @@ async function uploadToR2(base64Str, type = 'avatar') {
     }
 }
 
-// 🖼️ 圖片預覽載入 (區分頭像與一般背景圖)
-window.previewImage = function(input, imgId) {
+// ------------------------------------------
+// ✨ 頭像互動編輯系統 (Canvas + 滑鼠/觸控)
+// ------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+    const canvasContainer = document.getElementById('avatar-editor-container');
+    if (!canvasContainer) return;
+
+    // 滑鼠拖曳 (Pan)
+    canvasContainer.addEventListener('mousedown', e => { 
+        isDragging = true; 
+        lastMousePos = { x: e.clientX, y: e.clientY }; 
+    });
+    
+    window.addEventListener('mousemove', e => {
+        if (!isDragging || !currentAvatarImage) return;
+        avatarTransform.x += (e.clientX - lastMousePos.x);
+        avatarTransform.y += (e.clientY - lastMousePos.y);
+        lastMousePos = { x: e.clientX, y: e.clientY };
+        isAvatarChanged = true;
+        window.drawAvatarCanvas();
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    // 滾輪縮放 (Zoom)
+    canvasContainer.addEventListener('wheel', e => {
+        if (!currentAvatarImage) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.95 : 1.05; // 每次滾動縮放 5%
+        avatarTransform.zoom = Math.min(Math.max(avatarTransform.zoom * delta, 0.5), 5); // 限制 0.5倍 ~ 5倍
+        isAvatarChanged = true;
+        window.drawAvatarCanvas();
+    }, { passive: false });
+
+    // 觸控拖曳與捏合縮放 (Touch Pan & Pinch)
+    canvasContainer.addEventListener('touchstart', e => {
+        isDragging = true;
+        if (e.touches.length === 1) {
+            lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.touches.length === 2) {
+            lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        }
+    });
+
+    canvasContainer.addEventListener('touchmove', e => {
+        if (!isDragging || !currentAvatarImage) return;
+        e.preventDefault(); // 防止手機畫面跟著滑動
+        if (e.touches.length === 1) {
+            avatarTransform.x += (e.touches[0].clientX - lastMousePos.x);
+            avatarTransform.y += (e.touches[0].clientY - lastMousePos.y);
+            lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            isAvatarChanged = true;
+        } else if (e.touches.length === 2) {
+            const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            const delta = dist / lastTouchDist;
+            avatarTransform.zoom = Math.min(Math.max(avatarTransform.zoom * delta, 0.5), 5);
+            lastTouchDist = dist;
+            isAvatarChanged = true;
+        }
+        window.drawAvatarCanvas();
+    }, { passive: false });
+
+    canvasContainer.addEventListener('touchend', () => { 
+        isDragging = false; 
+        lastTouchDist = 0; 
+    });
+});
+
+// 處理使用者選擇新頭像
+window.handleAvatarFileSelect = function(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                currentAvatarImage = img;
+                isAvatarChanged = true;
+                window.resetAvatarTransform();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+};
+
+// 重置位置與縮放
+window.resetAvatarTransform = function() {
+    if (!currentAvatarImage) return;
+    avatarTransform = { zoom: 1, x: 0, y: 0 };
+    window.drawAvatarCanvas();
+};
+
+// 實際繪製畫布邏輯
+window.drawAvatarCanvas = function() {
+    const canvas = document.getElementById('avatar-canvas');
+    if (!canvas || !currentAvatarImage) return;
+
+    canvas.width = AVATAR_CANVAS_SIZE;
+    canvas.height = AVATAR_CANVAS_SIZE;
+    const ctx = canvas.getContext('2d');
+
+    const imgW = currentAvatarImage.width;
+    const imgH = currentAvatarImage.height;
+
+    // Cover 模式計算
+    const baseScale = Math.max(AVATAR_CANVAS_SIZE / imgW, AVATAR_CANVAS_SIZE / imgH);
+    const finalScale = baseScale * avatarTransform.zoom;
+
+    const drawW = imgW * finalScale;
+    const drawH = imgH * finalScale;
+
+    // 置中並加上使用者拖曳的偏移量
+    const offsetX = (AVATAR_CANVAS_SIZE - drawW) / 2 + avatarTransform.x;
+    const offsetY = (AVATAR_CANVAS_SIZE - drawH) / 2 + avatarTransform.y;
+
+    ctx.clearRect(0, 0, AVATAR_CANVAS_SIZE, AVATAR_CANVAS_SIZE);
+    ctx.drawImage(currentAvatarImage, offsetX, offsetY, drawW, drawH);
+};
+
+// ------------------------------------------
+// ✨ 背景圖專用預覽 (自動壓縮 WebP)
+// ------------------------------------------
+window.previewBannerImage = function(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                if (imgId === 'edit-avatar-preview') {
-                    // 若為頭像，儲存圖片物件並重設狀態
-                    currentAvatarFileObj = img;
-                    avatarState = { zoom: 1, x: 0, y: 0 };
-                    
-                    // 重設 HTML 滑桿的值
-                    if (document.getElementById('avatar-zoom-slider')) document.getElementById('avatar-zoom-slider').value = 1;
-                    if (document.getElementById('avatar-x-slider')) document.getElementById('avatar-x-slider').value = 0;
-                    if (document.getElementById('avatar-y-slider')) document.getElementById('avatar-y-slider').value = 0;
-                    
-                    // 顯示控制面板
-                    const controls = document.getElementById('avatar-controls');
-                    if (controls) controls.classList.remove('hidden');
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_SIZE = 1200;
 
-                    // 套用預設變形
-                    window.applyAvatarTransform();
-                } else {
-                    // 背景圖的自動壓縮
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const MAX_SIZE = 1200;
+                if (width > height && width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                } else if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
 
-                    if (width > height && width > MAX_SIZE) {
-                        height *= MAX_SIZE / width;
-                        width = MAX_SIZE;
-                    } else if (height > MAX_SIZE) {
-                        width *= MAX_SIZE / height;
-                        height = MAX_SIZE;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    const displayImg = document.getElementById(imgId);
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const displayImg = document.getElementById('edit-banner-preview');
+                const placeholder = document.getElementById('banner-placeholder');
+                
+                if (displayImg) {
                     displayImg.src = canvas.toDataURL('image/webp', 0.8);
                     displayImg.classList.remove('hidden');
+                }
+                if (placeholder) {
+                    placeholder.classList.add('hidden');
                 }
             };
             img.src = event.target.result;
         }
         reader.readAsDataURL(input.files[0]);
-    }
-}
-
-// ✨ 更新頭像的變形狀態 (Zoom / X / Y)
-window.updateAvatarTransform = function(type, value) {
-    if (!currentAvatarFileObj) return;
-    avatarState[type] = parseFloat(value);
-    window.applyAvatarTransform();
-}
-
-// ✨ 實際繪製與裁切的邏輯 (合併 Zoom + X Offset + Y Offset)
-window.applyAvatarTransform = function() {
-    if (!currentAvatarFileObj) return;
-    
-    const canvas = document.createElement('canvas');
-    const size = 600; // 統一輸出 600x600 正方形
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    const imgWidth = currentAvatarFileObj.width;
-    const imgHeight = currentAvatarFileObj.height;
-
-    // 1. 計算「蓋滿 (Cover)」畫布的基礎比例
-    const baseScale = Math.max(size / imgWidth, size / imgHeight);
-    
-    // 2. 乘上使用者的縮放倍率
-    const scale = baseScale * avatarState.zoom;
-
-    // 3. 計算實際繪製的長寬
-    const drawWidth = imgWidth * scale;
-    const drawHeight = imgHeight * scale;
-
-    // 4. 計算置中的座標，再加上使用者的 X/Y 偏移量
-    const x = ((size - drawWidth) / 2) + avatarState.x;
-    const y = ((size - drawHeight) / 2) + avatarState.y;
-
-    // 清空並繪製
-    ctx.clearRect(0, 0, size, size);
-    ctx.drawImage(currentAvatarFileObj, x, y, drawWidth, drawHeight);
-
-    // 輸出到預覽圖
-    const displayImg = document.getElementById('edit-avatar-preview');
-    if (displayImg) {
-        displayImg.src = canvas.toDataURL('image/webp', 0.8);
-        displayImg.classList.remove('hidden');
     }
 }
 
@@ -292,19 +361,33 @@ window.openEditProfile = async function() {
         document.getElementById('edit-display-name').value = profile.display_name || '';
         document.getElementById('edit-bio').value = profile.bio || '';
         
-        const avatarPreview = document.getElementById('edit-avatar-preview');
-        if (avatarPreview) avatarPreview.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
-        
-        const bannerPreview = document.getElementById('edit-banner-preview');
-        if (bannerPreview && profile.banner_url) {
-            bannerPreview.src = profile.banner_url;
-            bannerPreview.classList.remove('hidden');
+        // ✨ 頭像防破圖：加入 crossOrigin 允許跨域讀取，才能在 Canvas 上調整
+        isAvatarChanged = false;
+        if (profile.avatar_url && profile.avatar_url.startsWith('http')) {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                currentAvatarImage = img;
+                window.resetAvatarTransform();
+                isAvatarChanged = false; // 載入時不視為更動
+            };
+            img.src = profile.avatar_url;
+        } else {
+            currentAvatarImage = null;
+            const canvas = document.getElementById('avatar-canvas');
+            if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
         }
-
-        // ✨ 清空狀態並隱藏控制面板 (直到用戶選了新圖片才顯示)
-        currentAvatarFileObj = null; 
-        const controls = document.getElementById('avatar-controls');
-        if (controls) controls.classList.add('hidden');
+        
+        // 處理背景預覽
+        const bannerPreview = document.getElementById('edit-banner-preview');
+        const placeholder = document.getElementById('banner-placeholder');
+        if (profile.banner_url && profile.banner_url.startsWith('http')) {
+            if(bannerPreview) { bannerPreview.src = profile.banner_url; bannerPreview.classList.remove('hidden'); }
+            if(placeholder) placeholder.classList.add('hidden');
+        } else {
+            if(bannerPreview) { bannerPreview.src = ''; bannerPreview.classList.add('hidden'); }
+            if(placeholder) placeholder.classList.remove('hidden');
+        }
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -327,18 +410,27 @@ window.saveProfileData = async function() {
     btn.innerText = "轉檔上傳中..."; btn.disabled = true;
     
     try {
-        let avatarSrc = document.getElementById('edit-avatar-preview').src;
-        let bannerSrc = document.getElementById('edit-banner-preview').src;
-
-        if (avatarSrc.startsWith('data:image')) avatarSrc = await uploadToR2(avatarSrc, 'avatar');
-        if (bannerSrc.startsWith('data:image')) bannerSrc = await uploadToR2(bannerSrc, 'banner');
-
         const updateData = {
             display_name: document.getElementById('edit-display-name').value.trim(),
             bio: document.getElementById('edit-bio').value.trim(),
-            avatar_url: avatarSrc,
-            banner_url: (bannerSrc && bannerSrc.includes('http')) ? bannerSrc : null
         };
+
+        // ✨ 效能優化：只在頭像被拖曳或更換時，才重新上傳 R2
+        if (isAvatarChanged && currentAvatarImage) {
+            const canvas = document.getElementById('avatar-canvas');
+            const base64 = canvas.toDataURL('image/webp', 0.8);
+            updateData.avatar_url = await uploadToR2(base64, 'avatar');
+        }
+
+        // 處理背景
+        let bannerSrc = document.getElementById('edit-banner-preview').src;
+        if (bannerSrc.startsWith('data:image')) {
+            updateData.banner_url = await uploadToR2(bannerSrc, 'banner');
+        } else if (bannerSrc && bannerSrc.startsWith('http')) {
+            updateData.banner_url = bannerSrc;
+        } else {
+            updateData.banner_url = null;
+        }
 
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
@@ -347,7 +439,7 @@ window.saveProfileData = async function() {
         closeEditProfile();
         renderProfile();
     } catch (err) { alert("更新失敗：" + err.message); } 
-    finally { btn.innerText = "儲存"; btn.disabled = false; }
+    finally { btn.innerText = "儲存修改"; btn.disabled = false; }
 }
 
 // ------------------------------------------
