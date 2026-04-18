@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - R2 儲存 + 自動清理 + CORS 優化版
+// js/messages.js - R2 儲存 + 錄音跨平台修復 + CORS 優化版
 // ==========================================
 
 window.activeRoomId = null;
@@ -11,12 +11,12 @@ let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
 
-// ✨ 修復：避免重複宣告並確保全域統一
+// 確保全域統一的 Worker 網址
 if (typeof window.WORKER_URL === 'undefined') {
     window.WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 }
 
-// ✨ 新增：純 CSS 頭像產生器 (解決 UI-Avatars 的 CORS 報錯)
+// 純 CSS 頭像產生器 (解決 UI-Avatars 的 CORS 報錯)
 function getFallbackAvatar(name) {
     const char = name ? name.charAt(0).toUpperCase() : 'U';
     return `<div class="w-full h-full rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53)">${char}</div>`;
@@ -51,7 +51,7 @@ function scrollToBottom() {
     }
 }
 
-// ✨ 更新 UI 在線狀態
+// 更新 UI 在線狀態
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
@@ -82,7 +82,7 @@ window.handleSendAction = async function() {
 
         if (error) throw error;
         input.value = '';
-        window.selectedMediaUrl = null; // 發送後清空，防止重複發送舊圖
+        window.selectedMediaUrl = null; // 發送後清空
         await loadMessages();
         scrollToBottom();
     } catch (e) {
@@ -115,14 +115,15 @@ function drawMessages(messages) {
 
             const cleanContent = safeText(m.content);
             const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            const isAudio = safeImgUrl && (safeImgUrl.endsWith('.webm') || safeImgUrl.includes('voice_'));
+            // 兼容 mp4 (蘋果錄音) 與 webm (安卓/PC錄音)
+            const isAudio = safeImgUrl && (safeImgUrl.endsWith('.webm') || safeImgUrl.endsWith('.mp4') || safeImgUrl.includes('voice_'));
 
             return `
                 ${dateSeparator}
                 <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
                     <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
                         ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
-                        ${safeImgUrl ? (isAudio ? `<audio src="${safeImgUrl}" controls class="h-8 mt-1"></audio>` : `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm">`) : ''}
+                        ${safeImgUrl ? (isAudio ? `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>` : `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm">`) : ''}
                         <div class="text-[9px] opacity-50 mt-1 text-right">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                         ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute -left-8 top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
                     </div>
@@ -156,7 +157,6 @@ window.renderMessages = async function() {
         const name = p?.display_name || '用戶';
         const lastMsg = safeText(m.content || (m.image_url ? '[媒體訊息]' : ''));
         
-        // ✨ 修復：頭像改為優先檢查 avatar_url，若無則顯示 CSS 頭像 (避免 CORS)
         const avatarPart = p?.avatar_url 
             ? `<img src="${p.avatar_url}" class="w-full h-full rounded-full object-cover">`
             : getFallbackAvatar(name);
@@ -173,18 +173,18 @@ window.renderMessages = async function() {
 };
 
 window.openChat = async function(targetUid, displayName, avatarUrl) {
-    const myId = await getAuthenticatedUserId(); // 統一調用名稱
+    // 修復：統一名稱調用 getValidUserId
+    const myId = await getValidUserId(); 
     if (!myId) return;
     window.activeChatTarget = targetUid;
     window.activeRoomId = generateRoomId(myId, targetUid);
     
-    if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = displayName;
+    if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = safeText(displayName);
     
-    const avatarContainer = document.querySelector('.chat-target-avatar-container'); // 建議在 HTML 中包裹一層
-    if (avatarContainer) {
-        avatarContainer.innerHTML = avatarUrl 
-            ? `<img src="${avatarUrl}" class="w-10 h-10 rounded-full object-cover">`
-            : getFallbackAvatar(displayName);
+    // 修復：正確對應 HTML 的 ID
+    const avatarImg = document.getElementById('chat-target-avatar');
+    if (avatarImg) {
+        avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
     }
     
     const modal = document.getElementById('chat-modal');
@@ -236,21 +236,18 @@ function setupChatRealtime() {
         });
 }
 
-// ✨ 修改：回收訊息時同步刪除 R2 檔案
 window.deleteMessage = async function(msgId, senderId, mediaUrl) {
     const myId = await getValidUserId();
     if (myId !== senderId) return; 
     if (!confirm('確定回收這條訊息？(相關媒體檔案也將從伺服器永久刪除)')) return;
     
     try {
-        // 1. 如果有 R2 檔案網址，先呼叫 Worker 刪除檔案
         if (mediaUrl && mediaUrl.includes(window.WORKER_URL)) {
-            const fileName = mediaUrl.split('/').pop(); // 取得檔名
+            const fileName = mediaUrl.split('/').pop();
             await fetch(`${window.WORKER_URL}/${fileName}`, { method: 'DELETE' });
             console.log("R2 檔案已連動刪除:", fileName);
         }
 
-        // 2. 刪除 Supabase 紀錄
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
         loadMessages();
     } catch (e) { 
@@ -267,19 +264,41 @@ window.closeChat = function() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 };
 
+// ==========================================
+// 🎙️ 語音錄製核心邏輯 (跨平台兼容優化)
+// ==========================================
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
+    const input = document.getElementById('chat-input');
+    
     if (!window.isRecording) {
         try {
+            // 請求麥克風權限
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // 不強制指定 webm，讓瀏覽器 (尤其是 Safari) 自行決定最佳的封裝格式
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
-            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+            
             mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const myId = await getValidUserId();
+                
+                // 動態判斷附檔名 (iOS 通常為 mp4/aac，Android/PC 為 webm)
+                const mimeType = mediaRecorder.mimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunks, { type: mimeType });
+                const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                
                 const formData = new FormData();
-                formData.append('file', audioBlob, `voice_${myId}_${Date.now()}.webm`);
+                formData.append('file', audioBlob, `voice_${myId}_${Date.now()}.${ext}`);
+
+                // UI 上傳狀態回饋
+                const originalPlaceholder = input.placeholder;
+                input.placeholder = "語音上傳中，請稍候...";
+                input.disabled = true;
 
                 try {
                     const response = await fetch(`${window.WORKER_URL}/`, { method: 'POST', body: formData });
@@ -287,18 +306,44 @@ window.toggleVoiceRecord = async function() {
                     if (result.url) {
                         window.selectedMediaUrl = result.url;
                         await window.handleSendAction();
+                    } else {
+                        throw new Error("Worker 未回傳 URL");
                     }
-                } catch (e) { alert('語音上傳失敗'); }
+                } catch (e) { 
+                    console.error("上傳錯誤:", e);
+                    alert('語音上傳失敗，請確認 Cloudflare Worker 的 CORS 設定是否正確。'); 
+                } finally {
+                    input.placeholder = originalPlaceholder;
+                    input.disabled = false;
+                }
+                
                 stream.getTracks().forEach(track => track.stop());
             };
+            
             mediaRecorder.start();
             window.isRecording = true;
-            if(btnIcon) btnIcon.classList.add('text-red-500', 'animate-pulse');
-        } catch (e) { alert('無法開啟麥克風'); }
+            
+            // 改變 UI 為錄音中狀態
+            if(btnIcon) {
+                btnIcon.classList.remove('fa-microphone');
+                btnIcon.classList.add('fa-stop', 'text-red-500', 'animate-pulse');
+            }
+        } catch (e) { 
+            console.error("麥克風錯誤:", e);
+            alert('無法開啟麥克風。請確認：\n1. 您的網站使用 HTTPS 連線\n2. 已同意瀏覽器存取麥克風權限。'); 
+        }
     } else {
-        if(mediaRecorder) mediaRecorder.stop();
+        // 停止錄音
+        if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
         window.isRecording = false;
-        if(btnIcon) btnIcon.classList.remove('text-red-500', 'animate-pulse');
+        
+        // 恢復 UI 狀態
+        if(btnIcon) {
+            btnIcon.classList.add('fa-microphone');
+            btnIcon.classList.remove('fa-stop', 'text-red-500', 'animate-pulse');
+        }
     }
 };
 
@@ -306,7 +351,11 @@ window.handleImageSelection = async function(input) {
     const file = input.files[0];
     if (!file) return;
     
-    // 前端簡易圖片壓縮 (預防 R2 太快滿)
+    const chatInput = document.getElementById('chat-input');
+    const originalPlaceholder = chatInput.placeholder;
+    chatInput.placeholder = "圖片上傳中...";
+    chatInput.disabled = true;
+
     const formData = new FormData();
     formData.append('file', file);
     
@@ -317,5 +366,11 @@ window.handleImageSelection = async function(input) {
             window.selectedMediaUrl = result.url;
             await window.handleSendAction();
         }
-    } catch (e) { alert('媒體上傳失敗'); }
+    } catch (e) { 
+        alert('媒體上傳失敗'); 
+    } finally {
+        chatInput.placeholder = originalPlaceholder;
+        chatInput.disabled = false;
+        input.value = ''; // 清除 input 檔案，允許重複選擇同張圖
+    }
 };
