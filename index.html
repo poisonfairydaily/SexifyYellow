@@ -43,11 +43,14 @@
                 <div id="auth-register-only-fields" class="hidden space-y-4">
                     <input type="text" id="auth-display-name" placeholder="顯示名稱" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify transition">
                     <input type="text" id="auth-username" placeholder="帳號名" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify transition">
-                    <select id="auth-gender" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 outline-none">
+                    <select id="auth-gender" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 outline-none focus:border-sexify transition">
                         <option value="Unspecified" disabled selected>選擇您的性別</option>
                         <option value="Male">男性</option><option value="Female">女性</option><option value="Other">其他</option>
                     </select>
-                    <input type="date" id="auth-birthday" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none">
+                    <div>
+                        <label class="text-xs text-gray-500 ml-1 mb-1 block">生日</label>
+                        <input type="date" id="auth-birthday" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none">
+                    </div>
                     <div class="flex items-start gap-2">
                         <input type="checkbox" id="auth-tos" class="mt-1 accent-sexify">
                         <label for="auth-tos" class="text-xs text-gray-500 leading-tight">我同意服務條款，並聲明我已年滿 18 歲。</label>
@@ -57,7 +60,7 @@
                 <input type="email" id="auth-email" placeholder="電子信箱" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify transition">
                 <input type="password" id="auth-password" placeholder="密碼 (至少6位數)" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify transition">
                 
-                <button id="auth-btn" onclick="handleAuthAction()" class="w-full bg-sexify text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition mt-2">登入</button>
+                <button id="auth-btn" onclick="handleAuthAction()" class="w-full bg-sexify text-white font-bold py-3 rounded-xl shadow-lg shadow-sexify/30 active:scale-95 transition mt-2">登入</button>
             </div>
             
             <div class="mt-6 text-center text-sm">
@@ -66,7 +69,9 @@
             </div>
 
             <div class="flex justify-end mt-4 px-2">
-                <button type="button" onclick="toggleForgotModal(true)" class="text-[11px] text-gray-400 hover:text-sexify font-medium">忘記密碼？</button>
+                <button type="button" onclick="toggleForgotModal(true)" class="text-[11px] text-gray-400 hover:text-sexify font-medium transition-colors">
+                    忘記密碼？
+                </button>
             </div>
         </div>
     </div>
@@ -76,43 +81,68 @@
             <button onclick="toggleForgotModal(false)" class="absolute top-6 right-6 text-gray-400 hover:text-black">
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
-            <h2 class="text-2xl font-black text-gray-900 mb-2">找回密碼</h2>
-            <div class="space-y-5 mt-4">
-                <input type="email" id="modal-reset-email" placeholder="輸入註冊信箱" class="w-full p-4 bg-gray-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-black outline-none transition-all">
-                <button onclick="handleModalResetRequest()" id="modal-reset-btn" class="w-full bg-black text-white p-4 rounded-2xl font-bold text-sm active:scale-95">發送重設郵件</button>
+            <h2 class="text-2xl font-black text-gray-900 mb-2 text-center">找回密碼</h2>
+            <div class="space-y-5 mt-6">
+                <input type="email" id="modal-reset-email" placeholder="輸入您的註冊信箱" class="w-full p-4 bg-gray-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-black outline-none transition-all">
+                <button onclick="handleModalResetRequest()" id="modal-reset-btn" class="w-full bg-black text-white p-4 rounded-2xl font-bold text-sm active:scale-95 transition-all">發送重設郵件</button>
                 <p id="modal-message" class="text-center text-[11px] font-medium min-h-[1rem]"></p>
             </div>
         </div>
     </div>
 
+    <div id="post-detail-modal" class="fixed inset-0 bg-white z-[450] hidden flex-col transform translate-x-full transition-transform duration-300">
+        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm justify-between">
+            <div class="flex items-center gap-2">
+                <button onclick="closePostDetail()" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+                <h2 class="font-black text-lg">貼文詳情</h2>
+            </div>
+            <div class="relative">
+                <button onclick="document.getElementById('post-options-menu').classList.toggle('hidden'); event.stopPropagation();" class="text-gray-700 w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-ellipsis-vertical text-xl"></i></button>
+                <div id="post-options-menu" class="hidden absolute right-0 top-full mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50"></div>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto pb-20 bg-gray-100 flex flex-col" onclick="document.getElementById('post-options-menu').classList.add('hidden')">
+            <div id="post-detail-content" class="bg-white pb-4 mb-2 shadow-sm"></div>
+            <div class="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-widest">留言區</div>
+            <div id="post-comments-list" class="flex-1 bg-white p-4 space-y-4"></div>
+        </div>
+        <div class="p-3 bg-white border-t flex items-center gap-2">
+            <input type="text" id="comment-input" placeholder="新增留言..." class="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none">
+            <button onclick="submitComment()" class="bg-sexify text-white w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+        </div>
+    </div>
+
     <div id="chat-modal" class="fixed inset-0 bg-white z-[300] hidden transform translate-x-full transition-transform duration-300 flex flex-col">
         <div class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 shadow-sm">
-            <button onclick="closeChat()" class="text-gray-700 w-10 h-10 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+            <button onclick="closeChat()" class="text-gray-700 w-10 h-10 flex items-center justify-center -ml-2 active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
             <div class="flex items-center gap-3 ml-2 flex-1">
-                <img id="chat-target-avatar" src="" class="w-10 h-10 rounded-full object-cover">
+                <img id="chat-target-avatar" src="" class="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-100">
                 <span id="chat-name" class="font-bold text-gray-900 leading-tight">載入中...</span>
             </div>
         </div>
         <div id="chat-messages" class="flex-1 overflow-y-auto p-4 bg-gray-50 flex flex-col-reverse"></div>
         <div class="p-3 bg-white border-t flex items-center gap-2">
             <input type="text" id="chat-input" placeholder="發送訊息..." class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 text-sm outline-none">
-            <button id="send-btn" class="bg-sexify text-white w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+            <button id="send-btn" class="bg-sexify text-white w-10 h-10 rounded-full flex items-center justify-center shadow-md active:scale-90 transition"><i class="fa-solid fa-paper-plane text-sm"></i></button>
         </div>
     </div>
 
     <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-500 h-screen overflow-hidden flex flex-col relative">
         <header class="bg-white px-4 py-3 flex justify-between items-center sticky top-0 z-50 shadow-sm border-b">
-            <button onclick="toggleSettings()" class="text-gray-700 w-8"><i class="fa-solid fa-bars text-xl"></i></button>
+            <button onclick="toggleSettings()" class="text-gray-700 w-8 active:scale-90 transition"><i class="fa-solid fa-bars text-xl"></i></button>
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify flex-1 text-center">SEXIFY</h1>
             <div class="w-8 flex justify-end">
-                <button onclick="toggleNotifications()" class="text-gray-700 relative"><i class="fa-regular fa-bell text-xl"></i><span id="notification-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sexify rounded-full border border-white hidden"></span></button>
+                <button onclick="toggleNotifications()" class="text-gray-700 relative active:scale-90 transition">
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span id="notification-badge" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sexify rounded-full border border-white hidden"></span>
+                </button>
             </div>
         </header>
 
         <main class="flex-1 overflow-y-auto pb-24 relative">
             <div id="home-tab" class="tab-content block h-full">
                 <div class="px-4 py-3 flex gap-3 overflow-x-auto border-b bg-white sticky top-0 z-40 hide-scrollbar shadow-sm">
-                    <button class="bg-black text-white px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap">為你推薦</button>
+                    <button class="bg-black text-white px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap shadow-md">為你推薦</button>
                     <button class="bg-gray-100 text-gray-600 px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap">追蹤中</button>
                 </div>
                 <div id="discovery-grid" class="masonry-grid p-2 pb-20 bg-gray-100"></div>
@@ -121,16 +151,16 @@
             <div id="shop-tab" class="tab-content hidden h-full bg-gray-50 p-4 overflow-y-auto">
                 <div class="bg-[#1a1a1a] text-white rounded-2xl p-5 mb-6 shadow-xl relative overflow-hidden">
                     <div class="flex items-center justify-between relative z-10">
-                        <div class="flex-1 truncate"><h2 class="text-xl font-black italic">SEXIFY 商城</h2></div>
+                        <div class="flex-1 truncate"><h2 class="text-xl font-black italic">SEXIFY 商城</h2><p class="text-[10px] text-gray-400">解鎖私密互動</p></div>
                         <div class="flex items-center gap-1.5">
-                            <span class="text-sm font-black text-sexify leading-none">🪙 <span id="shop-balance-display">--</span></span>
-                            <button onclick="window.toggleMyOrders()" class="bg-white/10 px-3 py-1 rounded-full text-[11px] font-bold border border-white/10">庫存</button>
-                            <button onclick="window.toggleRechargeArea()" class="bg-sexify w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-plus text-sm"></i></button>
+                            <div class="flex flex-col items-end mr-1"><span class="text-[8px] text-gray-500 uppercase">我的餘額</span><span class="text-sm font-black text-sexify leading-none">🪙 <span id="shop-balance-display">--</span></span></div>
+                            <button onclick="window.toggleMyOrders()" class="bg-white/10 px-3 py-1 rounded-full text-[11px] font-bold border border-white/10 active:scale-95 transition">庫存</button>
+                            <button onclick="window.toggleRechargeArea()" class="bg-sexify w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-plus text-sm"></i></button>
                         </div>
                     </div>
                     <div id="recharge-drawer" style="display: none;" class="mt-4 pt-4 border-t border-white/10">
                         <input type="number" id="rechargeAmount" value="20" class="w-full bg-white/10 border-none rounded-xl p-2.5 text-sm text-white focus:ring-1 focus:ring-sexify">
-                        <button onclick="payNow()" class="w-full mt-2 bg-white text-black font-black py-2 rounded-xl text-sm">儲值</button>
+                        <button onclick="payNow()" class="w-full mt-2 bg-white text-black font-black py-2 rounded-xl text-sm active:scale-95 transition">儲值</button>
                     </div>
                 </div>
                 <div id="shop-grid" class="grid grid-cols-2 gap-4 pb-32"></div>
@@ -145,13 +175,13 @@
 
         <nav class="fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t shadow-md z-50 h-[68px]">
             <div class="flex justify-between items-center h-full px-4 relative">
-                <button onclick="switchTab('home-tab', this)" class="nav-btn flex flex-col items-center flex-1"><i class="fa-solid fa-house mb-1 text-xl"></i><span class="text-[10px] font-bold">首頁</span></button>
-                <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pr-6"><i class="fa-solid fa-store mb-1 text-xl"></i><span class="text-[10px] font-bold">商城</span></button>
+                <button onclick="switchTab('home-tab', this)" class="nav-btn flex flex-col items-center flex-1 transition-all"><i class="fa-solid fa-house mb-1 text-xl"></i><span class="text-[10px] font-bold">首頁</span></button>
+                <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pr-6 transition-all"><i class="fa-solid fa-store mb-1 text-xl"></i><span class="text-[10px] font-bold">商城</span></button>
                 <div class="absolute left-1/2 -translate-x-1/2 -top-5 z-50">
-                    <button onclick="openUploadModal()" class="w-14 h-14 bg-sexify text-white rounded-full flex justify-center items-center shadow-lg border-4 border-white"><i class="fa-solid fa-plus text-2xl font-black"></i></button>
+                    <button onclick="openUploadModal()" class="w-14 h-14 bg-sexify text-white rounded-full flex justify-center items-center shadow-lg border-4 border-white active:scale-95 transition"><i class="fa-solid fa-plus text-2xl font-black"></i></button>
                 </div>
-                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative"><i class="fa-solid fa-comment-dots mb-1 text-xl"></i><span class="text-[10px] font-bold">訊息</span></button>
-                <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1"><i class="fa-regular fa-user mb-1 text-xl"></i><span class="text-[10px] font-bold">我</span></button>
+                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative transition-all"><i class="fa-solid fa-comment-dots mb-1 text-xl"></i><span class="text-[10px] font-bold">訊息</span></button>
+                <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 transition-all"><i class="fa-regular fa-user mb-1 text-xl"></i><span class="text-[10px] font-bold">我</span></button>
             </div>
         </nav>
     </div>
