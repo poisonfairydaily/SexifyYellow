@@ -20,6 +20,9 @@
         input, textarea { font-size: 16px !important; }
         .bg-sexify { background-color: #ff2442; }
         .text-sexify { color: #ff2442; }
+        /* 彈窗滑入動畫 */
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     </style>
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
@@ -110,7 +113,7 @@
         </header>
         <div class="flex-1 overflow-y-auto pb-20 bg-gray-100" onclick="document.getElementById('post-options-menu').classList.add('hidden')">
             <div id="post-detail-content" class="bg-white pb-4 mb-2 shadow-sm"></div>
-            <div class="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-gray-900">留言區</div>
+            <div class="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">留言區</div>
             <div id="post-comments-list" class="bg-white p-4 space-y-4"></div>
         </div>
     </div>
@@ -130,21 +133,15 @@
                 </div>
             </div>
         </header>
-        
         <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col custom-scrollbar"></div>
-
         <div class="p-4 bg-white border-t flex flex-col gap-2 safe-area-bottom">
             <div class="flex items-center gap-2">
-                <button onclick="window.toggleVoiceRecord()" class="w-10 h-10 text-gray-400 active:scale-90">
-                    <i class="fa-solid fa-microphone text-xl"></i>
-                </button>
+                <button onclick="window.toggleVoiceRecord()" class="w-10 h-10 text-gray-400 active:scale-90"><i class="fa-solid fa-microphone text-xl"></i></button>
                 <label class="w-10 h-10 flex items-center justify-center text-gray-400 cursor-pointer active:scale-90">
                     <i class="fa-solid fa-image text-xl"></i>
                     <input type="file" accept="image/*" class="hidden" onchange="window.handleImageSelection(this)">
                 </label>
-                
                 <input type="text" id="chat-input" placeholder="輸入訊息..." class="flex-1 bg-gray-100 rounded-full px-4 py-3 text-sm outline-none">
-                
                 <button id="send-btn" onclick="window.handleSendAction()" class="bg-sexify text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition">
                     <i class="fa-solid fa-paper-plane text-sm"></i>
                 </button>
@@ -172,11 +169,86 @@
                     <input type="checkbox" id="view-paid" class="w-5 h-5 accent-sexify">
                 </div>
                 <div id="price-container" class="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl">
-                    <span class="text-sm font-bold text-gray-700 text-gray-900">價格 (🪙)</span>
+                    <span class="text-sm font-bold text-gray-700">價格 (🪙)</span>
                     <input type="number" id="post-price" placeholder="0" class="bg-transparent border-none outline-none w-full text-right font-black text-sexify">
                 </div>
                 <button onclick="publishPost()" class="w-full bg-sexify text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 transition">發佈內容</button>
             </div>
+        </div>
+    </div>
+
+    <div id="edit-profile-modal" class="fixed inset-0 z-[1100] hidden bg-black/60 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-fade-in">
+            <div class="p-6 border-b border-gray-50 flex justify-between items-center">
+                <h3 class="font-black text-lg">編輯個人資料</h3>
+                <button onclick="closeEditProfile()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div class="flex flex-col items-center mb-4">
+                    <div class="relative group cursor-pointer" onclick="document.getElementById('avatar-input').click()">
+                        <img id="edit-avatar-preview" src="" class="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md">
+                        <div class="absolute inset-0 bg-black/20 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                            <i class="fa-solid fa-camera text-white"></i>
+                        </div>
+                    </div>
+                    <input type="file" id="avatar-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-avatar-preview')">
+                    <p class="text-[10px] text-gray-400 mt-2 font-bold uppercase">點擊更換頭像</p>
+                </div>
+                <input type="file" id="banner-input" class="hidden" accept="image/*" onchange="previewImage(this, 'edit-banner-preview')">
+                <img id="edit-banner-preview" src="" class="hidden">
+
+                <div>
+                    <label class="block text-[11px] font-black text-gray-400 uppercase mb-1 ml-1">顯示名稱</label>
+                    <input type="text" id="edit-display-name" class="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-sexify outline-none">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-black text-gray-400 uppercase mb-1 ml-1">個人簡介</label>
+                    <textarea id="edit-bio" rows="3" class="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-sexify outline-none resize-none"></textarea>
+                </div>
+            </div>
+            <div class="p-6 pt-0">
+                <button id="save-profile-btn" onclick="saveProfileData()" class="w-full bg-sexify text-white font-black py-4 rounded-2xl active:scale-95 transition shadow-lg">儲存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="personal-center-modal" class="fixed inset-0 z-[1100] hidden bg-black/60 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-fade-in flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black italic">個人中心</h2>
+                <button onclick="closePersonalCenter()" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase mb-1 block">聯絡信箱</label>
+                    <input type="email" id="pc-email" class="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase mb-1 block">性別</label>
+                    <select id="pc-gender" class="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm outline-none">
+                        <option value="Male">男性</option><option value="Female">女性</option><option value="Other">其他</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase mb-1 block">出生日期</label>
+                    <input type="date" id="pc-birthday" class="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm outline-none">
+                </div>
+                <button id="save-personal-btn" onclick="savePersonalCenter()" class="w-full bg-black text-white font-black py-4 rounded-2xl mt-4 active:scale-95 transition">更新數據</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fans-subs-modal" class="fixed inset-0 z-[1100] hidden bg-black/60 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-[2.5rem] h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+            <header class="p-6 border-b flex justify-between items-center bg-white">
+                <div class="flex gap-4">
+                    <button id="tab-subs" onclick="switchFansTab('subs')" class="text-lg font-black border-b-2 border-sexify text-sexify pb-1">追蹤中</button>
+                    <button id="tab-fans" onclick="switchFansTab('fans')" class="text-lg font-black border-b-2 border-transparent text-gray-400 pb-1">粉絲</button>
+                </div>
+                <button onclick="closeFansSubsModal()" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </header>
+            <div id="fans-subs-list" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-50">
+                </div>
         </div>
     </div>
 
@@ -206,11 +278,11 @@
                     <div class="relative z-10 flex justify-between items-center">
                         <div class="flex-1">
                             <h2 class="text-xl font-black italic">SEXIFY MALL</h2>
-                            <p class="text-[10px] text-zinc-500 text-gray-400">解鎖專屬服務</p>
+                            <p class="text-[10px] text-zinc-500">解鎖專屬服務</p>
                         </div>
                         <div class="flex items-center gap-3">
                             <div class="text-right">
-                                <p class="text-[8px] text-zinc-500 uppercase text-gray-400">餘額</p>
+                                <p class="text-[8px] text-zinc-500 uppercase">餘額</p>
                                 <p class="text-sm font-black text-sexify leading-none">🪙 <span id="shop-balance-display">--</span></p>
                             </div>
                             <button onclick="window.toggleRechargeArea()" class="bg-sexify w-10 h-10 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition">
@@ -219,7 +291,7 @@
                         </div>
                     </div>
                     <div id="recharge-drawer" style="display: none;" class="mt-6 pt-4 border-t border-zinc-800 animate-fade-in">
-                        <label class="text-[10px] text-zinc-500 mb-2 block uppercase font-bold text-gray-400">儲值點數 (USD)</label>
+                        <label class="text-[10px] text-zinc-500 mb-2 block uppercase font-bold">儲值點數 (USD)</label>
                         <input type="number" id="rechargeAmount" value="20" class="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 text-sm focus:border-sexify outline-none mb-3 text-white">
                         <button onclick="window.handleRecharge(document.getElementById('rechargeAmount').value)" class="w-full bg-white text-black font-black py-3 rounded-xl text-sm active:scale-95 transition">確認儲值</button>
                     </div>
@@ -231,23 +303,25 @@
                 <div id="chat-list" class="flex-1 overflow-y-auto"></div>
             </div>
 
-            <div id="profile-tab" class="tab-content hidden h-full bg-gray-100 pb-20"><div id="my-profile-container"></div></div>
+            <div id="profile-tab" class="tab-content hidden h-full bg-gray-100 pb-20">
+                <div id="my-profile-container"></div>
+            </div>
         </main>
 
         <nav class="fixed bottom-0 w-full bg-white/95 border-t z-50 h-[72px]">
             <div class="flex justify-between items-center h-full px-4 relative">
-                <button onclick="switchTab('home-tab', this)" class="nav-btn flex flex-col items-center flex-1"><i class="fa-solid fa-house mb-1 text-xl"></i><span class="text-[10px] font-bold">首頁</span></button>
+                <button onclick="switchTab('home-tab', this)" class="nav-btn flex flex-col items-center flex-1 text-gray-900 nav-active"><i class="fa-solid fa-house mb-1 text-xl"></i><span class="text-[10px] font-bold">首頁</span></button>
                 <button onclick="switchTab('shop-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pr-6"><i class="fa-solid fa-store mb-1 text-xl"></i><span class="text-[10px] font-bold">商城</span></button>
                 <div class="absolute left-1/2 -translate-x-1/2 -top-6 z-50">
                     <button onclick="openUploadModal()" class="w-14 h-14 bg-sexify text-white rounded-full flex items-center justify-center border-4 border-white shadow-xl active:scale-90 transition"><i class="fa-solid fa-plus text-2xl text-white"></i></button>
                 </div>
-                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative"><i class="fa-solid fa-comment-dots mb-1 text-xl text-gray-400"></i><span class="text-[10px] font-bold">訊息</span></button>
-                <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1"><i class="fa-regular fa-user mb-1 text-xl text-gray-400"></i><span class="text-[10px] font-bold">我</span></button>
+                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative"><i class="fa-solid fa-comment-dots mb-1 text-xl"></i><span class="text-[10px] font-bold">訊息</span></button>
+                <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1"><i class="fa-regular fa-user mb-1 text-xl"></i><span class="text-[10px] font-bold">我</span></button>
             </div>
         </nav>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/auth.js"></script>
@@ -260,6 +334,7 @@
     <script src="js/search.js"></script>
 
     <script>
+        // 內嵌 UI 小邏輯
         window.toggleRechargeArea = function() {
             const drawer = document.getElementById('recharge-drawer');
             if (drawer) {
