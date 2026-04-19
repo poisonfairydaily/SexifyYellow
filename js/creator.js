@@ -1,6 +1,6 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 智能視覺審核攔截 (升級版)
+ * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 視覺檢測 (已解除成人限制)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
@@ -100,7 +100,6 @@ function renderCreatorStats(orders) {
         if (isPhysical) cashRev += netAmount; else tokenRev += netAmount;
         if (order.status === 'pending') pendingCount++;
 
-        // 處理 profiles 若為陣列的情況
         const buyer = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || { display_name: '匿名買家' });
         const statusText = order.status === 'pending' ? '待處理' : (order.status === 'shipped' ? '已發貨' : '已完成');
         const statusColor = order.status === 'pending' ? 'text-orange-500' : 'text-green-500';
@@ -200,7 +199,6 @@ window.handleProductFiles = function(input) {
     }
 };
 
-// 將檔案轉換為 Base64 供 AI 讀取
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -210,7 +208,6 @@ function fileToBase64(file) {
     });
 }
 
-// Creator 端的 WebP 壓縮引擎
 async function generateWebPBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -230,7 +227,6 @@ async function generateWebPBlob(file) {
     });
 }
 
-// 確保送給 R2 的是壓縮過的 WebP 並帶有正確檔名
 async function uploadToR2(blob, fileName) {
     const formData = new FormData();
     formData.append('file', blob, fileName);
@@ -239,7 +235,6 @@ async function uploadToR2(blob, fileName) {
     return (await response.json()).url;
 }
 
-// ✨ 升級：加入 AI 審核的上架主邏輯 (含標籤過濾與二次元防線)
 window.publishProduct = async function() {
     const btn = document.getElementById('upload-btn');
     const originalText = btn.innerText;
@@ -265,7 +260,7 @@ window.publishProduct = async function() {
             const file = selectedFiles[i];
             
             // ==========================================
-            // 1. AI 智能掃描與攔截階段
+            // 1. AI 智能掃描與報告階段 (解封成人內容)
             // ==========================================
             btn.innerText = `🔍 AI 掃描審核中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
@@ -276,35 +271,23 @@ window.publishProduct = async function() {
             if (auditError) throw new Error("AI 審核系統連線失敗");
 
             const safeSearch = audit.safeSearchAnnotation || audit;
-            const labels = audit.labelAnnotations || []; 
-
-
 
             if (safeSearch) {
                 // 相容 Likelihood 命名格式
                 const valViolence = safeSearch.violence || safeSearch.violenceLikelihood;
                 const valMedical = safeSearch.medical || safeSearch.medicalLikelihood;
-                const valSpoof = safeSearch.spoof || safeSearch.spoofLikelihood;
-                const valRacy = safeSearch.racy || safeSearch.racyLikelihood;
                 
                 const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
                 
-                // 暴力血腥防線
+                // 🛑 僅保留暴力血腥防線 (法律與平台底線)
                 if (dangerLevels.includes(valViolence) || dangerLevels.includes(valMedical)) {
-                    alert(`🚨 嚴重違規：圖片 "${window.escapeHTML(file.name)}" 偵測到暴力或血腥內容，上傳已強制中斷！\n請移除違規圖片後再試。`);
-                    throw new Error("圖片含有暴力或血腥違規內容"); 
+                    alert(`🚨 嚴重違規：圖片 "${window.escapeHTML(file.name)}" 偵測到暴力或血腥內容，上傳已強制中斷！`);
+                    throw new Error("圖片含有暴力或血腥內容"); 
                 }
 
-                // ✨ 二次元專屬防線：如果是卡通畫風且有一點點挑逗，直接判定違規
-                if (['LIKELY', 'VERY_LIKELY'].includes(valSpoof) && ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'].includes(valRacy)) {
-                    alert(`🚨 違規：系統偵測到不適當的動漫/二次元內容，上傳已攔截！`);
-                    throw new Error("二次元色情攔截");
-                }
-                
-                lastAiReport = safeSearch; // 儲存安全報告供後台查看
-            } else if (audit && audit.safe === false) {
-                alert(`❌ 警告：圖片 "${window.escapeHTML(file.name)}" 偵測到違規 (${audit.reason})，上傳已中斷！`);
-                throw new Error("圖片含有其他違規內容");
+                // ✅ 解封：不再攔截成人、性暗示或二次元色情內容
+                // 僅將結果保存，供後台審核參考
+                lastAiReport = safeSearch; 
             }
 
             // ==========================================
@@ -331,13 +314,13 @@ window.publishProduct = async function() {
             status: 'pending', // 創作者上傳強制為 pending 待審核
             price: category === 'virtual' ? priceVal : 0,
             price_usd: category === 'physical' ? priceVal : 0,
-            ai_report: lastAiReport // ✨ 將 AI 報告寫入資料庫，供 Admin 審核參考
+            ai_report: lastAiReport
         };
 
         const { error } = await window.supabaseClient.from('products').insert([productData]);
         if (error) throw error;
 
-        alert("🎉 商品上架申請已送出！請等待管理員審核。");
+        alert("🎉 商品上架申請已送出！請等待審核。");
         
         document.getElementById('p-name').value = '';
         document.getElementById('p-desc').value = '';
@@ -348,8 +331,7 @@ window.publishProduct = async function() {
         window.switchCreatorTab('inventory');
 
     } catch (e) {
-        // 如果是我們自己拋出的違規錯誤，就不顯示系統原始報錯，讓 UI 乾淨點
-        if (!e.message.includes("違規") && !e.message.includes("攔截")) {
+        if (!e.message.includes("內容")) {
             alert("發佈失敗: " + e.message);
         }
     } finally {
@@ -419,7 +401,6 @@ window.deleteProduct = async function(productId) {
     try {
         const { data, error: dbError } = await window.supabaseClient.from('products').delete().eq('id', productId).select();
         
-        // 創作者防呆機制：被擋下 (dbError) 或資料沒少 (!data)，代表已售出被保護
         if (dbError || !data || data.length === 0) {
             await window.supabaseClient.from('products').update({ is_archived: true, status: 'rejected' }).eq('id', productId);
             alert("⚠️ 由於商品已有成交紀錄，已為您轉為「下架封存」狀態，不再於商城顯示。");
