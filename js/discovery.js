@@ -184,10 +184,9 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
 
-// ✨ 加入過濾器：防止長按放開後誤觸發進入貼文
 window.handleCardClick = function(e, postId) {
     if (window.isLongPressActive) {
-        window.isLongPressActive = false; // 剛結束長按，阻擋點擊
+        window.isLongPressActive = false;
         e.preventDefault();
         return;
     }
