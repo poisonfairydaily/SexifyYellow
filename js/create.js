@@ -1,10 +1,9 @@
 /**
- * js/create.js - 究極修復版 (同步 creator.js 成功邏輯)
- * 功能：滑動關閉、WebP 智能壓縮、二進制串流修正、R2 同步上傳
- * 修正：解決 R2 破圖、Object Preview 文字問題
+ * js/create.js - 究極修復完整版
+ * 同步 creator.js 的成功上傳邏輯，徹底解決 R2 破圖問題
  */
 
-// --- 🛡️ 0. 工具函數 ---
+// --- 🛡️ 工具函數 ---
 window.escapeHTML = function(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -12,12 +11,9 @@ window.escapeHTML = function(str) {
     return div.innerHTML;
 };
 
-/**
- * 影像預處理：轉為 WebP (完全同步 creator.js 邏輯)
- */
+// 影像預處理 (完全同步 creator.js)
 async function generateWebPBlob(file) {
     if (file.type.startsWith('video/')) return file;
-
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
@@ -31,33 +27,20 @@ async function generateWebPBlob(file) {
             canvas.width = width; canvas.height = height;
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
+            canvas.toBlob((blob) => {
+                resolve(blob);
+                URL.revokeObjectURL(img.src);
+            }, 'image/webp', 0.85); 
         };
     });
 }
 
-/**
- * R2 上傳核心 (完全同步 creator.js 成功函數)
- */
-// ... (預覽、滑動關閉等 UI 邏輯保持不變，直接看上傳核心) ...
-
-async function uploadToR2(file) {
+// R2 上傳函數 (完全同步 creator.js 成功的雙參數格式)
+async function uploadToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
-    
-    // 1. 壓縮圖片
-    const webpBlob = await generateWebPBlob(file);
-    
-    // 2. 準備檔名 (移除所有可能導致 Header 解析出錯的字元)
-    const timestamp = Date.now();
-    const extension = file.type.startsWith('video/') ? 'mp4' : 'webp';
-    const fileName = `${timestamp}_post.${extension}`;
-
-    // 3. ✨ 核心修復：強制封裝為標準 File 對象
-    // 這樣 Worker 的 formData.get('file') 拿到的才會是 File 對象，而不是字串
-    const fileToUpload = new File([webpBlob], fileName, { type: webpBlob.type });
-
     const formData = new FormData();
-    formData.append('file', fileToUpload); // 不要傳第三個參數，直接傳 File 對象
+    // ✨ 核心修復：強制以「二進制 Blob + 檔名」方式封裝
+    formData.append('file', blob, fileName);
 
     const response = await fetch(WORKER_URL, {
         method: 'POST',
@@ -65,16 +48,12 @@ async function uploadToR2(file) {
     });
 
     if (!response.ok) throw new Error('R2 伺服器拒絕上傳');
-    
-    const result = await response.json();
-    if (!result.success) throw new Error(result.error || '上傳失敗');
-    
-    return result.url;
+    const resData = await response.json();
+    if (!resData.success) throw new Error(resData.error || '上傳失敗');
+    return resData.url;
 }
 
-// ... (其餘 publishPost 邏輯保持不變) ...
-
-// --- 🖼️ 1. UI 互動與預覽邏輯 ---
+// --- 🖼️ UI 互動邏輯 ---
 
 window.openUploadModal = function() {
     document.getElementById('upload-modal').classList.remove('hidden');
@@ -89,18 +68,6 @@ window.closeUploadModal = function() {
         resetUploadForm();
     }, 300);
 };
-
-document.addEventListener('DOMContentLoaded', () => {
-    const uploadPanel = document.getElementById('upload-panel');
-    let startY = 0;
-    if (uploadPanel) {
-        uploadPanel.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
-        uploadPanel.addEventListener('touchmove', (e) => {
-            const currentY = e.touches[0].clientY;
-            if (currentY - startY > 80) window.closeUploadModal();
-        }, { passive: true });
-    }
-});
 
 let selectedFile = null;
 
@@ -127,10 +94,10 @@ window.handleFileSelect = function(e) {
 
 function resetUploadForm() {
     selectedFile = null;
-    ['post-price', 'post-caption'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.value = '';
-    });
+    const priceEl = document.getElementById('post-price');
+    const captionEl = document.getElementById('post-caption');
+    if (priceEl) priceEl.value = '';
+    if (captionEl) captionEl.value = '';
     const mediaPreview = document.getElementById('media-preview');
     const videoPreview = document.getElementById('video-preview');
     if(mediaPreview) { mediaPreview.classList.add('hidden'); mediaPreview.src = ''; }
@@ -138,7 +105,7 @@ function resetUploadForm() {
     document.getElementById('media-placeholder').classList.remove('hidden');
 }
 
-// --- 📝 2. 發佈貼文主邏輯 ---
+// --- 📝 發佈主邏輯 ---
 
 window.publishPost = async function() {
     const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
@@ -160,22 +127,22 @@ window.publishPost = async function() {
         let finalMediaUrl = '';
 
         if (selectedFile) {
-            publishBtn.innerText = "優化上傳中...";
+            publishBtn.innerText = "🚀 正在優化並上傳...";
             
-            // 1. 生成 WebP Blob
+            // ✨ 這裡完全同步 creator.js 的執行順序
             const webpBlob = await generateWebPBlob(selectedFile);
             
-            // 2. 生成檔名 (使用 creator.js 穩定版邏輯)
+            // 生成檔名：清洗掉非法字元
             const baseName = selectedFile.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
             const extension = selectedFile.type.startsWith('video/') ? (selectedFile.name.split('.').pop() || 'mp4') : 'webp';
             const fileName = `${Date.now()}_post_${baseName}.${extension}`;
 
-            // 3. 呼叫上傳
+            // 執行上傳
             finalMediaUrl = await uploadToR2(webpBlob, fileName);
         }
 
-        publishBtn.innerText = "發佈中...";
-        const { error } = await window.supabaseClient.from('posts').insert([{
+        publishBtn.innerText = "💾 存入資料庫...";
+        const { error: dbError } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
             caption: window.escapeHTML(caption),
             media_url: finalMediaUrl,
@@ -183,14 +150,14 @@ window.publishPost = async function() {
             price: price
         }]);
 
-        if (error) throw error;
+        if (dbError) throw dbError;
 
         alert('✨ 發佈成功！');
         window.closeUploadModal();
         if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
 
     } catch (err) {
-        alert(err.message);
+        alert('發佈失敗: ' + err.message);
     } finally {
         publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
