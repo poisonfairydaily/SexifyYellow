@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
         msgBox.className = `mt-4 text-center text-xs font-bold ${isError ? 'text-red-500' : 'text-green-500'} block animate-pulse`;
     }
 
-    // 1. 檢查是否已登入
     async function checkSession() {
         if (!window.supabaseClient) return;
         const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -27,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     checkSession();
 
-    // 2. 登入邏輯
     if (btnLogin) {
         btnLogin.addEventListener('click', async () => {
             const email = emailInput?.value.trim();
@@ -54,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 3. 註冊邏輯
     if (btnRegister) {
         btnRegister.addEventListener('click', async () => {
             const email = emailInput?.value.trim();
@@ -86,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 4. 忘記密碼邏輯
     if (btnForgot) {
         btnForgot.addEventListener('click', async () => {
             const email = emailInput?.value.trim();
