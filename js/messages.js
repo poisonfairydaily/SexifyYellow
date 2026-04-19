@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - Supabase Storage 原生儲存 + 錄音優化版
+// js/messages.js - 完整升級版 (未讀數量 + 影片支援 + 在線狀態修復)
 // ==========================================
 
 window.activeRoomId = null;
@@ -70,12 +70,12 @@ function scrollToBottom() {
     }
 }
 
-// 更新 UI 在線狀態
+// 更新 UI 在線狀態 (修復假在線問題)
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
     statusText.innerHTML = isOnline ? '● Online' : '● Offline';
-    statusText.className = `text-[10px] font-black uppercase ${isOnline ? 'text-green-500' : 'text-gray-400'}`;
+    statusText.className = `text-[10px] font-bold mt-1 uppercase tracking-tighter ${isOnline ? 'text-green-500' : 'text-gray-400'}`;
 }
 
 window.handleSendAction = async function() {
@@ -104,6 +104,9 @@ window.handleSendAction = async function() {
         window.selectedMediaUrl = null; // 發送後清空
         await loadMessages();
         scrollToBottom();
+        
+        // 發送訊息後更新外層列表，將最後一句話推到最上面
+        if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
         alert('傳送失敗');
     } finally {
@@ -111,6 +114,7 @@ window.handleSendAction = async function() {
     }
 };
 
+// 渲染對話內容 (✨新增影片判斷與渲染)
 function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
@@ -134,15 +138,28 @@ function drawMessages(messages) {
 
             const cleanContent = safeText(m.content);
             const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            // 兼容 mp4 (蘋果錄音) 與 webm (安卓/PC錄音)
-            const isAudio = safeImgUrl && (safeImgUrl.endsWith('.webm') || safeImgUrl.endsWith('.mp4') || safeImgUrl.includes('voice_'));
+            
+            // 判斷媒體類型
+            const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
+            const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
+            
+            let mediaHtml = '';
+            if (safeImgUrl) {
+                if (isAudio) {
+                    mediaHtml = `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>`;
+                } else if (isVideo) {
+                    mediaHtml = `<video src="${safeImgUrl}" controls playsinline class="rounded-lg mt-1 max-w-full shadow-sm max-h-48 bg-black object-cover"></video>`;
+                } else {
+                    mediaHtml = `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm object-cover">`;
+                }
+            }
 
             return `
                 ${dateSeparator}
                 <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
                     <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
                         ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
-                        ${safeImgUrl ? (isAudio ? `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>` : `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm">`) : ''}
+                        ${mediaHtml}
                         <div class="text-[9px] opacity-50 mt-1 text-right">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                         ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute -left-8 top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
                     </div>
@@ -151,6 +168,7 @@ function drawMessages(messages) {
     });
 }
 
+// 渲染訊息列表 (✨新增未讀數量計算)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
@@ -163,29 +181,64 @@ window.renderMessages = async function() {
     if (!msgData) return;
 
     const rooms = {};
-    msgData.forEach(m => { if (!rooms[m.room_id]) rooms[m.room_id] = m; });
+    const unreadCounts = {};
+
+    msgData.forEach(m => { 
+        if (!rooms[m.room_id]) rooms[m.room_id] = m; // 保留每個房間最新的一則訊息
+        
+        // 如果我是接收者且這則訊息還沒讀過，數量+1
+        if (m.receiver === myId && m.is_read === false) {
+            unreadCounts[m.room_id] = (unreadCounts[m.room_id] || 0) + 1;
+        }
+    });
     
     const sortedRooms = Object.values(rooms);
     const targetIds = sortedRooms.map(m => m.sender_name === myId ? m.receiver : m.sender_name);
     const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', targetIds);
     const profMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
 
+    if (sortedRooms.length === 0) {
+        container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm font-bold">目前還沒有訊息喔</div>`;
+        return;
+    }
+
     container.innerHTML = sortedRooms.map(m => {
         const tid = m.sender_name === myId ? m.receiver : m.sender_name;
         const p = profMap[tid];
         const name = p?.display_name || '用戶';
-        const lastMsg = safeText(m.content || (m.image_url ? '[媒體訊息]' : ''));
+        
+        // 判斷最後一句話是不是媒體
+        let lastMsg = '';
+        if (m.content) {
+            lastMsg = safeText(m.content);
+        } else if (m.image_url) {
+            if (m.image_url.match(/\.(mp4|webm|mov|ogg)$/i) && !m.image_url.includes('voice_')) lastMsg = '[影片]';
+            else if (m.image_url.match(/\.(mp3|wav|m4a)$/i) || m.image_url.includes('voice_')) lastMsg = '[語音]';
+            else lastMsg = '[圖片]';
+        }
         
         const avatarPart = p?.avatar_url 
-            ? `<img src="${p.avatar_url}" class="w-full h-full rounded-full object-cover">`
+            ? `<img src="${p.avatar_url}" class="w-full h-full rounded-full object-cover border border-gray-100">`
             : getFallbackAvatar(name);
+            
+        // 未讀紅點 HTML
+        const unreads = unreadCounts[m.room_id] || 0;
+        const unreadBadge = unreads > 0 
+            ? `<div class="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">${unreads > 99 ? '99+' : unreads}</div>` 
+            : '';
+        
+        // 如果有未讀，讓預覽文字變黑變粗體
+        const textStyle = unreads > 0 ? "text-gray-900 font-bold" : "text-gray-400";
         
         return `
             <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${tid}', '${safeText(name)}', '${p?.avatar_url || ''}')">
                 <div class="w-14 h-14 bg-gray-100 rounded-full relative flex-shrink-0">${avatarPart}</div>
-                <div class="flex-1 overflow-hidden">
-                    <div class="flex justify-between font-bold text-sm text-gray-900"><span>${safeText(name)}</span></div>
-                    <div class="text-xs text-gray-400 truncate">${lastMsg}</div>
+                <div class="flex-1 overflow-hidden flex flex-col justify-center">
+                    <div class="flex justify-between items-center font-bold text-sm text-gray-900 mb-1">
+                        <span class="truncate pr-2">${safeText(name)}</span>
+                        ${unreadBadge}
+                    </div>
+                    <div class="text-xs ${textStyle} truncate pr-4">${lastMsg}</div>
                 </div>
             </div>`;
     }).join('');
@@ -194,6 +247,7 @@ window.renderMessages = async function() {
 window.openChat = async function(targetUid, displayName, avatarUrl) {
     const myId = await getValidUserId(); 
     if (!myId) return;
+    
     window.activeChatTarget = targetUid;
     window.activeRoomId = generateRoomId(myId, targetUid);
     
@@ -204,11 +258,19 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
         avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
     }
     
+    // ✨ 修復: 打開聊天室時先預設為 Offline，避免被硬生生寫死的 Online 騙了
+    updateOnlineStatusUI(false);
+    
     const modal = document.getElementById('chat-modal');
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
+    // 一打開就把該房間、對方傳給我的訊息標記為已讀
     await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+    
+    // 更新外層列表以消除紅點，但不加上 await 避免卡住開啟動畫
+    if(typeof window.renderMessages === 'function') window.renderMessages();
+    
     await loadMessages();
     scrollToBottom();
     setupChatRealtime();
@@ -234,8 +296,13 @@ function setupChatRealtime() {
             table: 'messages', 
             filter: `room_id=eq.${window.activeRoomId}` 
         }, async () => {
+            // 如果對方發新訊息，自動把狀態標成已讀
+            const myId = await getValidUserId();
+            await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+            
             await loadMessages();
             scrollToBottom();
+            if(typeof window.renderMessages === 'function') window.renderMessages(); // 同步更新外層最新文字
         })
         .on('presence', { event: 'sync' }, () => {
             const state = window.roomChannel.presenceState();
@@ -270,6 +337,7 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
 
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
         loadMessages();
+        if(typeof window.renderMessages === 'function') window.renderMessages(); // 同步更新外層最新文字
     } catch (e) { 
         console.error(e);
         alert('回收失敗'); 
@@ -277,7 +345,10 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
 };
 
 window.closeChat = function() {
-    if (window.roomChannel) window.roomChannel.unsubscribe();
+    if (window.roomChannel) {
+        window.roomChannel.untrack(); // 離開時主動解除線上追蹤
+        window.roomChannel.unsubscribe();
+    }
     window.activeRoomId = null;
     const modal = document.getElementById('chat-modal');
     modal.classList.add('translate-x-full');
@@ -360,7 +431,7 @@ window.toggleVoiceRecord = async function() {
 };
 
 // ==========================================
-// 🖼️ 圖片上傳邏輯 (直接上傳 Supabase)
+// 🖼️ 圖片/影片上傳邏輯 (支援影片格式)
 // ==========================================
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
@@ -368,14 +439,17 @@ window.handleImageSelection = async function(input) {
     
     const chatInput = document.getElementById('chat-input');
     const originalPlaceholder = chatInput.placeholder;
-    chatInput.placeholder = "圖片上傳中...";
+    chatInput.placeholder = "媒體檔案上傳中...";
     chatInput.disabled = true;
 
     try {
         const myId = await getValidUserId();
-        // 抓取副檔名 (例如 .jpg, .png)
-        const ext = file.name.split('.').pop() || 'jpg';
-        const filePath = `chat_media/img_${myId}_${Date.now()}.${ext}`;
+        // 抓取副檔名 (例如 .jpg, .png, .mp4, .mov)
+        const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+        const isVideoUpload = ['mp4', 'webm', 'mov', 'ogg'].includes(ext);
+        const prefix = isVideoUpload ? 'vid_' : 'img_';
+        
+        const filePath = `chat_media/${prefix}${myId}_${Date.now()}.${ext}`;
 
         const publicUrl = await uploadMediaToSupabase(file, filePath);
         
@@ -384,11 +458,11 @@ window.handleImageSelection = async function(input) {
             await window.handleSendAction();
         }
     } catch (e) { 
-        console.error("圖片上傳錯誤:", e);
+        console.error("上傳錯誤:", e);
         alert('媒體上傳失敗'); 
     } finally {
         chatInput.placeholder = originalPlaceholder;
         chatInput.disabled = false;
-        input.value = ''; // 清除 input 檔案，允許重複選擇同張圖
+        input.value = ''; // 清除 input 檔案，允許重複選擇同個檔案
     }
 };
