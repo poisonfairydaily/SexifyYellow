@@ -1,14 +1,29 @@
 // ==========================================
-// js/discovery.js - 乾淨佈局與 Haptic Touch 完美版
+// js/discovery.js - 瀑布流、排序功能與純淨版面 (完整版)
 // ==========================================
 
-let clickTimer = null;
+let currentSortType = 'latest'; // 預設排序
 
 async function getAuthenticatedUserId() {
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) return null;
     return user.id;
 }
+
+// 切換頂部 Tab 的功能
+window.switchDiscoveryTab = function(btn, sortType) {
+    // 樣式切換
+    document.querySelectorAll('.discovery-tab-btn').forEach(b => {
+        b.classList.remove('bg-black', 'text-white');
+        b.classList.add('bg-gray-200', 'text-gray-600');
+    });
+    btn.classList.remove('bg-gray-200', 'text-gray-600');
+    btn.classList.add('bg-black', 'text-white');
+
+    // 更新當前排序變數並重新渲染
+    currentSortType = sortType;
+    renderDiscovery();
+};
 
 window.renderDiscovery = async function(filterKeyword = '') {
     const grid = document.getElementById('discovery-grid');
@@ -21,11 +36,24 @@ window.renderDiscovery = async function(filterKeyword = '') {
 
         let query = window.supabaseClient
             .from('posts')
-            .select('*, profiles(display_name, avatar_url, username)')
-            .order('created_at', { ascending: false });
+            .select('*, profiles(display_name, avatar_url, username)');
 
+        // 搜尋過濾
         if (filterKeyword.trim() !== '') {
             query = query.ilike('caption', `%${filterKeyword}%`);
+        }
+
+        // 排序邏輯 (最新 / 熱門 / 追蹤中)
+        if (currentSortType === 'hot') {
+            // 熱門：依照按讚數遞減
+            query = query.order('likes_count', { ascending: false }).order('created_at', { ascending: false });
+        } else if (currentSortType === 'following') {
+            // 追蹤中：先抓出我追蹤的人 (如果有 follows 表的話)
+            // 這裡先簡單回退到最新，若你有 follows 表，需先查詢 follows 再用 .in('user_id', followedIds)
+            query = query.order('created_at', { ascending: false });
+        } else {
+            // 最新：依照時間遞減
+            query = query.order('created_at', { ascending: false });
         }
 
         const { data: posts, error } = await query;
@@ -58,43 +86,40 @@ window.renderDiscovery = async function(filterKeyword = '') {
             
             const currentLikes = post.likes_count || post.likes || 0;
             const commentCount = post.comments_count || 0; 
-            
-            // 收藏所需的字串化物件
-            const postObjStr = encodeURIComponent(JSON.stringify({
-                id: post.id, caption: post.caption, media_url: post.media_url, authorName: safeName, authorAvatar: safeAvatar
-            }));
 
-            // ✨ 全新乾淨佈局：左下頭像、右下數據、移除圖片上方干擾物
+            // ✨ 瀑布流卡片結構
+            // 加入 break-inside-avoid 防止被截斷
             return `
-            <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 select-none transition-transform duration-200"
+            <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-2xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
                  style="touch-action: pan-y;"
-                 onclick="handleCardClick(event, '${post.id}')"
-                 onpointerdown="startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
-                 onpointerup="cancelLongPress(event, '${post.id}')"
-                 onpointerleave="cancelLongPress(event, '${post.id}')"
-                 onpointercancel="cancelLongPress(event, '${post.id}')"
                  oncontextmenu="event.preventDefault();">
 
-                <div class="relative bg-gray-100 min-h-[150px]">
-                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字內容</div>`}
-                    ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
+                <div class="relative bg-gray-50 min-h-[120px]"
+                     onpointerdown="startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
+                     onpointerup="cancelLongPress(event, '${post.id}')"
+                     onpointerleave="cancelLongPress(event, '${post.id}')"
+                     onpointercancel="cancelLongPress(event, '${post.id}')">
+                     
+                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字內容</div>`}
+                    ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
                 </div>
 
-                <div class="p-3 bg-white relative z-20">
-                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed font-medium mb-3">${safeCaption}</p>
+                <div class="p-3 bg-white" onclick="handleCardClick(event, '${post.id}')">
+                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed font-medium mb-2">${safeCaption}</p>
                     
-                    <div class="flex justify-between items-center pt-2 border-t border-gray-50">
-                        <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
+                    <div class="flex justify-between items-center mt-2">
+                        
+                        <div class="flex items-center gap-1.5 flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
                             <img src="${safeAvatar}" class="w-5 h-5 rounded-full border border-gray-100 object-cover flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=User'">
-                            <span class="text-gray-600 text-[10px] font-bold truncate max-w-[80px]">${safeName}</span>
+                            <span class="text-gray-600 text-[11px] font-bold truncate">${safeName}</span>
                         </div>
 
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2.5 flex-shrink-0">
                             <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
                                 <i class="${likeIcon} text-[13px] transition-transform group-active:scale-125"></i>
                                 <span class="text-[11px] font-bold text-gray-500">${currentLikes}</span>
                             </button>
-                            <button onclick="event.stopPropagation(); window.viewPost('${post.id}')" class="flex items-center gap-1 group">
+                            <button class="flex items-center gap-1 group">
                                 <i class="fa-regular fa-comment text-[13px] text-gray-400 transition-transform group-active:scale-125"></i>
                                 <span class="text-[11px] font-bold text-gray-500">${commentCount}</span>
                             </button>
@@ -109,26 +134,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
         grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10 text-red-400 text-sm font-bold">載入失敗。</div>`;
     }
 };
-
-window.toggleBookmark = function(btn, postId, postStr) {
-    let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-    const index = bookmarks.findIndex(b => b.id === postId);
-    const icon = btn.querySelector('i');
-    
-    if (index > -1) {
-        bookmarks.splice(index, 1);
-        icon.classList.replace('fa-solid', 'fa-regular');
-        icon.classList.remove('text-yellow-500');
-        icon.classList.add('text-gray-300');
-    } else {
-        const postObj = JSON.parse(decodeURIComponent(postStr));
-        bookmarks.push(postObj);
-        icon.classList.replace('fa-regular', 'fa-solid');
-        icon.classList.remove('text-gray-300');
-        icon.classList.add('text-yellow-500');
-    }
-    localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
-}
 
 window.toggleLike = async function(btn, postId, postOwnerId) {
     if (btn.disabled) return;
@@ -184,6 +189,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
 
+// ✨ 防止長按放開後誤觸發進入貼文
 window.handleCardClick = function(e, postId) {
     if (window.isLongPressActive) {
         window.isLongPressActive = false;
@@ -193,6 +199,9 @@ window.handleCardClick = function(e, postId) {
     viewPost(postId);
 };
 
+// =====================================
+// 以下為詳情頁、留言等原生功能 (保持不變)
+// =====================================
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
     const modal = document.getElementById('post-detail-modal');
