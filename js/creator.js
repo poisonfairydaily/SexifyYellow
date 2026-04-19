@@ -1,6 +1,6 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP)
+ * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 智能視覺審核攔截
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
@@ -69,7 +69,6 @@ window.loadCreatorDashboard = async function() {
         document.getElementById('stat-views').innerText = myProducts?.reduce((sum, p) => sum + (p.views || 0), 0) || 0;
 
         if (myProductIds.length > 0) {
-            // ✨ 修正點：簡化 profiles 的關聯語法，解決 PGRST200 報錯
             const { data: orders, error } = await window.supabaseClient
                 .from('orders')
                 .select(`id, amount, amount_usd, created_at, status, shipping_address, category, products(name), profiles(display_name, avatar_url)`)
@@ -201,6 +200,16 @@ window.handleProductFiles = function(input) {
     }
 };
 
+// ✨ 新增：將檔案轉換為 Base64 供 AI 讀取
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+    });
+}
+
 // Creator 端的 WebP 壓縮引擎
 async function generateWebPBlob(file) {
     return new Promise((resolve) => {
@@ -230,6 +239,7 @@ async function uploadToR2(blob, fileName) {
     return (await response.json()).url;
 }
 
+// ✨ 升級：加入 AI 審核的上架主邏輯
 window.publishProduct = async function() {
     const btn = document.getElementById('upload-btn');
     const originalText = btn.innerText;
@@ -246,20 +256,57 @@ window.publishProduct = async function() {
         if (!name || selectedFiles.length === 0) return alert("請輸入商品名稱並上傳至少一張圖片");
         if (priceVal <= 0) return alert("請設定有效的價格");
 
-        btn.innerText = "壓縮並上傳中 (請勿關閉)...";
         btn.disabled = true;
 
-        const uploadPromises = selectedFiles.map(async (file, index) => {
+        let uploadedUrls = [];
+        let lastAiReport = null;
+
+        // ✨ 為了讓 AI 能一張一張擋下違規圖片，這裡改用循序的 for 迴圈
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            
+            // 1. AI 掃描階段
+            btn.innerText = `🔍 AI 掃描審核中 (${i+1}/${selectedFiles.length})...`;
+            const base64Str = await fileToBase64(file);
+            const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
+                body: { imageBase64: base64Str }
+            });
+
+            if (auditError) throw new Error("AI 審核系統連線失敗");
+
+            const safeSearch = audit.safeSearchAnnotation || audit;
+
+            if (safeSearch) {
+                // 相容 Likelihood 命名格式
+                const valViolence = safeSearch.violence || safeSearch.violenceLikelihood;
+                const valMedical = safeSearch.medical || safeSearch.medicalLikelihood;
+                
+                const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
+                
+                // 如果偵測到暴力血腥，直接拋出錯誤中斷整個上傳流程
+                if (dangerLevels.includes(valViolence) || dangerLevels.includes(valMedical)) {
+                    alert(`🚨 嚴重違規：圖片 "${window.escapeHTML(file.name)}" 偵測到暴力或血腥內容，上傳已強制中斷！\n請移除違規圖片後再試。`);
+                    throw new Error("圖片含有暴力或血腥違規內容"); 
+                }
+                
+                lastAiReport = safeSearch; // 儲存安全報告供後台查看
+            } else if (audit && audit.safe === false) {
+                alert(`❌ 警告：圖片 "${window.escapeHTML(file.name)}" 偵測到違規 (${audit.reason})，上傳已中斷！`);
+                throw new Error("圖片含有其他違規內容");
+            }
+
+            // 2. 轉換與上傳階段
+            btn.innerText = `📦 壓縮並上傳中 (${i+1}/${selectedFiles.length})...`;
             const webpBlob = await generateWebPBlob(file);
             const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
-            const fileName = `${Date.now()}_${index}_${baseName}.webp`; 
-            return await uploadToR2(webpBlob, fileName);
-        });
-
-        const urls = await Promise.all(uploadPromises);
-        const imageUrlsString = urls.join(',');
+            const fileName = `${Date.now()}_${i}_${baseName}.webp`; 
+            
+            const uploadedUrl = await uploadToR2(webpBlob, fileName);
+            uploadedUrls.push(uploadedUrl);
+        }
 
         btn.innerText = "資料寫入中...";
+        const imageUrlsString = uploadedUrls.join(',');
         
         const productData = {
             user_id: user.id,
@@ -269,13 +316,14 @@ window.publishProduct = async function() {
             image_url: imageUrlsString,
             status: 'pending', // 創作者上傳強制為 pending 待審核
             price: category === 'virtual' ? priceVal : 0,
-            price_usd: category === 'physical' ? priceVal : 0
+            price_usd: category === 'physical' ? priceVal : 0,
+            ai_report: lastAiReport // ✨ 將 AI 報告寫入資料庫，供 Admin 審核參考
         };
 
         const { error } = await window.supabaseClient.from('products').insert([productData]);
         if (error) throw error;
 
-        alert("🎉 商品上架申請已送出！請等待審核。");
+        alert("🎉 商品上架申請已送出！請等待管理員審核。");
         
         document.getElementById('p-name').value = '';
         document.getElementById('p-desc').value = '';
@@ -286,7 +334,10 @@ window.publishProduct = async function() {
         window.switchCreatorTab('inventory');
 
     } catch (e) {
-        alert("發佈失敗: " + e.message);
+        // 如果是我們自己拋出的違規錯誤，就不顯示系統原始報錯，讓 UI 乾淨點
+        if (!e.message.includes("違規")) {
+            alert("發佈失敗: " + e.message);
+        }
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
@@ -352,7 +403,6 @@ window.loadMyProducts = async function() {
 window.deleteProduct = async function(productId) {
     if (!confirm("確定要下架並刪除此商品嗎？")) return;
     try {
-        // ✨ 修正點：加上 .select() 強制偵測 RLS 或外鍵保護狀態
         const { data, error: dbError } = await window.supabaseClient.from('products').delete().eq('id', productId).select();
         
         // 創作者防呆機制：被擋下 (dbError) 或資料沒少 (!data)，代表已售出被保護
