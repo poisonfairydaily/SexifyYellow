@@ -2,102 +2,141 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; img-src 'self' data: blob: https://*.supabase.co; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;">
-    
-    <title>創作者中心 - 投稿作品</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SEXIFY - 創作者中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
-        .preview-grid::-webkit-scrollbar, .custom-scroll::-webkit-scrollbar { display: none; }
-        .upload-card { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.9); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 10px; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
         .sexify-gradient { background: linear-gradient(135deg, #ff2442 0%, #ff5263 100%); }
-        /* 避免圖片太大撐破頁面 */
-        .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; }
+        .tab-btn.active { background-color: #000; color: #fff; }
+        .tab-btn { background-color: #f3f4f6; color: #4b5563; transition: all 0.2s; }
+        input, textarea, select { font-size: 16px !important; } /* 防止 iOS 縮放 */
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
-<div class="grid grid-cols-2 gap-4 mb-8">
-    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
-        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">累計銷量</span>
-        <span id="stat-sales" class="text-2xl font-black text-gray-900">--</span>
-    </div>
+<body class="bg-gray-100 min-h-screen pb-20">
 
-    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
-        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">預估淨利 (分成後)</span>
-        <div class="flex flex-col items-center">
-            <span class="text-lg font-black text-sexify leading-tight">🪙 <span id="stat-revenue-token">0</span></span>
-            <span class="text-lg font-black text-blue-600 leading-tight">＄<span id="stat-revenue-cash">0</span></span>
-        </div>
-    </div>
+    <header class="bg-white px-6 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+        <button onclick="window.history.back()" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+        <h1 class="text-xl font-black italic tracking-tighter text-sexify">CREATOR STUDIO</h1>
+        <div class="w-8"></div>
+    </header>
 
-    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
-        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">店鋪訪客</span>
-        <span id="stat-views" class="text-2xl font-black text-blue-500">--</span>
-    </div>
-
-    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
-        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">待發貨/待處理</span>
-        <span id="stat-pending" class="text-2xl font-black text-orange-500">--</span>
-    </div>
-</div>
-    <div class="upload-card w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 border border-white my-8">
-        <div class="text-center mb-8">
-            <h1 class="text-2xl font-black text-gray-900 tracking-tight">發布作品</h1>
-            <p class="text-gray-400 text-sm mt-1">分享你的創作，讓世界看見</p>
+    <div class="max-w-2xl mx-auto p-4 mt-2">
+        <div class="flex gap-2 overflow-x-auto hide-scrollbar mb-6 p-1 bg-white rounded-full shadow-sm border border-gray-100">
+            <button onclick="switchCreatorTab('dashboard')" id="btn-dashboard" class="tab-btn active flex-1 py-2.5 rounded-full text-sm font-bold whitespace-nowrap">📊 數據中心</button>
+            <button onclick="switchCreatorTab('publish')" id="btn-publish" class="tab-btn flex-1 py-2.5 rounded-full text-sm font-bold whitespace-nowrap">📦 發佈商品</button>
+            <button onclick="switchCreatorTab('inventory')" id="btn-inventory" class="tab-btn flex-1 py-2.5 rounded-full text-sm font-bold whitespace-nowrap">📋 我的商品</button>
         </div>
 
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1 ml-4">標題</label>
-                <input type="text" id="p-name" class="w-full bg-gray-100 border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all" placeholder="輸入作品名稱...">
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1 ml-4">設定價格 (🪙)</label>
-                <input type="number" id="p-price" class="w-full bg-gray-100 border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all" placeholder="例如：100">
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-2 ml-4">上傳相片 (多選)</label>
-                <div class="relative group">
-                    <input type="file" id="p-image" multiple accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                    <div class="border-2 border-dashed border-gray-200 rounded-[2rem] p-10 flex flex-col items-center justify-center group-hover:border-red-400 transition-colors">
-                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-300 group-hover:text-red-400 mb-3"></i>
-                        <span class="text-gray-400 text-xs">點擊或拖拽照片至此</span>
+        <div id="tab-dashboard" class="block animate-fade-in">
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+                    <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">累計銷量</span>
+                    <span id="stat-sales" class="text-3xl font-black text-gray-900">0</span>
+                </div>
+                <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+                    <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">店鋪訪客</span>
+                    <span id="stat-views" class="text-3xl font-black text-blue-500">0</span>
+                </div>
+                <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center col-span-2">
+                    <span class="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">預估淨利 (分成後)</span>
+                    <div class="flex gap-8 w-full justify-center divide-x divide-gray-100">
+                        <div class="flex flex-col items-center pr-8">
+                            <span class="text-[10px] text-gray-400 font-bold mb-1">虛擬收益</span>
+                            <span class="text-2xl font-black text-sexify">🪙 <span id="stat-revenue-token">0</span></span>
+                        </div>
+                        <div class="flex flex-col items-center pl-8">
+                            <span class="text-[10px] text-gray-400 font-bold mb-1">現金收益</span>
+                            <span class="text-2xl font-black text-blue-600">＄<span id="stat-revenue-cash">0</span></span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div id="preview-container" class="grid grid-cols-3 gap-2 mt-4 max-h-48 overflow-y-auto preview-grid"></div>
-        </div>
-
-        <div id="status-box" class="mt-6 hidden">
-            <div class="flex items-center justify-center gap-2">
-                <i class="fa-solid fa-circle-notch fa-spin text-red-500"></i>
-                <span id="status-text" class="text-xs text-gray-500 font-medium">AI 正在審核中...</span>
+            <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-black text-lg text-gray-900">📦 訂單管理</h3>
+                    <span class="bg-orange-100 text-orange-600 text-[10px] font-black px-3 py-1 rounded-full"><span id="stat-pending">0</span> 待處理</span>
+                </div>
+                <div id="sales-record-list" class="space-y-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+                    <div class="text-center py-10 text-gray-300 font-bold"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>載入中...</div>
+                </div>
             </div>
         </div>
 
-        <button id="upload-btn" class="sexify-gradient w-full text-white font-bold py-4 rounded-2xl mt-8 shadow-lg shadow-red-200 active:scale-95 transition-transform">
-            立即投稿
-        </button>
+        <div id="tab-publish" class="hidden animate-fade-in">
+            <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-6 sm:p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-black text-gray-900 tracking-tight">上架新商品</h2>
+                    <p class="text-gray-400 text-xs mt-1 font-bold">為你的商品設定完美的展示</p>
+                </div>
 
-        <div class="mt-10 pt-8 border-t border-gray-100">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-black text-gray-900 tracking-tight">我的作品清單</h2>
-                <button onclick="loadMyProducts()" class="text-gray-300 hover:text-red-500 transition-colors p-2">
-                    <i class="fa-solid fa-rotate-right text-sm"></i>
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">商品圖片 (支援多選)</label>
+                        <div class="relative group">
+                            <input type="file" id="p-image" multiple accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="window.handleProductFiles(this)">
+                            <div class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-[1.5rem] p-8 flex flex-col items-center justify-center group-hover:border-sexify transition-colors">
+                                <i class="fa-solid fa-images text-3xl text-gray-300 group-hover:text-sexify mb-2"></i>
+                                <span class="text-gray-400 text-[11px] font-bold">點擊或拖曳上傳圖片</span>
+                            </div>
+                        </div>
+                        <div id="preview-container" class="grid grid-cols-4 gap-2 mt-3 empty:hidden"></div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">商品名稱</label>
+                        <input type="text" id="p-name" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-sexify outline-none" placeholder="輸入吸引人的商品名稱...">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">詳細描述</label>
+                        <textarea id="p-desc" rows="4" class="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-sexify outline-none resize-none" placeholder="介紹你的商品特色、尺寸、內容等..."></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">商品類型</label>
+                            <select id="p-category" onchange="window.togglePriceInput()" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-sm focus:ring-2 focus:ring-sexify outline-none font-bold text-gray-700">
+                                <option value="virtual">✨ 虛擬內容 (相片/影片)</option>
+                                <option value="physical">📦 實體商品 (需寄送)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label id="price-label" class="block text-[11px] font-black text-sexify uppercase tracking-widest mb-2 ml-1">定價 (代幣)</label>
+                            <div class="relative">
+                                <span id="price-icon" class="absolute left-4 top-1/2 -translate-y-1/2 font-black text-sexify">🪙</span>
+                                <input type="number" id="p-price" class="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-sexify outline-none font-black" placeholder="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="upload-btn" onclick="window.publishProduct()" class="sexify-gradient w-full text-white font-black py-4 rounded-2xl mt-8 shadow-lg shadow-red-200 active:scale-95 transition-transform">
+                    確認上架
                 </button>
             </div>
-            
-            <div id="my-products-list" class="space-y-4 max-h-[400px] overflow-y-auto custom-scroll pr-1">
-                <p class="text-center text-gray-400 text-[10px] py-10 tracking-widest uppercase">載入作品中...</p>
+        </div>
+
+        <div id="tab-inventory" class="hidden animate-fade-in">
+            <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 min-h-[50vh]">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-black text-lg text-gray-900">庫存管理</h3>
+                    <button onclick="window.loadMyProducts()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200"><i class="fa-solid fa-rotate-right"></i></button>
+                </div>
+                <div id="my-products-list" class="space-y-4">
+                    <div class="text-center py-20 text-gray-300 font-bold">載入中...</div>
+                </div>
             </div>
         </div>
-    </div> <script src="js/creator.js"></script>
+
+    </div>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/creator.js"></script>
 </body>
 </html>
