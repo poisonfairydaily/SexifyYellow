@@ -1,7 +1,16 @@
 // ==========================================
 // js/app.js - 全域邏輯、導航、長按手勢與分享核心
 // ==========================================
-
+// 防 XSS 攻擊的核心過濾器
+window.escapeHTML = function(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[&<>'"]/g, function(tag) {
+        const charsToReplace = {
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        };
+        return charsToReplace[tag] || tag;
+    });
+};
 // 1. 底部導航欄分頁切換
 window.switchTab = function(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(t => {
