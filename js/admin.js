@@ -1,6 +1,6 @@
 /**
  * admin.js - 究極管理員核心版 (整合 Dashboard + WebP + AI 審核 + 全域內容中控)
- * 修正：多重關聯錯誤 (profiles!user_id)、Description 上傳遺漏、完美合併活躍審查表
+ * 修正：多重關聯錯誤 (profiles!user_id)、Description 上傳遺漏、完美合併活躍審查表、強效刪除機制
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -50,10 +50,9 @@ window.onload = async () => {
         
         if(adminDash) {
             adminDash.style.display = 'flex';
-            // 初始化載入各大模塊資料
             if(typeof loadPendingProducts === 'function') loadPendingProducts();
             if(typeof loadRecentPosts === 'function') loadRecentPosts();
-            if(typeof loadAuditList === 'function') loadAuditList(); // 載入原 dashboard 資料
+            if(typeof loadAuditList === 'function') loadAuditList(); 
         } else if (adminSec) {
             adminSec.style.display = 'block';
         }
@@ -150,13 +149,13 @@ async function generateWebPBlob(file) {
     });
 }
 
-// --- 🚀 5. 上架主邏輯 (修復 description 與 user_id 遺漏問題) ---
+// --- 🚀 5. 上架主邏輯 ---
 const uploadBtn = document.getElementById('upload-btn');
 if (uploadBtn) {
     uploadBtn.addEventListener('click', async () => {
         const rawName = document.getElementById('p-name')?.value.trim();
         const price = document.getElementById('p-price')?.value;
-        const desc = document.getElementById('p-desc')?.value.trim() || ''; // ✨ 加入 Description
+        const desc = document.getElementById('p-desc')?.value.trim() || ''; 
         const files = document.getElementById('p-image')?.files;
         const btn = document.getElementById('upload-btn');
 
@@ -215,16 +214,15 @@ if (uploadBtn) {
                 const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
                 const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
-if(statusText) statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
+                if(statusText) statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
 
-// ✨ 修正點：加入 contentType 確保 R2 識別為 webp
-const uploadOptions = {
-    contentType: 'image/webp',
-    upsert: true // 如果檔名重複則覆蓋
-};
+                const uploadOptions = {
+                    contentType: 'image/webp',
+                    upsert: true 
+                };
 
-await supabaseClient.storage.from('products').upload(fileName, webpBlob, uploadOptions);
-await supabaseClient.storage.from('previews').upload(fileName, webpBlob, uploadOptions);
+                await supabaseClient.storage.from('products').upload(fileName, webpBlob, uploadOptions);
+                await supabaseClient.storage.from('previews').upload(fileName, webpBlob, uploadOptions);
                 
                 uploadedFileNames.push(fileName);
             }
@@ -234,9 +232,9 @@ await supabaseClient.storage.from('previews').upload(fileName, webpBlob, uploadO
             const { error: dbError } = await supabaseClient.from('products').insert([{
                 name: rawName,
                 price: parseInt(price),
-                description: desc, // ✨ 寫入資料庫
+                description: desc, 
                 image_url: uploadedFileNames.join(','),
-                user_id: user.id,  // ✨ 強制改為 user_id 確保與 shop.js 連結一致
+                user_id: user.id,  
                 status: 'approved',
                 is_official: true, 
                 ai_report: lastAiReport,
@@ -266,7 +264,6 @@ window.loadPendingProducts = async function() {
     grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
     
     try {
-        // ✨ 強制使用 profiles!user_id 解決關係衝突
         const { data, error } = await supabaseClient.from('products')
             .select('*, profiles!user_id(display_name)')
             .eq('is_official', false)
@@ -290,7 +287,6 @@ window.loadPendingProducts = async function() {
                 imgPath = supabaseClient.storage.from('previews').getPublicUrl(firstImg).data.publicUrl;
             }
             
-            // 安全提取 profile 名稱
             const prof = Array.isArray(item.profiles) ? item.profiles[0] : (item.profiles || {});
 
             return `
@@ -307,7 +303,7 @@ window.loadPendingProducts = async function() {
                         <button onclick="approveProduct('${item.id}')" class="w-full bg-green-500 text-white font-bold py-2 rounded-lg text-xs hover:bg-green-600 transition">
                             <i class="fa-solid fa-check mr-1"></i> 核准上架
                         </button>
-                        <button onclick="hardDeleteProduct('${item.id}', '${item.image_url}')" class="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-2 rounded-lg text-xs hover:bg-red-100 transition">
+                        <button onclick="hardDeleteProduct('${item.id}', '${item.image_url || ''}')" class="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-2 rounded-lg text-xs hover:bg-red-100 transition">
                             <i class="fa-solid fa-trash mr-1"></i> 刪除違規
                         </button>
                     </div>
@@ -341,7 +337,6 @@ window.loadAuditList = async function() {
     listContainer.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:50px;">🚀 正在載入活躍商品列表...</td></tr>';
 
     try {
-        // ✨ 同理使用 profiles!user_id 避免衝突
         const { data: products, error } = await supabaseClient
             .from('products')
             .select('*, reports(count), profiles!user_id(display_name)')
@@ -407,7 +402,7 @@ function renderTable(products) {
                 <div style="display:flex; flex-direction:column; gap:8px;">
                     ${p.status === 'pending' ? `<button onclick="approveProduct('${p.id}')" style="background:#52c41a; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">通過</button>` : ''}
                     <button onclick="archiveProduct('${p.id}')" style="background:#faad14; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold;">下架封存</button>
-                    <button onclick="hardDeleteProduct('${p.id}', '${p.image_url}')" style="background:none; color:#ff4d4f; border:1px solid #ff4d4f; padding:6px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:bold;">徹底刪除 (違規)</button>
+                    <button onclick="hardDeleteProduct('${p.id}', '${p.image_url || ''}')" style="background:none; color:#ff4d4f; border:1px solid #ff4d4f; padding:6px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:bold;">徹底刪除 (違規)</button>
                 </div>
             </td>
         `;
@@ -415,36 +410,49 @@ function renderTable(products) {
     });
 }
 
-// 軟刪除 (下架)
 window.archiveProduct = async (id) => {
     const ok = confirm("確定要下架此商品嗎？\n下架後商品將不再顯示，但會保留歷史交易紀錄。");
     if (!ok) return;
 
-    const { error } = await supabaseClient.from('products').update({ is_archived: true }).eq('id', id);
+    const { error } = await supabaseClient.from('products').update({ is_archived: true, status: 'rejected' }).eq('id', id);
     if (error) alert("下架失敗: " + error.message);
     else { loadAuditList(); loadPendingProducts(); }
 };
 
-// 徹底刪除
+// ✨ 強效徹底刪除 (繞過關聯保護與軟刪除機制)
 window.hardDeleteProduct = async (id, imageUrls) => {
     const ok = confirm("🚨 極度警告 🚨\n\n此操作將會「永遠刪除」該商品及其所有圖片檔案。\n此操作無法撤銷，確定執行嗎？");
     if (!ok) return;
 
     try {
-        const { error: dbError } = await supabaseClient.from('products').delete().eq('id', id);
-        if (dbError) throw dbError;
+        // 先強制刪除所有該商品的檢舉紀錄，防止資料庫因為外鍵保護而拒絕刪除
+        await supabaseClient.from('reports').delete().eq('product_id', id);
 
-        const fileNames = imageUrls.split(',').map(name => name.trim()).filter(n => !n.startsWith('http'));
-        if (fileNames.length > 0) {
-            await supabaseClient.storage.from('products').remove(fileNames);
-            await supabaseClient.storage.from('previews').remove(fileNames);
+        // 嘗試刪除本體
+        const { error: dbError } = await supabaseClient.from('products').delete().eq('id', id);
+        
+        if (dbError) {
+            console.warn("徹底刪除受阻，執行強制深度封存:", dbError);
+            // 如果仍有外鍵(如訂單)導致無法刪除，進行深度防呆封存，確保商城絕對看不見
+            await supabaseClient.from('products').update({ is_archived: true, status: 'deleted' }).eq('id', id);
+            alert("⚠️ 由於該商品已有用戶購買紀錄，基於資料庫安全，已將其「強制深度封存」。它絕對不會再出現在商城中！");
+        } else {
+            alert("🗑️ 商品資料庫已徹底清除。");
         }
 
-        alert("🗑️ 商品及其檔案已徹底清除。");
+        // 刪除 Supabase 儲存空間內的圖片
+        if (imageUrls) {
+            const fileNames = imageUrls.split(',').map(name => name.trim()).filter(n => !n.startsWith('http') && !n.includes('r2.dev'));
+            if (fileNames.length > 0) {
+                await supabaseClient.storage.from('products').remove(fileNames);
+                await supabaseClient.storage.from('previews').remove(fileNames);
+            }
+        }
+
         loadAuditList();
         loadPendingProducts();
     } catch (err) {
-        alert("刪除失敗: " + err.message);
+        alert("執行操作失敗: " + err.message);
     }
 };
 
@@ -458,7 +466,6 @@ window.updateStatus = async (id, newStatus) => {
 // 🛡️ 模塊 D：燈箱與貼文管理
 // ==========================================
 
-// ✨ 完美版燈箱
 window.openLightbox = function(url) {
     let overlay = document.getElementById('audit-lightbox');
     if (!overlay) {
@@ -489,14 +496,12 @@ window.openLightbox = function(url) {
     document.body.style.overflow = 'hidden'; 
 };
 
-// 載入一般用戶貼文
 window.loadRecentPosts = async function() {
     const grid = document.getElementById('posts-grid');
     if(!grid) return;
     grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
     
     try {
-        // ✨ 同理使用 profiles!user_id
         const { data, error } = await supabaseClient.from('posts')
             .select('*, profiles!user_id(display_name)')
             .order('created_at', { ascending: false })
