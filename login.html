@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>登入 - SFY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-init.js"></script> 
+    <script src="js/login.js" defer></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen relative overflow-hidden">
+    
+    <div class="absolute top-[-10%] left-[-10%] w-72 h-72 bg-gradient-to-br from-gray-200 to-gray-100 rounded-full blur-3xl opacity-50"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-72 h-72 bg-gradient-to-br from-gray-300 to-gray-200 rounded-full blur-3xl opacity-50"></div>
+
+    <div class="w-full max-w-md px-8 py-10 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10 m-4">
+        
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-black tracking-tighter text-gray-900 mb-1">SFY</h1>
+            <p class="text-xs text-gray-400 font-bold tracking-widest uppercase">Style For You</p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-1">電子郵件</label>
+                <input type="email" id="auth-email" placeholder="hello@sfy.app" class="w-full bg-gray-50 border border-gray-100 text-gray-900 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-black transition">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-1">密碼</label>
+                <input type="password" id="auth-password" placeholder="••••••••" class="w-full bg-gray-50 border border-gray-100 text-gray-900 text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-black transition">
+            </div>
+            
+            <div class="pt-4 space-y-3">
+                <button id="btn-login" class="w-full bg-black text-white font-bold rounded-2xl py-3.5 shadow-md active:scale-[0.98] transition">登入</button>
+                <button id="btn-register" class="w-full bg-white text-black border-2 border-black font-bold rounded-2xl py-3.5 active:scale-[0.98] transition">註冊新帳號</button>
+            </div>
+        </div>
+
+        <div id="auth-message" class="mt-4 text-center text-xs font-bold hidden"></div>
+
+        <div class="mt-8 pt-6 border-t border-gray-50 text-center">
+            <p class="text-[10px] text-gray-400 leading-relaxed">
+                登入或註冊即代表您已閱讀並同意 SFY 的 <br>
+                <a href="terms.html" class="text-gray-600 underline font-bold">服務條款</a> 
+                與 
+                <a href="privacy.html" class="text-gray-600 underline font-bold">隱私政策</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
