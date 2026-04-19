@@ -1,26 +1,23 @@
 // ==========================================
-// js/discovery.js - 瀑布流、排序功能與純淨版面 (完整版)
+// js/discovery.js - 小紅書風格完美佈局版
 // ==========================================
 
-let currentSortType = 'latest'; // 預設排序
+let currentSortType = 'latest';
 
 async function getAuthenticatedUserId() {
+    if (!window.supabaseClient) return null;
     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
     if (error || !user) return null;
     return user.id;
 }
 
-// 切換頂部 Tab 的功能
 window.switchDiscoveryTab = function(btn, sortType) {
-    // 樣式切換
     document.querySelectorAll('.discovery-tab-btn').forEach(b => {
         b.classList.remove('bg-black', 'text-white');
         b.classList.add('bg-gray-200', 'text-gray-600');
     });
     btn.classList.remove('bg-gray-200', 'text-gray-600');
     btn.classList.add('bg-black', 'text-white');
-
-    // 更新當前排序變數並重新渲染
     currentSortType = sortType;
     renderDiscovery();
 };
@@ -33,26 +30,17 @@ window.renderDiscovery = async function(filterKeyword = '') {
 
     try {
         const myId = await getAuthenticatedUserId();
-
         let query = window.supabaseClient
             .from('posts')
             .select('*, profiles(display_name, avatar_url, username)');
 
-        // 搜尋過濾
         if (filterKeyword.trim() !== '') {
             query = query.ilike('caption', `%${filterKeyword}%`);
         }
 
-        // 排序邏輯 (最新 / 熱門 / 追蹤中)
         if (currentSortType === 'hot') {
-            // 熱門：依照按讚數遞減
             query = query.order('likes_count', { ascending: false }).order('created_at', { ascending: false });
-        } else if (currentSortType === 'following') {
-            // 追蹤中：先抓出我追蹤的人 (如果有 follows 表的話)
-            // 這裡先簡單回退到最新，若你有 follows 表，需先查詢 follows 再用 .in('user_id', followedIds)
-            query = query.order('created_at', { ascending: false });
         } else {
-            // 最新：依照時間遞減
             query = query.order('created_at', { ascending: false });
         }
 
@@ -63,7 +51,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
             grid.innerHTML = `
                 <div class="col-span-2 text-center py-20 mt-10 text-gray-400 flex flex-col items-center">
                     <i class="fa-solid fa-ghost text-4xl mb-4 opacity-30"></i>
-                    <p class="font-bold">目前大廳空空如也</p>
+                    <p class="font-bold">目前空空如也</p>
                 </div>`;
             return;
         }
@@ -75,20 +63,21 @@ window.renderDiscovery = async function(filterKeyword = '') {
         }
 
         grid.innerHTML = posts.map(post => {
-            const safeName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
+            const safeName = window.escapeHTML(post.profiles?.display_name || '使用者');
             const safeCaption = window.escapeHTML(post.caption || '');
             const safeAvatar = window.escapeHTML(post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}`);
             const safeMedia = window.escapeHTML(post.media_url || '');
 
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
-            const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
+            
+            // 判斷是否按讚，給予對應的愛心樣式
+            const isLiked = myLikes.has(post.id);
+            // 確保一定要有 fa-heart
+            const heartClass = isLiked ? 'fa-solid fa-heart text-sexify' : 'fa-regular fa-heart text-gray-400';
             
             const currentLikes = post.likes_count || post.likes || 0;
-            const commentCount = post.comments_count || 0; 
 
-            // ✨ 瀑布流卡片結構
-            // 加入 break-inside-avoid 防止被截斷
             return `
             <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-2xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
                  style="touch-action: pan-y;"
@@ -100,28 +89,23 @@ window.renderDiscovery = async function(filterKeyword = '') {
                      onpointerleave="cancelLongPress(event, '${post.id}')"
                      onpointercancel="cancelLongPress(event, '${post.id}')">
                      
-                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字內容</div>`}
-                    ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
+                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字</div>`}
+                    ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖內容</span></div>` : ''}
                 </div>
 
                 <div class="p-3 bg-white" onclick="handleCardClick(event, '${post.id}')">
-                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed font-medium mb-2">${safeCaption}</p>
+                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-snug font-medium mb-2">${safeCaption}</p>
                     
                     <div class="flex justify-between items-center mt-2">
-                        
-                        <div class="flex items-center gap-1.5 flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
-                            <img src="${safeAvatar}" class="w-5 h-5 rounded-full border border-gray-100 object-cover flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=User'">
-                            <span class="text-gray-600 text-[11px] font-bold truncate">${safeName}</span>
+                        <div class="flex items-center gap-1.5 flex-1 min-w-0 pr-2 hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
+                            <img src="${safeAvatar}" class="w-5 h-5 rounded-full object-cover aspect-square shrink-0 border border-gray-100 bg-gray-50">
+                            <span class="text-gray-600 text-[11px] font-medium truncate">${safeName}</span>
                         </div>
 
-                        <div class="flex items-center gap-2.5 flex-shrink-0">
+                        <div class="flex items-center shrink-0">
                             <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
-                                <i class="${likeIcon} text-[13px] transition-transform group-active:scale-125"></i>
-                                <span class="text-[11px] font-bold text-gray-500">${currentLikes}</span>
-                            </button>
-                            <button class="flex items-center gap-1 group">
-                                <i class="fa-regular fa-comment text-[13px] text-gray-400 transition-transform group-active:scale-125"></i>
-                                <span class="text-[11px] font-bold text-gray-500">${commentCount}</span>
+                                <i class="${heartClass} text-[13px] transition-transform group-active:scale-125"></i>
+                                <span class="text-[11px] font-medium text-gray-500">${currentLikes}</span>
                             </button>
                         </div>
                     </div>
@@ -130,7 +114,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
         }).join('');
 
     } catch (error) {
-        console.error("載入探索頁面失敗:", error);
+        console.error("載入失敗:", error);
         grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10 text-red-400 text-sm font-bold">載入失敗。</div>`;
     }
 };
@@ -160,12 +144,6 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 
             await window.supabaseClient.from('likes').insert({ post_id: postId, user_id: myId });
             await window.supabaseClient.from('posts').update({ likes_count: count + 1 }).eq('id', postId);
-            
-            if (postOwnerId && postOwnerId !== myId) {
-                await window.supabaseClient.from('notifications').insert({ 
-                    user_id: postOwnerId, actor_id: myId, type: 'like', post_id: postId 
-                });
-            }
         } else {
             const newCount = Math.max(0, count - 1);
             icon.classList.replace('fa-solid', 'fa-regular');
@@ -177,7 +155,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
             await window.supabaseClient.from('posts').update({ likes_count: newCount }).eq('id', postId);
         }
     } catch(e) {
-        console.error("操作失敗", e);
+        console.error("按讚失敗", e);
     } finally {
         setTimeout(() => {
             icon.classList.remove('scale-125');
@@ -189,16 +167,16 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
 
-// ✨ 防止長按放開後誤觸發進入貼文
 window.handleCardClick = function(e, postId) {
     if (window.isLongPressActive) {
         window.isLongPressActive = false;
         e.preventDefault();
         return;
     }
-    viewPost(postId);
+    if (typeof viewPost === 'function') viewPost(postId);
 };
 
+// ... 以下保留你原本的 viewPost 等其他詳細頁面邏輯 ...
 // =====================================
 // 以下為詳情頁、留言等原生功能 (保持不變)
 // =====================================
