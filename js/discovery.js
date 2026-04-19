@@ -1,8 +1,19 @@
 // ==========================================
-// js/discovery.js - 小紅書完美排版版 (防衝突修復版)
+// js/discovery.js - 小紅書完美排版版 (終極完整修復版)
+// 包含：動態載入、長按預覽、貼文詳情、留言系統、按讚系統
 // ==========================================
 
 let currentSortType = 'latest';
+window.isLongPressActive = false;
+let longPressTimer = null;
+
+// --- 🛡️ 1. 核心輔助函數 ---
+window.escapeHTML = window.escapeHTML || function(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+};
 
 async function getAuthenticatedUserId() {
     if (!window.supabaseClient) return null;
@@ -11,6 +22,37 @@ async function getAuthenticatedUserId() {
     return user.id;
 }
 
+// --- 🖱️ 2. 互動與長按事件控制 ---
+window.startLongPress = function(e, postId, mediaUrl) {
+    window.isLongPressActive = false;
+    longPressTimer = setTimeout(() => {
+        window.isLongPressActive = true;
+        if (mediaUrl && mediaUrl !== 'null' && confirm("是否下載此圖片/影片？")) {
+            const link = document.createElement('a');
+            link.href = mediaUrl;
+            link.download = `sexify_media_${postId}.jpg`;
+            link.click();
+        }
+    }, 800);
+};
+
+window.cancelLongPress = function() {
+    clearTimeout(longPressTimer);
+    // 延遲重置，防止鬆開手指時瞬間觸發點擊事件
+    setTimeout(() => {
+        window.isLongPressActive = false;
+    }, 100);
+};
+
+window.handleCardClick = function(e, postId) {
+    if (window.isLongPressActive) {
+        e.preventDefault();
+        return; 
+    }
+    window.viewPost(postId);
+};
+
+// --- 📱 3. 首頁瀑布流渲染 ---
 window.switchDiscoveryTab = function(btn, sortType) {
     document.querySelectorAll('.discovery-tab-btn').forEach(b => {
         b.classList.remove('bg-black', 'text-white');
@@ -62,13 +104,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
             if (likeData) likeData.forEach(l => myLikes.add(l.post_id));
         }
 
-        window.escapeHTML = window.escapeHTML || function(str) {
-            if (!str) return '';
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        };
-
         grid.innerHTML = posts.map(post => {
             const safeName = window.escapeHTML(post.profiles?.display_name || '使用者');
             const safeCaption = window.escapeHTML(post.caption || '');
@@ -84,19 +119,20 @@ window.renderDiscovery = async function(filterKeyword = '') {
             return `
             <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
                  style="touch-action: pan-y;"
-                 oncontextmenu="event.preventDefault();">
+                 oncontextmenu="event.preventDefault();"
+                 onclick="window.handleCardClick(event, '${post.id}')">
 
                 <div class="relative bg-gray-50 min-h-[120px]"
-                     onpointerdown="startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
-                     onpointerup="cancelLongPress(event, '${post.id}')"
-                     onpointerleave="cancelLongPress(event, '${post.id}')"
-                     onpointercancel="cancelLongPress(event, '${post.id}')">
+                     onpointerdown="window.startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
+                     onpointerup="window.cancelLongPress()"
+                     onpointerleave="window.cancelLongPress()"
+                     onpointercancel="window.cancelLongPress()">
                      
                     ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字</div>`}
                     ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖內容</span></div>` : ''}
                 </div>
 
-                <div class="p-3 bg-white" onclick="window.handleCardClick(event, '${post.id}')">
+                <div class="p-3 bg-white">
                     <p class="text-[13px] text-gray-900 line-clamp-2 leading-snug font-medium mb-2.5">${safeCaption}</p>
                     
                     <div class="flex justify-between items-center">
@@ -165,30 +201,19 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
             btn.disabled = false;
         }, 300);
     }
-}
+};
 
+// --- 📖 4. 貼文詳情與留言系統 ---
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
 
-window.handleCardClick = function(e, postId) {
-    if (window.isLongPressActive) {
-        window.isLongPressActive = false;
-        e.preventDefault();
-        return;
-    }
-    if (typeof window.viewPost === 'function') window.viewPost(postId);
-};
-
-// =====================================
-// 詳情頁、留言等原生功能 (防衝突修復版)
-// =====================================
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
     const modal = document.getElementById('post-detail-modal');
     const contentDiv = document.getElementById('post-detail-content');
     if(!modal || !contentDiv) return;
 
-    // ✨ 核心修復：強制把留言區打開！(因為商城打開商品時會把它隱藏)
+    // ✨ 核心修復：強制把留言區打開！(因為商城打開商品時會把它隱藏，這裡必須打開)
     const commentsArea = document.getElementById('post-comments-list');
     const commentsTitle = document.querySelector('[data-i18n="comments"]');
     if(commentsArea) commentsArea.style.display = 'block';
@@ -198,7 +223,7 @@ window.viewPost = async function(postId) {
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
-    contentDiv.innerHTML = `<div class="p-10 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
+    contentDiv.innerHTML = `<div class="p-20 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin text-3xl"></i></div>`;
     
     try {
         const myId = await getAuthenticatedUserId();
@@ -215,6 +240,7 @@ window.viewPost = async function(postId) {
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}`;
         const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
 
+        // 判斷權限選單
         const optionsMenu = document.getElementById('post-options-menu');
         if (optionsMenu) {
             if (post.user_id === myId) {
@@ -227,6 +253,7 @@ window.viewPost = async function(postId) {
             }
         }
 
+        // 判斷按讚狀態
         let isLiked = false;
         if (myId) {
             const { data: ld } = await window.supabaseClient.from('likes').select('id').eq('post_id', postId).eq('user_id', myId).single();
@@ -234,6 +261,7 @@ window.viewPost = async function(postId) {
         }
         const likeIcon = isLiked ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
 
+        // 判斷收藏狀態
         let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
         const isBookmarked = bookmarks.some(b => b.id === post.id);
         const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
@@ -241,6 +269,7 @@ window.viewPost = async function(postId) {
         const currentLikes = post.likes_count || post.likes || 0;
         const postObjStr = encodeURIComponent(JSON.stringify({ id: post.id, caption: post.caption, media_url: post.media_url, authorName, authorAvatar }));
 
+        // 渲染詳情內容
         contentDiv.innerHTML = `
             <div class="flex items-center gap-3 p-4 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition" onclick="window.closePostDetail(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
                 <img src="${authorAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm" onerror="this.src='https://ui-avatars.com/api/?name=User'">
@@ -272,9 +301,9 @@ window.viewPost = async function(postId) {
         
         window.renderComments();
     } catch(e) {
-        contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容</div>`;
+        contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容: ${e.message}</div>`;
     }
-}
+};
 
 window.renderComments = async function() {
     const list = document.getElementById('post-comments-list');
@@ -291,7 +320,7 @@ window.renderComments = async function() {
         if (error) throw error;
         
         if (!comments || comments.length === 0) {
-            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言</div>`;
+            list.innerHTML = `<div class="text-center py-10 text-gray-400 text-sm">目前沒有留言，來搶頭香吧！</div>`;
             return;
         }
 
@@ -320,7 +349,7 @@ window.renderComments = async function() {
     } catch(e) {
         list.innerHTML = `<div class="text-center py-5 text-red-400 text-xs">載入留言失敗。</div>`;
     }
-}
+};
 
 window.submitComment = async function() {
     const input = document.getElementById('comment-input');
@@ -351,11 +380,11 @@ window.submitComment = async function() {
         }
         
         window.renderComments();
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
+        window.renderDiscovery();
     } catch(e) {
         alert("留言失敗");
     }
-}
+};
 
 window.editPostContent = async function(postId) {
     const menu = document.getElementById('post-options-menu');
@@ -367,10 +396,10 @@ window.editPostContent = async function(postId) {
         const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
         if(error) throw error;
         const captionElem = document.getElementById('detail-caption');
-        if(captionElem) captionElem.innerText = newText;
-        if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
+        if(captionElem) captionElem.innerText = window.escapeHTML(newText);
+        window.renderDiscovery();
     } catch (err) { alert("編輯失敗"); }
-}
+};
 
 window.deletePostFromModal = async function(postId) {
     const menu = document.getElementById('post-options-menu');
@@ -381,9 +410,9 @@ window.deletePostFromModal = async function(postId) {
         const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
         if(error) throw error;
         window.closePostDetail();
-        if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
+        window.renderDiscovery();
     } catch (err) { alert("刪除失敗"); }
-}
+};
 
 window.reportPost = async function(postId = window.currentViewedPostId) {
     const menu = document.getElementById('post-options-menu');
@@ -405,11 +434,19 @@ window.reportPost = async function(postId = window.currentViewedPostId) {
     } catch(e) {
         alert("送出失敗，請確認網路狀態。");
     }
-}
+};
 
 window.closePostDetail = function() {
     const modal = document.getElementById('post-detail-modal');
     if(!modal) return;
     modal.classList.add('translate-x-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+};
+
+// --- 🚀 5. 自動載入初始化 ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 確保一進入網站，如果畫面上有首頁網格，就自動渲染貼文
+    if (document.getElementById('discovery-grid')) {
+        window.renderDiscovery();
+    }
+});
