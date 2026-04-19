@@ -1,5 +1,5 @@
 /**
- * shop.js - 專業商城正式營運整合版 (視覺升級 + 支付中心 + 安全修復)
+ * shop.js - 專業商城正式營運整合版 (視覺升級 + 支付中心 + 渲染修復版)
  */
 
 let cart = []; 
@@ -10,7 +10,7 @@ let currentKeyword = '';
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 
 // --- 🛡️ 安全核心與輔助函數 ---
-function escapeHTML(str) {
+window.escapeHTML = function(str) {
     if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
@@ -18,7 +18,7 @@ function escapeHTML(str) {
 }
 
 // ✨ 圖片防破圖過濾器
-function getSafeImageUrl(url, bucket = 'previews') {
+window.getSafeImageUrl = function(url, bucket = 'previews') {
     if (!url) return 'https://placehold.co/400x400/eeeeee/999999?text=No+Image';
     let firstUrl = url.split(',')[0];
     if (firstUrl.includes('r2.dev')) {
@@ -31,7 +31,7 @@ function getSafeImageUrl(url, bucket = 'previews') {
     return firstUrl;
 }
 
-function showNotification(msg) {
+window.showNotification = function(msg) {
     const n = document.createElement('div');
     n.className = 'fixed top-20 left-1/2 -translate-x-1/2 bg-black/80 text-white px-6 py-2 rounded-full text-[10px] font-bold z-[6000] animate-fade-in shadow-xl';
     n.innerText = msg;
@@ -45,6 +45,7 @@ function showNotification(msg) {
 // --- 💰 0. 財務系統：餘額與支付選擇中心 ---
 window.refreshBalanceUI = async function() {
     try {
+        if (!window.supabaseClient) return;
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         if (!user) return;
         const { data } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
@@ -56,16 +57,14 @@ window.refreshBalanceUI = async function() {
     } catch (err) { console.error("刷新餘額失敗:", err); }
 };
 
-// ✨ 升級：攔截儲值請求，彈出「多重支付選擇中心」
+// ✨ 多重支付選擇中心
 window.handleRecharge = function(amount) {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount < 20) return alert("最低儲值金額為 $20 USD");
     
-    // 關閉輸入抽屜 (如果有)
     const drawer = document.getElementById('recharge-drawer');
     if (drawer) drawer.style.display = 'none';
 
-    // 建立支付選擇彈窗
     let selector = document.getElementById('payment-selector-modal');
     if (!selector) {
         selector = document.createElement('div');
@@ -84,17 +83,17 @@ window.handleRecharge = function(amount) {
                 預計儲值金額：<span class="text-sexify text-lg block mt-1">🪙 ${numAmount} USD</span>
             </p>
             <div class="space-y-3">
-                <button onclick="processNowPayments(${numAmount})" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-sexify transition active:scale-95 group">
+                <button onclick="window.processNowPayments(${numAmount})" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-sexify transition active:scale-95 group">
                     <div class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center group-hover:bg-orange-100 transition text-xl"><i class="fa-brands fa-bitcoin text-orange-500"></i></div>
-                    <div class="text-left flex-1"><p class="font-black text-gray-900">加密貨幣支付</p><p class="text-[10px] text-gray-400 font-bold">由 NowPayments 提供支持</p></div>
+                    <div class="text-left flex-1"><p class="font-black text-gray-900">加密貨幣支付</p><p class="text-[10px] text-gray-400 font-bold">由 NowPayments 提供</p></div>
                     <i class="fa-solid fa-chevron-right text-gray-300"></i>
                 </button>
-                <button onclick="alert('💳 信用卡支付閘道正在申請中，即將開放！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 transition active:scale-95 group opacity-70">
+                <button onclick="alert('💳 信用卡支付閘道正在審核中，敬請期待！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 transition active:scale-95 group opacity-60">
                     <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-xl"><i class="fa-regular fa-credit-card text-blue-500"></i></div>
                     <div class="text-left flex-1"><p class="font-black text-gray-900">信用卡 (Credit Card)</p><p class="text-[10px] text-blue-500 font-bold">即將開放</p></div>
                     <i class="fa-solid fa-lock text-gray-300"></i>
                 </button>
-                <button onclick="alert('🍎 行動支付閘道正在整合中，敬請期待！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-black transition active:scale-95 group opacity-70">
+                <button onclick="alert('🍎 行動支付閘道整合中，敬請期待！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 transition active:scale-95 group opacity-60">
                     <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-xl"><i class="fa-brands fa-apple text-black"></i></div>
                     <div class="text-left flex-1"><p class="font-black text-gray-900">Apple / Google Pay</p><p class="text-[10px] text-gray-500 font-bold">即將開放</p></div>
                     <i class="fa-solid fa-lock text-gray-300"></i>
@@ -104,7 +103,6 @@ window.handleRecharge = function(amount) {
     `;
 };
 
-// 實際執行 NowPayments 支付
 window.processNowPayments = async function(numAmount) {
     const btn = document.querySelector('#payment-selector-modal button');
     if (btn) { btn.innerText = "建立訂單中..."; btn.disabled = true; }
@@ -129,7 +127,7 @@ window.processNowPayments = async function(numAmount) {
         const result = await response.json();
 
         if (result.invoice_url) {
-            showNotification("正在前往安全支付頁面...");
+            window.showNotification("正在前往安全支付頁面...");
             window.location.href = result.invoice_url;
         } else {
             throw new Error(result.message || "無法取得支付連結");
@@ -210,7 +208,7 @@ async function renderProductGrid(grid, keyword) {
         }
 
         grid.innerHTML = displayProducts.map(p => {
-            const displayImg = getSafeImageUrl(p.image_url, 'previews');
+            const displayImg = window.getSafeImageUrl(p.image_url, 'previews');
             const isUnlocked = purchasedIds.has(p.id);
             return `
                 <div onclick="window.openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95">
@@ -219,7 +217,7 @@ async function renderProductGrid(grid, keyword) {
                         ${isUnlocked ? '<div class="absolute top-2 right-2 bg-green-500 text-white text-[8px] px-2 py-1 rounded-full font-bold">已解鎖</div>' : ''}
                     </div>
                     <div class="p-3">
-                        <h3 class="font-bold text-[11px] text-gray-800 line-clamp-1">${escapeHTML(p.name)}</h3>
+                        <h3 class="font-bold text-[11px] text-gray-800 line-clamp-1">${window.escapeHTML(p.name)}</h3>
                         <div class="flex justify-between items-center mt-2">
                             <span class="text-sexify font-black text-xs">🪙 ${p.price}</span>
                         </div>
@@ -250,7 +248,7 @@ function renderCartInline(grid) {
         <div class="flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm animate-fade-in">
             <img src="${item.img}" class="w-16 h-16 rounded-xl object-cover bg-gray-50">
             <div class="flex-1 overflow-hidden">
-                <h3 class="font-black text-sm text-gray-900 truncate mb-1">${escapeHTML(item.name)}</h3>
+                <h3 class="font-black text-sm text-gray-900 truncate mb-1">${window.escapeHTML(item.name)}</h3>
                 <p class="text-sexify font-black text-sm">🪙 ${item.price}</p>
             </div>
             <button onclick="window.removeFromCart('${item.id}')" class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center active:scale-90 transition">
@@ -274,7 +272,7 @@ function renderCartInline(grid) {
 window.addToCart = function(id, name, price, img) {
     if (cart.some(i => i.id === id)) return alert("已在清單中");
     cart.push({ id, name, price: parseInt(price), img });
-    showNotification(`已加入清單`);
+    window.showNotification(`已加入清單`);
     ensureShopTabs();
     window.closeProductModal();
 };
@@ -304,7 +302,7 @@ window.checkoutCart = async function() {
         await Promise.all(orderPromises);
 
         cart = []; 
-        showNotification("🎉 成功解鎖所有內容！");
+        window.showNotification("🎉 成功解鎖所有內容！");
         window.refreshBalanceUI();
         window.switchView('owned'); 
     } catch (e) { alert("結帳失敗: " + e.message); }
@@ -322,7 +320,7 @@ window.handlePurchase = async function(productId, price) {
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - price }).eq('id', user.id);
         await window.supabaseClient.from('orders').insert({ user_id: user.id, product_id: productId, amount: price });
 
-        showNotification("🎉 解鎖成功！馬上開始閱讀");
+        window.showNotification("🎉 解鎖成功！馬上開始閱讀");
         window.refreshBalanceUI();
         window.closeProductModal();
         window.renderShop(currentKeyword); 
@@ -335,7 +333,6 @@ window.zoomImage = function(url) {
     z.className = 'fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center opacity-0 transition-opacity duration-300 cursor-zoom-out backdrop-blur-sm';
     z.innerHTML = `<img src="${url}" class="max-w-[95vw] max-h-[90vh] object-contain transform scale-95 transition-transform duration-300 shadow-2xl rounded-lg">`;
     
-    // 點擊關閉動畫
     z.onclick = () => {
         z.classList.remove('opacity-100');
         z.querySelector('img').classList.remove('scale-100');
@@ -343,7 +340,6 @@ window.zoomImage = function(url) {
     };
     document.body.appendChild(z);
     
-    // 觸發進場動畫
     setTimeout(() => {
         z.classList.add('opacity-100');
         z.querySelector('img').classList.add('scale-100');
@@ -353,22 +349,20 @@ window.zoomImage = function(url) {
 window.reportProduct = async function(id) {
     if(!confirm("🚨 確定要檢舉此商品包含違規內容（如未成年、血腥、無授權盜圖）嗎？\n\n濫用檢舉將導致帳號被封鎖。")) return;
     try {
-        // 在這裡可以加入寫入 Supabase 'reports' 資料表的邏輯
-        // await window.supabaseClient.from('reports').insert({ target_id: id, type: 'product' });
-        showNotification("🚩 已收到您的檢舉，管理員將於 24 小時內審查！");
+        window.showNotification("🚩 已收到您的檢舉，管理員將於 24 小時內審查！");
     } catch(e) {
         console.error(e);
     }
 }
 
 
-// --- 📖 4. 彈窗與漫畫閱讀器 (視覺升級版) ---
+// --- 📖 4. 彈窗與漫畫閱讀器 ---
 window.openProductModal = async function(productId) {
     let modal = document.getElementById('post-detail-modal'); 
     let content = document.getElementById('post-detail-content');
     if (!modal || !content) return;
 
-    // 關閉原本的留言板，避免干擾商城展示
+    // ✨ 隱藏留言區 (專屬商城的乾淨版面)
     const commentsArea = document.getElementById('post-comments-list');
     const commentsTitle = document.querySelector('[data-i18n="comments"]');
     if(commentsArea) commentsArea.style.display = 'none';
@@ -387,34 +381,29 @@ window.openProductModal = async function(productId) {
         const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('user_id', user.id).eq('product_id', productId).maybeSingle() : { data: null };
         const isUnlocked = !!order;
 
-        const safeImg = getSafeImageUrl(item.image_url, 'previews');
+        const safeImg = window.getSafeImageUrl(item.image_url, 'previews');
 
         let buttonsHtml = isUnlocked 
             ? `<button onclick="window.openComicReader('${item.id}', '${item.image_url}')" class="w-full bg-green-500 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 flex justify-center items-center gap-2"><i class="fa-solid fa-book-open text-lg"></i> 立即觀看內容</button>`
             : `<div class="flex gap-3 mt-2">
-                    <button onclick="window.addToCart('${item.id}', '${escapeHTML(item.name)}', ${item.price}, '${safeImg}')" class="flex-1 bg-gray-100 text-gray-900 font-bold py-4 rounded-2xl active:scale-95 transition hover:bg-gray-200"><i class="fa-solid fa-cart-plus text-lg"></i></button>
+                    <button onclick="window.addToCart('${item.id}', '${window.escapeHTML(item.name)}', ${item.price}, '${safeImg}')" class="flex-1 bg-gray-100 text-gray-900 font-bold py-4 rounded-2xl active:scale-95 transition hover:bg-gray-200"><i class="fa-solid fa-cart-plus text-lg"></i></button>
                     <button onclick="window.handlePurchase('${item.id}', ${item.price})" class="flex-[3] bg-black text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 transition flex justify-center items-center gap-2 hover:bg-zinc-800"><i class="fa-solid fa-unlock"></i> 立即解鎖</button>
                </div>`;
 
-        // ✨ 視覺大升級：沉浸式黑底模糊光暈 + 懸浮放大 + 全螢幕放大 + 檢舉按鈕
+        // ✨ 沉浸式黑底模糊光暈
         content.innerHTML = `
             <div class="relative bg-black flex items-center justify-center min-h-[40vh] sm:min-h-[50vh] overflow-hidden group cursor-zoom-in" onclick="window.zoomImage('${safeImg}')">
                 <div class="absolute inset-0 bg-cover bg-center opacity-30 blur-2xl transform scale-110" style="background-image: url('${safeImg}')"></div>
                 <img src="${safeImg}" class="relative z-10 w-full h-auto max-h-[55vh] object-contain transform transition-transform duration-500 group-hover:scale-105 shadow-2xl">
-                
                 ${isUnlocked ? '<div class="absolute top-4 left-4 bg-green-500 text-white text-[10px] px-3 py-1.5 rounded-full font-black shadow-lg z-20 tracking-widest uppercase">已購買</div>' : ''}
-                
                 <button onclick="event.stopPropagation(); window.reportProduct('${item.id}')" class="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white/70 hover:text-white hover:bg-red-500 w-8 h-8 rounded-full flex items-center justify-center z-20 transition" title="檢舉違規內容">
                     <i class="fa-solid fa-flag text-[12px]"></i>
                 </button>
-                
-                <div class="absolute bottom-3 right-3 bg-black/50 backdrop-blur-md text-white/80 text-[9px] px-2 py-1 rounded font-bold z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                    點擊放大
-                </div>
+                <div class="absolute bottom-3 right-3 bg-black/50 backdrop-blur-md text-white/80 text-[9px] px-2 py-1 rounded font-bold z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">點擊放大</div>
             </div>
             <div class="p-6 bg-white rounded-t-[2rem] -mt-6 relative z-30 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                 <div class="flex justify-between items-start mb-6">
-                    <h2 class="text-2xl font-black text-gray-900 leading-tight pr-4">${escapeHTML(item.name)}</h2>
+                    <h2 class="text-2xl font-black text-gray-900 leading-tight pr-4">${window.escapeHTML(item.name)}</h2>
                     <div class="bg-red-50 text-sexify px-3 py-1.5 rounded-xl border border-red-100 flex flex-col items-center justify-center">
                         <span class="text-[9px] font-bold uppercase tracking-widest mb-0.5">價格</span>
                         <span class="text-lg font-black leading-none">🪙 ${item.price}</span>
@@ -423,34 +412,19 @@ window.openProductModal = async function(productId) {
                 <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl mb-6 border border-gray-100 shadow-sm">
                     <img src="${item.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-10 h-10 rounded-full object-cover">
                     <div>
-                        <p class="text-sm font-black text-gray-800">${escapeHTML(item.profiles?.display_name || '官方認證')}</p>
+                        <p class="text-sm font-black text-gray-800">${window.escapeHTML(item.profiles?.display_name || '官方認證')}</p>
                         <p class="text-[10px] text-sexify uppercase font-black tracking-widest mt-0.5">Verified Creator</p>
                     </div>
                 </div>
                 <div class="mb-8">
                     <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">作品描述</h4>
-                    <p class="text-sm text-gray-600 leading-relaxed whitespace-pre-line bg-gray-50 p-4 rounded-2xl border border-gray-100">${escapeHTML(item.description || '這件商品目前沒有詳細描述。')}</p>
+                    <p class="text-sm text-gray-600 leading-relaxed whitespace-pre-line bg-gray-50 p-4 rounded-2xl border border-gray-100">${window.escapeHTML(item.description || '這件商品目前沒有詳細描述。')}</p>
                 </div>
                 ${buttonsHtml}
             </div>
         `;
     } catch (err) {
         content.innerHTML = `<div class="p-20 text-center text-red-500 font-bold">載入失敗: ${err.message}</div>`;
-    }
-};
-
-window.closeProductModal = function() {
-    const modal = document.getElementById('post-detail-modal');
-    if (modal) {
-        modal.classList.add('translate-x-full');
-        setTimeout(() => { 
-            modal.classList.add('hidden'); 
-            // 關閉時把留言板恢復 (讓首頁的文章點擊不受影響)
-            const commentsArea = document.getElementById('post-comments-list');
-            const commentsTitle = document.querySelector('[data-i18n="comments"]');
-            if(commentsArea) commentsArea.style.display = '';
-            if(commentsTitle) commentsTitle.style.display = '';
-        }, 300);
     }
 };
 
@@ -465,7 +439,7 @@ window.openComicReader = function(productId, imageUrlsString) {
         document.body.appendChild(readerModal);
     }
 
-    const urls = imageUrlsString.split(',').filter(u => u.trim() !== '').map(u => getSafeImageUrl(u, 'products'));
+    const urls = imageUrlsString.split(',').filter(u => u.trim() !== '').map(u => window.getSafeImageUrl(u, 'products'));
 
     readerModal.innerHTML = `
         <header class="bg-black/80 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-10 border-b border-zinc-800">
@@ -498,8 +472,10 @@ window.closeComicReader = function() {
     }
 };
 
-// 初始化
+// ✨ 補回這個！保證進去商城會有畫面！
 document.addEventListener('DOMContentLoaded', () => {
-    window.refreshBalanceUI();
-    // 不自動調用 renderShop，讓 app.js 去控制初始首頁
+    if (window.refreshBalanceUI) window.refreshBalanceUI();
+    if (document.getElementById('shop-grid')) {
+        window.renderShop();
+    }
 });
