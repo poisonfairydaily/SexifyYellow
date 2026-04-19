@@ -1,5 +1,5 @@
 /**
- * shop.js - 專業商城正式營運版 (進階篩選 + 官方標籤 + 匯率轉換系統 + 無 Emoji 質感版)
+ * shop.js - 專業商城正式營運版 (進階篩選 + 官方標籤 + 匯率轉換系統 + 無 Emoji 質感版 + 修正 CORS 頭像)
  */
 
 let cart = []; 
@@ -11,6 +11,9 @@ window.shopSortType = 'new';
 
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
 const EXCHANGE_RATE = 20; 
+
+// ✨ 預設頭像解決方案 (DiceBear)，避免 CORS 錯誤
+const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=U&backgroundColor=eeeeee&textColor=999999";
 
 // --- 安全核心與輔助函數 ---
 window.escapeHTML = function(str) {
@@ -83,7 +86,7 @@ window.handleRecharge = function(amount) {
     const tokensToGet = numAmount * EXCHANGE_RATE;
 
     selector.innerHTML = `
-        <div class="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl transform transition-all scale-100">
+        <div class="bg-white rounded-[2rem] p-6 w-full max-sm shadow-2xl transform transition-all scale-100">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="text-xl font-black text-gray-900">選擇付款方式</h3>
                 <button onclick="document.getElementById('payment-selector-modal').remove()" class="text-gray-400 hover:text-gray-600 active:scale-90 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -215,6 +218,7 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
+        // ✨ 強制指定 !user_id 來解決 PGRST201 衝突
         let query = window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('status', 'approved').eq('is_archived', false); 
         
         if (keyword) query = query.ilike('name', `%${keyword}%`);
@@ -457,7 +461,7 @@ window.openProductModal = async function(productId) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        // 關鍵修復：強制指定 !user_id
+        // ✨ 強制指定 !user_id 抓取資料
         const { data: item, error } = await window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('id', productId).single();
         if (error) throw error;
 
@@ -470,6 +474,9 @@ window.openProductModal = async function(productId) {
 
         const safeImg = window.getSafeImageUrl(item.image_url, 'previews');
         const officialBadge = isOfficial ? `<span class="bg-black text-white px-2 py-1 rounded-[4px] text-[10px] font-black mr-2 align-middle uppercase tracking-widest shadow-sm">OFFICIAL</span>` : '';
+
+        // ✨ 修正頭像：優先使用 avatar_url，否則使用 DEFAULT_AVATAR
+        const userAvatar = item.profiles?.avatar_url || DEFAULT_AVATAR;
 
         let buttonsHtml = '';
         if (isUnlocked) {
@@ -510,7 +517,7 @@ window.openProductModal = async function(productId) {
                     </div>
                 </div>
                 <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl mb-6 border border-gray-100 shadow-sm">
-                    <img src="${item.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
+                    <img src="${userAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
                     <div>
                         <p class="text-sm font-black text-gray-800">${window.escapeHTML(item.profiles?.display_name || '官方認證')}</p>
                         <p class="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-0.5">${isOfficial ? 'OFFICIAL CREATOR' : 'CREATOR'}</p>
