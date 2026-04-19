@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 小紅書完美排版版
+// js/discovery.js - 小紅書完美排版版 (防衝突修復版)
 // ==========================================
 
 let currentSortType = 'latest';
@@ -19,7 +19,7 @@ window.switchDiscoveryTab = function(btn, sortType) {
     btn.classList.remove('bg-gray-200', 'text-gray-600');
     btn.classList.add('bg-black', 'text-white');
     currentSortType = sortType;
-    renderDiscovery();
+    window.renderDiscovery();
 };
 
 window.renderDiscovery = async function(filterKeyword = '') {
@@ -62,6 +62,13 @@ window.renderDiscovery = async function(filterKeyword = '') {
             if (likeData) likeData.forEach(l => myLikes.add(l.post_id));
         }
 
+        window.escapeHTML = window.escapeHTML || function(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
+
         grid.innerHTML = posts.map(post => {
             const safeName = window.escapeHTML(post.profiles?.display_name || '使用者');
             const safeCaption = window.escapeHTML(post.caption || '');
@@ -71,7 +78,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
             const isLiked = myLikes.has(post.id);
-            // ✨ 保證愛心一定會渲染的 Class 組合
             const heartClass = isLiked ? 'fa-solid fa-heart text-sexify' : 'fa-regular fa-heart text-gray-500';
             const currentLikes = post.likes_count || post.likes || 0;
 
@@ -90,7 +96,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
                     ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖內容</span></div>` : ''}
                 </div>
 
-                <div class="p-3 bg-white" onclick="handleCardClick(event, '${post.id}')">
+                <div class="p-3 bg-white" onclick="window.handleCardClick(event, '${post.id}')">
                     <p class="text-[13px] text-gray-900 line-clamp-2 leading-snug font-medium mb-2.5">${safeCaption}</p>
                     
                     <div class="flex justify-between items-center">
@@ -100,7 +106,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
                         </div>
 
                         <div class="flex items-center flex-shrink-0">
-                            <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
+                            <button onclick="event.stopPropagation(); window.toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
                                 <i class="${heartClass} text-[14px] transition-transform group-active:scale-125"></i>
                                 <span class="text-[12px] font-medium text-gray-600">${currentLikes}</span>
                             </button>
@@ -170,23 +176,28 @@ window.handleCardClick = function(e, postId) {
         e.preventDefault();
         return;
     }
-    if (typeof viewPost === 'function') viewPost(postId);
+    if (typeof window.viewPost === 'function') window.viewPost(postId);
 };
 
-// (底下如有 viewPost, renderComments 等詳情頁邏輯，請保留你原本的)
 // =====================================
-// 以下為詳情頁、留言等原生功能 (保持不變)
+// 詳情頁、留言等原生功能 (防衝突修復版)
 // =====================================
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
     const modal = document.getElementById('post-detail-modal');
-    if(!modal) return;
+    const contentDiv = document.getElementById('post-detail-content');
+    if(!modal || !contentDiv) return;
+
+    // ✨ 核心修復：強制把留言區打開！(因為商城打開商品時會把它隱藏)
+    const commentsArea = document.getElementById('post-comments-list');
+    const commentsTitle = document.querySelector('[data-i18n="comments"]');
+    if(commentsArea) commentsArea.style.display = 'block';
+    if(commentsTitle) commentsTitle.style.display = 'block';
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
-    const contentDiv = document.getElementById('post-detail-content');
     contentDiv.innerHTML = `<div class="p-10 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>`;
     
     try {
@@ -208,11 +219,11 @@ window.viewPost = async function(postId) {
         if (optionsMenu) {
             if (post.user_id === myId) {
                 optionsMenu.innerHTML = `
-                    <button onclick="editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50">編輯貼文</button>
-                    <button onclick="deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">刪除貼文</button>
+                    <button onclick="window.editPostContent('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 border-b border-gray-50">編輯貼文</button>
+                    <button onclick="window.deletePostFromModal('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">刪除貼文</button>
                 `;
             } else {
-                optionsMenu.innerHTML = `<button onclick="reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">檢舉貼文</button>`;
+                optionsMenu.innerHTML = `<button onclick="window.reportPost('${post.id}')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-gray-50">檢舉貼文</button>`;
             }
         }
 
@@ -231,7 +242,7 @@ window.viewPost = async function(postId) {
         const postObjStr = encodeURIComponent(JSON.stringify({ id: post.id, caption: post.caption, media_url: post.media_url, authorName, authorAvatar }));
 
         contentDiv.innerHTML = `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition" onclick="closePostDetail(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition" onclick="window.closePostDetail(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
                 <img src="${authorAvatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm" onerror="this.src='https://ui-avatars.com/api/?name=User'">
                 <div class="flex-1">
                     <div class="font-bold text-sm text-gray-900">${authorName}</div>
@@ -244,14 +255,14 @@ window.viewPost = async function(postId) {
             
             <div class="p-4 border-b border-gray-50 flex justify-between items-center">
                 <div class="flex items-center gap-4">
-                    <button class="text-xs hover:text-sexify transition flex items-center gap-1.5" onclick="toggleLike(this, '${post.id}', '${post.user_id}')">
+                    <button class="text-xs hover:text-sexify transition flex items-center gap-1.5" onclick="window.toggleLike(this, '${post.id}', '${post.user_id}')">
                         <i class="${likeIcon} fa-heart text-xl"></i> <span class="font-bold text-gray-400">${currentLikes}</span>
                     </button>
-                    <button class="text-xl hover:text-gray-600 transition" onclick="handleShare('${post.id}', '${window.escapeHTML(post.caption || '')}')">
+                    <button class="text-xl hover:text-gray-600 transition" onclick="if(typeof handleShare==='function') handleShare('${post.id}', '${window.escapeHTML(post.caption || '')}')">
                         <i class="fa-solid fa-share-nodes text-gray-400"></i>
                     </button>
                 </div>
-                <button class="text-xl hover:text-gray-600 transition" onclick="toggleBookmark(this, '${post.id}', '${postObjStr}')">
+                <button class="text-xl hover:text-gray-600 transition" onclick="if(typeof toggleBookmark==='function') toggleBookmark(this, '${post.id}', '${postObjStr}')">
                     <i class="${bmIcon} fa-bookmark"></i>
                 </button>
             </div>
@@ -259,7 +270,7 @@ window.viewPost = async function(postId) {
             <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed" id="detail-caption">${window.escapeHTML(post.caption || '')}</div>
         `;
         
-        renderComments();
+        window.renderComments();
     } catch(e) {
         contentDiv.innerHTML = `<div class="p-10 text-center text-red-500">無法載入貼文內容</div>`;
     }
@@ -339,8 +350,8 @@ window.submitComment = async function() {
             });
         }
         
-        renderComments();
-        if (typeof renderDiscovery === 'function') renderDiscovery();
+        window.renderComments();
+        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
     } catch(e) {
         alert("留言失敗");
     }
@@ -357,7 +368,7 @@ window.editPostContent = async function(postId) {
         if(error) throw error;
         const captionElem = document.getElementById('detail-caption');
         if(captionElem) captionElem.innerText = newText;
-        if(typeof renderDiscovery === 'function') renderDiscovery();
+        if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
     } catch (err) { alert("編輯失敗"); }
 }
 
@@ -369,8 +380,8 @@ window.deletePostFromModal = async function(postId) {
     try {
         const { error } = await window.supabaseClient.from('posts').delete().eq('id', postId);
         if(error) throw error;
-        closePostDetail();
-        if(typeof renderDiscovery === 'function') renderDiscovery();
+        window.closePostDetail();
+        if(typeof window.renderDiscovery === 'function') window.renderDiscovery();
     } catch (err) { alert("刪除失敗"); }
 }
 
