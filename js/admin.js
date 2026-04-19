@@ -1,6 +1,6 @@
 /**
  * admin.js - 究極管理員核心版 (整合 Dashboard + WebP + AI 審核 + 全域內容中控)
- * 修正：多重關聯錯誤 (profiles!user_id)、Description 上傳遺漏、完美合併活躍審查表、強效刪除機制
+ * 修正：多重關聯錯誤、Description 遺漏、強效刪除機制、✨ AI 報告 Likelihood 相容性修復與二次元偵測
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -21,6 +21,13 @@ function escapeHTML(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// 用於 AI 標籤的顏色判定
+function getAiColor(v) {
+    if (v === 'VERY_LIKELY' || v === 'LIKELY') return '#ff4d4f'; // 紅色危險
+    if (v === 'POSSIBLE') return '#faad14'; // 橘色警告
+    return '#8c8c8c'; // 灰色安全
 }
 
 // --- 🔐 1. 初始化門禁檢查 ---
@@ -184,20 +191,29 @@ if (uploadBtn) {
 
                 if (auditError) throw new Error("AI 審核系統連線失敗");
                 
+                console.log("🔍 AI 原始報告內容:", audit); // 方便管理員在 F12 除錯
+                
                 const safeSearch = audit.safeSearchAnnotation || audit;
 
-                if (safeSearch && safeSearch.violence) {
+                if (safeSearch) {
+                    // ✨ 修正點：支援 Google Vision SDK 的 Likelihood 後綴
+                    const valViolence = safeSearch.violence || safeSearch.violenceLikelihood;
+                    const valMedical = safeSearch.medical || safeSearch.medicalLikelihood;
+                    const valAdult = safeSearch.adult || safeSearch.adultLikelihood;
+                    const valRacy = safeSearch.racy || safeSearch.racyLikelihood;
+
                     const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
-                    const isViolent = dangerLevels.includes(safeSearch.violence);
-                    const isMedicalGore = dangerLevels.includes(safeSearch.medical);
+                    
+                    const isViolent = dangerLevels.includes(valViolence);
+                    const isMedicalGore = dangerLevels.includes(valMedical);
                     
                     if (isViolent || isMedicalGore) {
                         alert(`🚨 嚴重違規：圖片 "${escapeHTML(file.name)}" 偵測到暴力或血腥內容，已強制攔截！`);
                         continue; 
                     }
 
-                    const isAdult = dangerLevels.includes(safeSearch.adult);
-                    const isRacy = dangerLevels.includes(safeSearch.racy);
+                    const isAdult = dangerLevels.includes(valAdult);
+                    const isRacy = dangerLevels.includes(valRacy);
                     
                     if (isAdult || isRacy) {
                         console.log(`🔥 圖片 "${file.name}" 包含成人/性感內容，安全放行 (18+ 政策)。`);
@@ -289,6 +305,13 @@ window.loadPendingProducts = async function() {
             
             const prof = Array.isArray(item.profiles) ? item.profiles[0] : (item.profiles || {});
 
+            // ✨ 加入：在待審核列表直接顯示 AI 報告 (防止 Creators 繞過)
+            const rawReport = item.ai_report || {};
+            const report = rawReport.safeSearchAnnotation || rawReport;
+            const valAdult = report.adult || report.adultLikelihood || 'N/A';
+            const valViolence = report.violence || report.violenceLikelihood || 'N/A';
+            const hasAiReport = valAdult !== 'N/A';
+
             return `
             <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
                 <div class="h-44 bg-gray-100 relative cursor-zoom-in" onclick="openLightbox('${imgPath}')">
@@ -298,7 +321,15 @@ window.loadPendingProducts = async function() {
                 </div>
                 <div class="p-4 flex-1 flex flex-col">
                     <h3 class="font-bold text-sm text-gray-900 mb-1 truncate">${escapeHTML(item.name)}</h3>
-                    <p class="text-[10px] text-gray-500 mb-4">創作者: ${escapeHTML(prof.display_name || '未知')}</p>
+                    <p class="text-[10px] text-gray-500 mb-2">創作者: ${escapeHTML(prof.display_name || '未知')}</p>
+                    
+                    <div class="mb-4 text-[10px] bg-gray-50 p-2 rounded border border-gray-100">
+                        ${hasAiReport ? 
+                            `<span style="color:${getAiColor(valAdult)}">🔞成人: ${valAdult}</span><br><span style="color:${getAiColor(valViolence)}">💀暴力: ${valViolence}</span>` 
+                            : `<span class="text-orange-500 font-bold">⚠️ 此商品上傳時未經過 AI 掃描</span>`
+                        }
+                    </div>
+
                     <div class="mt-auto flex flex-col gap-2">
                         <button onclick="approveProduct('${item.id}')" class="w-full bg-green-500 text-white font-bold py-2 rounded-lg text-xs hover:bg-green-600 transition">
                             <i class="fa-solid fa-check mr-1"></i> 核准上架
@@ -363,7 +394,18 @@ function renderTable(products) {
     }
 
     products.forEach(p => {
-        const report = p.ai_report || {};
+        // ✨ 修正點：全域相容 Likelihood，加入 Spoof 屬性偵測二次元干擾
+        const rawReport = p.ai_report || {};
+        const report = rawReport.safeSearchAnnotation || rawReport;
+
+        const valViolence = report.violence || report.violenceLikelihood || 'N/A';
+        const valRacy = report.racy || report.racyLikelihood || 'N/A';
+        const valMedical = report.medical || report.medicalLikelihood || 'N/A';
+        const valAdult = report.adult || report.adultLikelihood || 'N/A';
+        const valSpoof = report.spoof || report.spoofLikelihood || 'N/A';
+
+        const isSuspicious = [valViolence, valRacy, valMedical, valAdult].some(v => v === 'POSSIBLE' || v === 'LIKELY' || v === 'VERY_LIKELY');
+
         const allFiles = p.image_url?.split(',') || [];
         const imagesHtml = allFiles.map(fileName => {
             const imgUrl = fileName.includes('r2.dev') 
@@ -374,9 +416,6 @@ function renderTable(products) {
         
         let reportCount = 0;
         if (p.reports && p.reports.length > 0) reportCount = p.reports[0].count;
-
-        const getClr = (v) => (v === 'LIKELY' || v === 'VERY_LIKELY') ? '#ff4d4f' : '#8c8c8c';
-        const isSuspicious = Object.values(report).some(v => v === 'POSSIBLE' || v === 'LIKELY' || v === 'VERY_LIKELY');
 
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid #eee";
@@ -393,10 +432,12 @@ function renderTable(products) {
                 ${reportCount > 0 ? `<div style="color:#ff4d4f; font-size:11px; margin-top:4px;">⚠️ 被用戶檢舉: ${reportCount} 次</div>` : ''}
             </td>
             <td style="padding: 15px; font-weight:bold; color:#ff2442;">🪙 ${p.price}</td>
-            <td style="padding: 15px; font-size: 11px; font-family: monospace;">
-                <div style="color: ${getClr(report.violence)}">💀 暴力: ${report.violence || 'N/A'}</div>
-                <div style="color: ${getClr(report.racy)}">👙 挑逗: ${report.racy || 'N/A'}</div>
-                <div style="color: ${getClr(report.medical)}">🏥 醫療: ${report.medical || 'N/A'}</div>
+            <td style="padding: 15px; font-size: 11px; font-family: monospace; line-height: 1.5;">
+                <div style="color: ${getAiColor(valAdult)}">🔞 成人: ${valAdult}</div>
+                <div style="color: ${getAiColor(valViolence)}">💀 暴力: ${valViolence}</div>
+                <div style="color: ${getAiColor(valRacy)}">👙 挑逗: ${valRacy}</div>
+                <div style="color: ${getAiColor(valMedical)}">🏥 醫療: ${valMedical}</div>
+                <div style="color: #bfbfbf">🤡 惡搞/卡通: ${valSpoof}</div>
             </td>
             <td style="padding: 15px;">
                 <div style="display:flex; flex-direction:column; gap:8px;">
