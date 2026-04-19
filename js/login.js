@@ -1,5 +1,5 @@
 // ==========================================
-// js/login.js - 完整版 (登入/註冊/忘記密碼)
+// js/login.js - 完整版 (登入/註冊/忘記密碼) - 防止死循環修復版
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnRegister = document.getElementById('btn-register');
     const btnForgot = document.getElementById('btn-forgot-password');
     const msgBox = document.getElementById('auth-message');
+
+    // ✨ 終極防護：如果畫面上沒有登入信箱輸入框，代表這不是登入頁面，直接停止執行，防止無限循環！
+    if (!emailInput) return;
 
     function showMessage(msg, isError = false) {
         if (!msgBox) return;
@@ -20,8 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function checkSession() {
         if (!window.supabaseClient) return;
         const { data: { session } } = await window.supabaseClient.auth.getSession();
-        if (session) {
-            window.location.href = 'index.html';
+        
+        // ✨ 修改跳轉邏輯：只有在登入頁面且有 session 時，才使用 replace 跳轉 (防止上一頁循環)
+        if (session && window.location.pathname.includes('login.html')) {
+            window.location.replace('index.html');
         }
     }
     checkSession();
@@ -43,7 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 showMessage('登入成功！正在跳轉...', false);
                 localStorage.setItem('userId', data.user.id);
-                setTimeout(() => { window.location.href = 'index.html'; }, 500);
+                // 使用 replace 避免瀏覽器歷史紀錄產生死循環
+                setTimeout(() => { window.location.replace('index.html'); }, 500);
             } catch (error) {
                 btnLogin.disabled = false;
                 btnLogin.innerText = originalText;
@@ -74,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ]);
                 }
                 showMessage('註冊成功！歡迎加入，正在跳轉...', false);
-                setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+                setTimeout(() => { window.location.replace('index.html'); }, 1000);
             } catch (error) {
                 btnRegister.disabled = false;
                 btnRegister.innerText = originalText;
