@@ -1,27 +1,53 @@
 // ==========================================
-// js/create.js - Cloudflare R2 上傳版
+// js/create.js - Cloudflare R2 上傳版 + 滑動關閉
 // ==========================================
 
-function openUploadModal() {
+window.openUploadModal = function() {
     document.getElementById('upload-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('upload-panel').classList.remove('translate-y-full'), 10);
-}
+};
 
-function closeUploadModal() {
+window.closeUploadModal = function() {
     document.getElementById('upload-panel').classList.add('translate-y-full');
     setTimeout(() => {
         document.getElementById('upload-modal').classList.add('hidden');
         resetUploadForm();
     }, 300);
-}
+};
 
-// 建立一個變數來儲存原始檔案，不要只存 Base64
+// ✨ 新增：觸控往下滑動關閉面板的邏輯
+document.addEventListener('DOMContentLoaded', () => {
+    const uploadPanel = document.getElementById('upload-panel');
+    let startY = 0;
+
+    if (uploadPanel) {
+        uploadPanel.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        uploadPanel.addEventListener('touchmove', (e) => {
+            const currentY = e.touches[0].clientY;
+            // 如果手指往下滑動超過 80px，就觸發關閉
+            if (currentY - startY > 80) {
+                window.closeUploadModal();
+            }
+        }, { passive: true });
+        
+        // 讓白邊也能點擊關閉
+        const dragHandle = uploadPanel.querySelector('.w-12.h-1\\.5.bg-gray-200');
+        if(dragHandle) {
+            dragHandle.style.cursor = 'pointer';
+            dragHandle.addEventListener('click', window.closeUploadModal);
+        }
+    }
+});
+
 let selectedFile = null;
 
-function handleFileSelect(e) {
+window.handleFileSelect = function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    selectedFile = file; // 儲存原始檔案供上傳 Worker 使用
+    selectedFile = file; 
     
     const isVideo = file.type.startsWith('video/');
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
@@ -38,7 +64,7 @@ function handleFileSelect(e) {
         document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
     };
     reader.readAsDataURL(file);
-}
+};
 
 function resetUploadForm() {
     selectedFile = null;
@@ -46,23 +72,24 @@ function resetUploadForm() {
     if (priceEl) priceEl.value = '';
     const captionEl = document.getElementById('post-caption');
     if (captionEl) captionEl.value = '';
-    const viewFreeEl = document.getElementById('view-free');
-    if (viewFreeEl) viewFreeEl.checked = true;
+    const viewPaidEl = document.getElementById('view-paid');
+    if (viewPaidEl) viewPaidEl.checked = false;
 
-    document.getElementById('media-preview').classList.add('hidden');
-    document.getElementById('video-preview').classList.add('hidden');
-    document.getElementById('media-placeholder').classList.remove('hidden');
-    document.getElementById('media-preview-container').dataset.mediaType = ''; 
-    document.getElementById('media-preview').src = '';
-    document.getElementById('video-preview').src = '';
+    const mediaPreview = document.getElementById('media-preview');
+    const videoPreview = document.getElementById('video-preview');
+    const placeholder = document.getElementById('media-placeholder');
+    const container = document.getElementById('media-preview-container');
+
+    if(mediaPreview) { mediaPreview.classList.add('hidden'); mediaPreview.src = ''; }
+    if(videoPreview) { videoPreview.classList.add('hidden'); videoPreview.src = ''; }
+    if(placeholder) placeholder.classList.remove('hidden');
+    if(container) container.dataset.mediaType = ''; 
 }
 
-// ✨ 核心功能：上傳檔案到 Cloudflare R2
 async function uploadToR2(file) {
     const formData = new FormData();
     formData.append('file', file);
-
-    // 請換成你剛才部署成功的 Worker 網址
+    // 你的 Worker 網址
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
 
     const response = await fetch(WORKER_URL, {
@@ -73,7 +100,7 @@ async function uploadToR2(file) {
     if (!response.ok) throw new Error('上傳到 R2 失敗');
     
     const result = await response.json();
-    return result.url; // 這裡回傳的是 https://pub-xxx.r2.dev/檔名.jpg
+    return result.url;
 }
 
 window.publishPost = async function() {
@@ -83,7 +110,6 @@ window.publishPost = async function() {
     publishBtn.innerText = "驗證身分中...";
     publishBtn.disabled = true;
 
-    // 1. 安全檢查
     const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
     if (authError || !user) {
         publishBtn.innerText = originalBtnText;
@@ -107,19 +133,19 @@ window.publishPost = async function() {
     let finalMediaUrl = '';
 
     try {
-        // 2. 如果有選擇檔案，先執行 R2 上傳
         if (selectedFile) {
             publishBtn.innerText = "上傳媒體中...";
             finalMediaUrl = await uploadToR2(selectedFile);
-            console.log("R2 上傳成功:", finalMediaUrl);
         }
 
-        // 3. 寫入 Supabase 資料庫
         publishBtn.innerText = "發佈中...";
+        // 加入防 XSS 的安全過濾 (如果 app.js 沒有，這裡用自定義備案)
+        const safeCaption = typeof window.escapeHTML === 'function' ? window.escapeHTML(caption) : caption.replace(/[<>&"']/g, '');
+        
         const { error } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
-            caption: window.escapeHTML(caption),
-            media_url: finalMediaUrl, // 存入 R2 的公開網址
+            caption: safeCaption,
+            media_url: finalMediaUrl,
             is_paid: isPaid,
             price: price
         }]);
@@ -127,8 +153,8 @@ window.publishPost = async function() {
         if (error) throw error;
 
         alert('✨ 發佈成功！');
-        closeUploadModal();
-        if (typeof renderDiscovery === 'function') renderDiscovery();
+        window.closeUploadModal();
+        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
 
     } catch (err) {
         console.error("發佈流程失敗:", err);
@@ -137,23 +163,15 @@ window.publishPost = async function() {
         publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
     }
-}
+};
 
-// ✨ 新增功能：刪除貼文
 window.deletePost = async function(postId) {
-    // 再次確認是否刪除
-    if (!confirm('確定要刪除這篇貼文嗎？此動作無法復原。')) {
-        return;
-    }
+    if (!confirm('確定要刪除這篇貼文嗎？此動作無法復原。')) return;
 
-    // 1. 驗證身分
     const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
-    if (authError || !user) {
-        return alert('請先登入！');
-    }
+    if (authError || !user) return alert('請先登入！');
 
     try {
-        // 2. 從 Supabase 刪除資料 (加入 user_id 條件確保只能刪除自己的貼文)
         const { error } = await window.supabaseClient
             .from('posts')
             .delete()
@@ -164,12 +182,10 @@ window.deletePost = async function(postId) {
 
         alert('🗑️ 貼文已成功刪除！');
         
-        // 3. 重新渲染畫面以移除該貼文 (假設你的首頁或個人頁面有這兩個函數)
-        if (typeof renderDiscovery === 'function') renderDiscovery();
-        if (typeof renderProfile === 'function') renderProfile(); 
-
+        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
+        if (typeof window.renderProfile === 'function') window.renderProfile(); 
     } catch (err) {
         console.error("刪除貼文失敗:", err);
         alert('刪除失敗: ' + err.message);
     }
-}
+};
