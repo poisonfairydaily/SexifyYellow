@@ -3,74 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; img-src 'self' data: blob: https://*.supabase.co; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;">
-    
-    <title>商戶安全後台 - 官方管理版</title>
+    <title>SFY 管理員中控台</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        :root { --sexify: #ff3b30; }
-        body { background-color: #f5f5f7; }
-        /* 初始狀態全部隱藏，防止閃爍或權限外洩 */
-        #admin-section, #login-section { display: none; }
+        :root { --sexify: #ff2442; }
+        body { background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #admin-dashboard, #login-section { display: none; }
         .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; border: 1px solid #eee; }
-        /* 隱藏滾動條但保持功能 */
-        .custom-scroll::-webkit-scrollbar { display: none; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active { border-bottom: 2px solid var(--sexify); color: var(--sexify); font-weight: 900; }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
+<body class="min-h-screen">
 
-<div class="w-full max-w-md">
-    <div id="login-section" class="bg-white p-8 rounded-[2.5rem] shadow-xl">
-        <div class="text-center mb-8">
-            <h2 class="text-2xl font-black text-gray-900">商戶登入</h2>
-            <p class="text-gray-400 text-sm">請輸入管理員憑證以進入系統</p>
-        </div>
-        <div class="space-y-4">
-            <input type="email" id="login-email" class="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-black outline-none transition-all" placeholder="管理員信箱">
-            <input type="password" id="login-password" class="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-black outline-none transition-all" placeholder="密碼">
-            <button id="login-btn" class="w-full bg-black text-white font-bold py-4 rounded-2xl hover:opacity-90 transition-all active:scale-95">進入系統</button>
-            <p id="login-status" class="text-red-500 text-xs text-center mt-2"></p>
+    <div id="login-section" class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white p-10 rounded-[2rem] shadow-2xl w-full max-w-md">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-black italic tracking-tighter text-gray-900 mb-1">SFY ADMIN</h1>
+                <p class="text-gray-400 text-sm font-bold">最高權限管理中心</p>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="login-email" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="管理員信箱">
+                <input type="password" id="login-password" class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="密碼">
+                <button id="login-btn" class="w-full bg-black text-white font-black py-4 rounded-2xl hover:opacity-90 transition-all active:scale-95 shadow-lg">進入系統</button>
+                <p id="login-status" class="text-red-500 text-xs text-center mt-2 font-bold"></p>
+            </div>
         </div>
     </div>
 
-    <div id="admin-section" class="bg-white p-8 rounded-[2.5rem] shadow-xl">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black text-gray-900 font-sans">上架新商品</h2>
-            <a href="dashboard.html" class="text-blue-500 text-xs font-bold hover:underline">
-                <i class="fa-solid fa-chart-line mr-1"></i>審核中控台
-            </a>
+    <div id="admin-dashboard" class="flex flex-col min-h-screen">
+        <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+            <div class="flex items-center gap-4">
+                <h1 class="text-2xl font-black italic tracking-tighter text-red-500">SFY ADMIN</h1>
+                <span class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded">官方後台</span>
+            </div>
+            <button id="logout-btn-trigger" class="text-gray-500 hover:text-black font-bold text-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> 登出
+            </button>
+        </header>
+
+        <div class="bg-white px-6 border-b border-gray-200 flex gap-8">
+            <button onclick="switchTab('tab-upload')" class="tab-btn active pb-4 pt-5 text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-cloud-arrow-up mr-2"></i>發布官方商品
+            </button>
+            <button onclick="switchTab('tab-products')" class="tab-btn pb-4 pt-5 text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-store mr-2"></i>商戶商品審核 (Creators)
+            </button>
+            <button onclick="switchTab('tab-posts')" class="tab-btn pb-4 pt-5 text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-users mr-2"></i>用戶動態審核 (Users)
+            </button>
         </div>
-        
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-gray-400 mb-1 ml-2 uppercase tracking-wider">作品名稱</label>
-                <input type="text" id="p-name" class="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="輸入標題">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-400 mb-1 ml-2 uppercase tracking-wider">定價 (🪙)</label>
-                <input type="number" id="p-price" class="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="0.0">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-400 mb-1 ml-2 uppercase tracking-wider">上傳高清相片 (WebP)</label>
-                <input type="file" id="p-image" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 cursor-pointer" accept="image/*" multiple>
+
+        <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+            
+            <div id="tab-upload" class="tab-content active max-w-xl mx-auto bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 mt-6">
+                <h2 class="text-xl font-black text-gray-900 mb-6"><i class="fa-solid fa-award text-yellow-500 mr-2"></i>上架官方精選商品</h2>
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">作品名稱</label>
+                        <input type="text" id="p-name" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="輸入標題">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">定價 (🪙)</label>
+                        <input type="number" id="p-price" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">上傳相片 (將自動進行 AI 安全掃描與 WebP 轉換)</label>
+                        <input type="file" id="p-image" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-red-50 file:text-red-600 hover:file:bg-red-100 cursor-pointer" accept="image/*" multiple>
+                    </div>
+                    <div id="preview-container" class="grid grid-cols-4 gap-2 mt-2 max-h-40 overflow-y-auto custom-scroll"></div>
+                    <button id="upload-btn" class="w-full bg-red-500 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition">確認並發布</button>
+                    <p id="status" class="text-center text-xs text-gray-500 font-bold mt-2"></p>
+                </div>
             </div>
 
-            <div id="preview-container" class="grid grid-cols-3 gap-2 mt-2 max-h-40 overflow-y-auto custom-scroll"></div>
+            <div id="tab-products" class="tab-content">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-black text-gray-900">商戶上架申請 (Products)</h2>
+                    <button onclick="loadPendingProducts()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold active:scale-95"><i class="fa-solid fa-rotate-right mr-2"></i>重新整理</button>
+                </div>
+                <div id="products-grid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <div class="col-span-full text-center py-20 text-gray-400 font-bold">載入中...</div>
+                </div>
+            </div>
 
-            <button id="upload-btn" class="w-full bg-red-500 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-100 hover:bg-red-600 transition-all active:scale-95">確認並批量上架</button>
-            
-            <button id="logout-btn-trigger" class="w-full bg-white text-gray-400 font-bold py-3 rounded-2xl border border-gray-100 mt-2 text-xs hover:bg-gray-50 transition-colors">登出系統</button>
-            
-            <p id="status" class="text-center text-[10px] text-gray-400 mt-4 leading-relaxed font-medium"></p>
-        </div>
+            <div id="tab-posts" class="tab-content">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-black text-gray-900">用戶日常動態 (Posts)</h2>
+                    <button onclick="loadRecentPosts()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold active:scale-95"><i class="fa-solid fa-rotate-right mr-2"></i>重新整理</button>
+                </div>
+                <div id="posts-grid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <div class="col-span-full text-center py-20 text-gray-400 font-bold">載入中...</div>
+                </div>
+            </div>
+
+        </main>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/admin.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/admin.js"></script>
 
 </body>
 </html>
