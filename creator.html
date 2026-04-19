@@ -20,7 +20,30 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+<div class="grid grid-cols-2 gap-4 mb-8">
+    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">累計銷量</span>
+        <span id="stat-sales" class="text-2xl font-black text-gray-900">--</span>
+    </div>
 
+    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">預估淨利 (分成後)</span>
+        <div class="flex flex-col items-center">
+            <span class="text-lg font-black text-sexify leading-tight">🪙 <span id="stat-revenue-token">0</span></span>
+            <span class="text-lg font-black text-blue-600 leading-tight">＄<span id="stat-revenue-cash">0</span></span>
+        </div>
+    </div>
+
+    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">店鋪訪客</span>
+        <span id="stat-views" class="text-2xl font-black text-blue-500">--</span>
+    </div>
+
+    <div class="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-center">
+        <span class="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">待發貨/待處理</span>
+        <span id="stat-pending" class="text-2xl font-black text-orange-500">--</span>
+    </div>
+</div>
     <div class="upload-card w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 border border-white my-8">
         <div class="text-center mb-8">
             <h1 class="text-2xl font-black text-gray-900 tracking-tight">發布作品</h1>
