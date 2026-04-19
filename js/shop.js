@@ -1,19 +1,18 @@
 /**
- * shop.js - 專業商城正式營運版 (進階篩選 + 官方標籤 + 匯率轉換系統)
+ * shop.js - 專業商城正式營運版 (進階篩選 + 官方標籤 + 匯率轉換系統 + 無 Emoji 質感版)
  */
 
 let cart = []; 
 let currentView = 'all'; 
 let currentKeyword = ''; 
 
-// 新增：篩選與排序狀態
-window.shopFilterType = 'all'; // 'all', 'virtual', 'physical'
-window.shopSortType = 'new';   // 'new', 'hot', 'official'
+window.shopFilterType = 'all'; 
+window.shopSortType = 'new';   
 
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
-const EXCHANGE_RATE = 20; // 匯率：1 USD = 20 Tokens
+const EXCHANGE_RATE = 20; 
 
-// --- 🛡️ 安全核心與輔助函數 ---
+// --- 安全核心與輔助函數 ---
 window.escapeHTML = function(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -36,7 +35,7 @@ window.getSafeImageUrl = function(url, bucket = 'previews') {
 
 window.showNotification = function(msg) {
     const n = document.createElement('div');
-    n.className = 'fixed top-20 left-1/2 -translate-x-1/2 bg-black/80 text-white px-6 py-2 rounded-full text-[10px] font-bold z-[6000] animate-fade-in shadow-xl';
+    n.className = 'fixed top-20 left-1/2 -translate-x-1/2 bg-black/90 text-white px-6 py-3 rounded-full text-xs font-bold z-[6000] animate-fade-in shadow-xl tracking-wider';
     n.innerText = msg;
     document.body.appendChild(n);
     setTimeout(() => {
@@ -45,7 +44,7 @@ window.showNotification = function(msg) {
     }, 2000);
 }
 
-// --- 💰 0. 財務系統：1:20 匯率轉換中心 ---
+// --- 財務系統：1:20 匯率轉換中心 ---
 window.refreshBalanceUI = async function() {
     try {
         if (!window.supabaseClient) return;
@@ -63,7 +62,7 @@ window.refreshBalanceUI = async function() {
 window.updateRechargePreview = function(val) {
     const num = parseFloat(val) || 0;
     const preview = document.getElementById('rechargePreview');
-    if (preview) preview.innerText = `🪙 ${num * EXCHANGE_RATE}`;
+    if (preview) preview.innerText = `代幣 ${num * EXCHANGE_RATE}`;
 };
 
 window.handleRecharge = function(amount) {
@@ -92,10 +91,10 @@ window.handleRecharge = function(amount) {
             <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6 relative overflow-hidden">
                 <div class="absolute right-0 top-0 w-16 h-16 bg-sexify/10 rounded-bl-full -z-0"></div>
                 <p class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1 relative z-10">支付金額</p>
-                <p class="text-gray-900 text-2xl font-black relative z-10">＄${numAmount} <span class="text-xs text-gray-500 font-bold">USD</span></p>
+                <p class="text-gray-900 text-2xl font-black relative z-10">$${numAmount} <span class="text-xs text-gray-500 font-bold">USD</span></p>
                 <div class="h-px bg-gray-200 my-3"></div>
                 <p class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1 relative z-10">獲得代幣 (1:${EXCHANGE_RATE})</p>
-                <p class="text-sexify text-xl font-black relative z-10">🪙 ${tokensToGet}</p>
+                <p class="text-sexify text-xl font-black relative z-10">代幣 ${tokensToGet}</p>
             </div>
             <div class="space-y-3">
                 <button onclick="window.processNowPayments(${numAmount})" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-sexify transition active:scale-95 group">
@@ -103,7 +102,7 @@ window.handleRecharge = function(amount) {
                     <div class="text-left flex-1"><p class="font-black text-gray-900">加密貨幣支付</p><p class="text-[10px] text-gray-400 font-bold">由 NowPayments 提供</p></div>
                     <i class="fa-solid fa-chevron-right text-gray-300"></i>
                 </button>
-                <button onclick="alert('💳 信用卡支付閘道正在審核中，敬請期待！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 transition active:scale-95 group opacity-60">
+                <button onclick="alert('信用卡支付閘道正在審核中，敬請期待！')" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 transition active:scale-95 group opacity-60">
                     <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-xl"><i class="fa-regular fa-credit-card text-blue-500"></i></div>
                     <div class="text-left flex-1"><p class="font-black text-gray-900">信用卡 (Credit Card)</p><p class="text-[10px] text-blue-500 font-bold">即將開放</p></div>
                     <i class="fa-solid fa-lock text-gray-300"></i>
@@ -148,7 +147,7 @@ window.processNowPayments = async function(numAmount) {
     }
 };
 
-// --- 🏪 1. 頁籤與進階篩選渲染 ---
+// --- 頁籤與進階篩選渲染 ---
 function ensureShopTabs() {
     const grid = document.getElementById('shop-grid');
     if (!grid) return;
@@ -172,19 +171,18 @@ function ensureShopTabs() {
         </div>
     `;
 
-    // 只有在「商城」視圖才顯示篩選器
     if (currentView === 'all') {
         html += `
             <div class="flex gap-2 overflow-x-auto hide-scrollbar mt-2">
                 <select onchange="window.shopFilterType=this.value; window.renderShop(currentKeyword)" class="bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-full px-4 py-2 outline-none shadow-sm">
-                    <option value="all" ${window.shopFilterType === 'all' ? 'selected' : ''}>🌍 全部類型</option>
-                    <option value="virtual" ${window.shopFilterType === 'virtual' ? 'selected' : ''}>✨ 虛擬內容</option>
-                    <option value="physical" ${window.shopFilterType === 'physical' ? 'selected' : ''}>📦 實體商品</option>
+                    <option value="all" ${window.shopFilterType === 'all' ? 'selected' : ''}>全部類型</option>
+                    <option value="virtual" ${window.shopFilterType === 'virtual' ? 'selected' : ''}>虛擬內容</option>
+                    <option value="physical" ${window.shopFilterType === 'physical' ? 'selected' : ''}>實體商品</option>
                 </select>
                 <select onchange="window.shopSortType=this.value; window.renderShop(currentKeyword)" class="bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-full px-4 py-2 outline-none shadow-sm">
-                    <option value="new" ${window.shopSortType === 'new' ? 'selected' : ''}>🆕 最新上架</option>
-                    <option value="hot" ${window.shopSortType === 'hot' ? 'selected' : ''}>🔥 熱門暢銷</option>
-                    <option value="official" ${window.shopSortType === 'official' ? 'selected' : ''}>👑 官方推薦</option>
+                    <option value="new" ${window.shopSortType === 'new' ? 'selected' : ''}>最新上架</option>
+                    <option value="hot" ${window.shopSortType === 'hot' ? 'selected' : ''}>熱門暢銷</option>
+                    <option value="official" ${window.shopSortType === 'official' ? 'selected' : ''}>官方推薦</option>
                 </select>
             </div>
         `;
@@ -217,19 +215,17 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        // 抓取包含發布者角色(role)的資料
-        let query = window.supabaseClient.from('products').select('*, profiles!inner(display_name, avatar_url, role)').eq('status', 'approved').eq('is_archived', false); 
+        // 關鍵修復：強制指定 !user_id 來解決關聯衝突 PGRST201
+        let query = window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('status', 'approved').eq('is_archived', false); 
         
         if (keyword) query = query.ilike('name', `%${keyword}%`);
         if (currentView === 'all' && window.shopFilterType !== 'all') {
             query = query.eq('category', window.shopFilterType);
         }
 
-        // 排序邏輯
         if (currentView === 'all') {
             if (window.shopSortType === 'new') query = query.order('created_at', { ascending: false });
             if (window.shopSortType === 'hot') query = query.order('views', { ascending: false });
-            // 如果是 official，我們先抓最新，然後在 JS 處理將 official 提拔到最前面
             if (window.shopSortType === 'official') query = query.order('created_at', { ascending: false });
         } else {
             query = query.order('created_at', { ascending: false });
@@ -243,17 +239,15 @@ async function renderProductGrid(grid, keyword) {
 
         let displayProducts = products || [];
 
-        // 庫存過濾
         if (currentView === 'owned') {
             displayProducts = displayProducts.filter(p => purchasedIds.has(p.id));
         }
 
-        // 官方推薦排序處理
         if (currentView === 'all' && window.shopSortType === 'official') {
             displayProducts.sort((a, b) => {
                 const aOff = (a.profiles?.role === 'admin') ? 1 : 0;
                 const bOff = (b.profiles?.role === 'admin') ? 1 : 0;
-                return bOff - aOff; // Admin 排前面
+                return bOff - aOff; 
             });
         }
 
@@ -267,21 +261,19 @@ async function renderProductGrid(grid, keyword) {
             const isUnlocked = purchasedIds.has(p.id);
             const isPhysical = p.category === 'physical';
             
-            // ✨ 判斷是否為官方 (role === 'admin')
             const isOfficial = p.profiles?.role === 'admin';
-            const officialBadge = isOfficial ? `<span class="bg-black text-white px-1.5 py-0.5 rounded text-[8px] font-black mr-1 align-middle uppercase tracking-widest">Official</span>` : '';
+            const officialBadge = isOfficial ? `<span class="bg-black text-white px-1.5 py-0.5 rounded text-[8px] font-black mr-1 align-middle uppercase tracking-widest">OFFICIAL</span>` : '';
 
-            // 價格顯示邏輯
             const priceDisplay = isPhysical 
-                ? `<span class="text-blue-600 font-black text-xs">＄${p.price_usd}</span>`
-                : `<span class="text-sexify font-black text-xs">🪙 ${p.price}</span>`;
+                ? `<span class="text-blue-600 font-black text-xs">$${p.price_usd}</span>`
+                : `<span class="text-sexify font-black text-xs">代幣 ${p.price}</span>`;
 
             return `
                 <div onclick="window.openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95">
                     <div class="aspect-square w-full overflow-hidden bg-gray-100 relative">
                         <img src="${displayImg}" class="w-full h-full object-cover">
-                        ${isPhysical ? '<div class="absolute top-2 left-2 bg-blue-600/90 backdrop-blur text-white text-[8px] px-2 py-1 rounded-full font-bold shadow-sm">📦 實體</div>' : ''}
-                        ${isUnlocked ? '<div class="absolute top-2 right-2 bg-green-500/90 backdrop-blur text-white text-[8px] px-2 py-1 rounded-full font-bold shadow-sm">已解鎖</div>' : ''}
+                        ${isPhysical ? '<div class="absolute top-2 left-2 bg-blue-600/90 backdrop-blur text-white text-[8px] px-2 py-1 rounded-sm font-bold shadow-sm uppercase tracking-widest"><i class="fa-solid fa-box mr-1"></i>實體</div>' : ''}
+                        ${isUnlocked ? '<div class="absolute top-2 right-2 bg-green-500/90 backdrop-blur text-white text-[8px] px-2 py-1 rounded-sm font-bold shadow-sm uppercase tracking-widest"><i class="fa-solid fa-check mr-1"></i>已解鎖</div>' : ''}
                     </div>
                     <div class="p-3 flex flex-col flex-1 justify-between gap-2">
                         <h3 class="font-bold text-[11px] text-gray-800 line-clamp-2 leading-tight">${officialBadge}${window.escapeHTML(p.name)}</h3>
@@ -294,18 +286,18 @@ async function renderProductGrid(grid, keyword) {
         }).join('');
     } catch (e) { 
         console.error("渲染清單崩潰:", e);
-        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 font-bold">發生錯誤</div>`;
+        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 font-bold text-sm">無法載入商品資料</div>`;
     }
 }
 
-// --- 🛍️ 2. 購物車與統一結帳邏輯 ---
+// --- 購物車與統一結帳邏輯 ---
 function renderCartInline(grid) {
     if (cart.length === 0) {
         grid.innerHTML = `
             <div class="text-center py-20 flex flex-col items-center">
                 <i class="fa-solid fa-cart-shopping text-4xl text-gray-300 mb-4"></i>
-                <p class="text-gray-400 font-bold">清單內沒有商品</p>
-                <button onclick="window.switchView('all')" class="mt-6 bg-black text-white px-6 py-2 rounded-full text-xs font-bold active:scale-95">去逛逛</button>
+                <p class="text-gray-400 font-bold text-sm">清單內沒有商品</p>
+                <button onclick="window.switchView('all')" class="mt-6 bg-black text-white px-6 py-2 rounded-full text-xs font-bold active:scale-95 transition">前往選購</button>
             </div>`;
         return;
     }
@@ -318,10 +310,10 @@ function renderCartInline(grid) {
             <div class="flex-1 overflow-hidden">
                 <h3 class="font-black text-sm text-gray-900 truncate mb-1">${window.escapeHTML(item.name)}</h3>
                 <p class="text-[10px] text-gray-500 font-bold mb-0.5">${item.isPhysical ? `實體商品 ($${item.priceUsd})` : '虛擬內容'}</p>
-                <p class="text-sexify font-black text-sm">🪙 ${item.tokenCost}</p>
+                <p class="text-sexify font-black text-sm">代幣 ${item.tokenCost}</p>
             </div>
             <button onclick="window.removeFromCart('${item.id}')" class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center active:scale-90 transition">
-                <i class="fa-solid fa-trash-can"></i>
+                <i class="fa-solid fa-trash-can text-sm"></i>
             </button>
         </div>
     `).join('');
@@ -332,10 +324,10 @@ function renderCartInline(grid) {
             <div class="flex justify-between items-end relative z-10">
                 <div>
                     <span class="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block mb-1">扣除總代幣</span>
-                    <span class="text-3xl font-black text-sexify leading-none">🪙 ${totalTokens}</span>
+                    <span class="text-3xl font-black text-sexify leading-none">代幣 ${totalTokens}</span>
                 </div>
             </div>
-            <button onclick="window.checkoutCart()" class="w-full bg-white text-black font-black py-4 rounded-xl active:scale-95 transition shadow-lg relative z-10 mt-2">一鍵安全解鎖</button>
+            <button onclick="window.checkoutCart()" class="w-full bg-white text-black font-black py-4 rounded-xl active:scale-95 transition shadow-lg relative z-10 mt-2">一鍵安全結帳</button>
         </div>
     `;
     grid.innerHTML = html;
@@ -348,7 +340,7 @@ window.addToCart = function(id, name, price, priceUsd, category, img) {
     const tokenCost = isPhysical ? (parseFloat(priceUsd) * EXCHANGE_RATE) : parseInt(price);
 
     cart.push({ id, name, price, priceUsd, category, isPhysical, tokenCost, img });
-    window.showNotification(`已加入清單`);
+    window.showNotification("已加入清單");
     ensureShopTabs();
     window.closeProductModal();
 };
@@ -362,31 +354,29 @@ window.checkoutCart = async function() {
     if (cart.length === 0) return;
     const totalTokens = cart.reduce((sum, item) => sum + item.tokenCost, 0);
     
-    if (!confirm(`系統將從餘額扣除 🪙 ${totalTokens} 代幣來結帳清單，確定嗎？`)) return;
+    if (!confirm(`系統將從餘額扣除 ${totalTokens} 代幣來結帳清單，確定嗎？`)) return;
 
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (!user) throw new Error("請先登入");
+        if (!user) throw new Error("請先登入帳號");
 
         const { data: profile } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
-        if (profile.balance < totalTokens) return alert("代幣餘額不足，請先點擊右上角「+」儲值！");
+        if (profile.balance < totalTokens) return alert("代幣餘額不足，請先點擊右上角「+」儲值。");
 
-        // 扣款
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - totalTokens }).eq('id', user.id);
 
-        // 建立訂單 (寫入實際扣除的代幣，以及如果為實體則寫入金額)
         const orderPromises = cart.map(item => window.supabaseClient.from('orders').insert({
             user_id: user.id, 
             product_id: item.id, 
             amount: item.tokenCost, 
             amount_usd: item.isPhysical ? item.priceUsd : 0,
             category: item.category,
-            status: 'pending' // 等待發貨或處理
+            status: 'pending' 
         }));
         await Promise.all(orderPromises);
 
         cart = []; 
-        window.showNotification("🎉 成功解鎖所有內容！");
+        window.showNotification("成功解鎖所有內容！");
         window.refreshBalanceUI();
         window.switchView('owned'); 
     } catch (e) { alert("結帳失敗: " + e.message); }
@@ -397,17 +387,17 @@ window.handlePurchase = async function(productId, price, priceUsd, category) {
     const tokenCost = isPhysical ? (parseFloat(priceUsd) * EXCHANGE_RATE) : parseInt(price);
 
     const confirmMsg = isPhysical 
-        ? `此實體商品定價為 $${priceUsd} USD。\n系統將自動換算並扣除 🪙 ${tokenCost} 代幣，確定購買嗎？`
-        : `確定要花費 🪙 ${tokenCost} 單獨解鎖此項目嗎？`;
+        ? `此實體商品定價為 $${priceUsd} USD。\n系統將自動換算並扣除 ${tokenCost} 代幣，確定購買嗎？`
+        : `確定要花費 ${tokenCost} 代幣單獨解鎖此項目嗎？`;
 
     if (!confirm(confirmMsg)) return;
 
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (!user) throw new Error("請先登入");
+        if (!user) throw new Error("請先登入帳號");
 
         const { data: profile } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
-        if (profile.balance < tokenCost) return alert("代幣餘額不足，請先點擊右上角「+」儲值！");
+        if (profile.balance < tokenCost) return alert("代幣餘額不足，請先點擊右上角「+」儲值。");
 
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - tokenCost }).eq('id', user.id);
         await window.supabaseClient.from('orders').insert({ 
@@ -419,14 +409,14 @@ window.handlePurchase = async function(productId, price, priceUsd, category) {
             status: 'pending'
         });
 
-        window.showNotification("🎉 交易成功！");
+        window.showNotification("交易成功！");
         window.refreshBalanceUI();
         window.closeProductModal();
         window.renderShop(currentKeyword); 
     } catch (e) { alert("購買失敗: " + e.message); }
 };
 
-// --- 🔍 3. 沉浸式視覺：全螢幕無損看圖與檢舉 ---
+// --- 沉浸式視覺：全螢幕無損看圖與檢舉 ---
 window.zoomImage = function(url) {
     let z = document.createElement('div');
     z.className = 'fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center opacity-0 transition-opacity duration-300 cursor-zoom-out backdrop-blur-sm';
@@ -446,17 +436,16 @@ window.zoomImage = function(url) {
 };
 
 window.reportProduct = async function(id) {
-    if(!confirm("🚨 確定要檢舉此商品包含違規內容（如未成年、血腥、無授權盜圖）嗎？\n\n濫用檢舉將導致帳號被封鎖。")) return;
-    window.showNotification("🚩 已收到您的檢舉，管理員將於 24 小時內審查！");
+    if(!confirm("確定要檢舉此商品包含違規內容（如未成年、血腥、無授權盜圖）嗎？\n\n濫用檢舉將導致帳號被限制。")) return;
+    window.showNotification("已收到您的檢舉，管理員將於 24 小時內審查。");
 }
 
-// --- 📖 4. 彈窗與漫畫閱讀器 ---
+// --- 彈窗與漫畫閱讀器 ---
 window.openProductModal = async function(productId) {
     let modal = document.getElementById('post-detail-modal'); 
     let content = document.getElementById('post-detail-content');
     if (!modal || !content) return;
 
-    // 隱藏一般社群留言區
     const commentsArea = document.getElementById('post-comments-list');
     const commentsTitle = document.querySelector('[data-i18n="comments"]');
     if(commentsArea) commentsArea.style.display = 'none';
@@ -469,10 +458,10 @@ window.openProductModal = async function(productId) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        const { data: item, error } = await window.supabaseClient.from('products').select('*, profiles(display_name, avatar_url, role)').eq('id', productId).single();
+        // 關鍵修復：強制指定 !user_id
+        const { data: item, error } = await window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('id', productId).single();
         if (error) throw error;
 
-        // 增加觀看次數
         await window.supabaseClient.from('products').update({ views: (item.views || 0) + 1 }).eq('id', item.id);
 
         const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('user_id', user.id).eq('product_id', productId).maybeSingle() : { data: null };
@@ -481,9 +470,8 @@ window.openProductModal = async function(productId) {
         const isOfficial = item.profiles?.role === 'admin';
 
         const safeImg = window.getSafeImageUrl(item.image_url, 'previews');
-        const officialBadge = isOfficial ? `<span class="bg-black text-white px-2 py-1 rounded-[6px] text-[10px] font-black mr-2 align-middle uppercase tracking-widest shadow-sm">Official</span>` : '';
+        const officialBadge = isOfficial ? `<span class="bg-black text-white px-2 py-1 rounded-[4px] text-[10px] font-black mr-2 align-middle uppercase tracking-widest shadow-sm">OFFICIAL</span>` : '';
 
-        // 動態按鈕邏輯
         let buttonsHtml = '';
         if (isUnlocked) {
             buttonsHtml = isPhysical 
@@ -498,19 +486,18 @@ window.openProductModal = async function(productId) {
             `;
         }
 
-        // 價格顯示區塊
         const priceDisplayHTML = isPhysical
             ? ` <span class="text-[9px] font-bold uppercase tracking-widest mb-0.5 text-blue-600">實體定價</span>
-                <span class="text-xl font-black leading-none text-blue-600">＄${item.price_usd}</span>
-                <span class="text-[9px] font-bold text-gray-400 mt-1">(扣除 🪙 ${item.price_usd * EXCHANGE_RATE})</span>`
+                <span class="text-xl font-black leading-none text-blue-600">$${item.price_usd}</span>
+                <span class="text-[9px] font-bold text-gray-400 mt-1">(扣除代幣 ${item.price_usd * EXCHANGE_RATE})</span>`
             : ` <span class="text-[9px] font-bold uppercase tracking-widest mb-0.5 text-sexify">解鎖價</span>
-                <span class="text-xl font-black leading-none text-sexify">🪙 ${item.price}</span>`;
+                <span class="text-xl font-black leading-none text-sexify">代幣 ${item.price}</span>`;
 
         content.innerHTML = `
             <div class="relative bg-black flex items-center justify-center min-h-[40vh] sm:min-h-[50vh] overflow-hidden group cursor-zoom-in" onclick="window.zoomImage('${safeImg}')">
                 <div class="absolute inset-0 bg-cover bg-center opacity-30 blur-2xl transform scale-110" style="background-image: url('${safeImg}')"></div>
                 <img src="${safeImg}" class="relative z-10 w-full h-auto max-h-[55vh] object-contain transform transition-transform duration-500 group-hover:scale-105 shadow-2xl">
-                ${isUnlocked ? '<div class="absolute top-4 left-4 bg-green-500 text-white text-[10px] px-3 py-1.5 rounded-full font-black shadow-lg z-20 tracking-widest uppercase">已購買</div>' : ''}
+                ${isUnlocked ? '<div class="absolute top-4 left-4 bg-green-500 text-white text-[10px] px-3 py-1.5 rounded-[4px] font-black shadow-lg z-20 tracking-widest uppercase">已購買</div>' : ''}
                 <button onclick="event.stopPropagation(); window.reportProduct('${item.id}')" class="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white/70 hover:text-white hover:bg-red-500 w-8 h-8 rounded-full flex items-center justify-center z-20 transition" title="檢舉違規內容">
                     <i class="fa-solid fa-flag text-[12px]"></i>
                 </button>
@@ -527,7 +514,7 @@ window.openProductModal = async function(productId) {
                     <img src="${item.profiles?.avatar_url || 'https://ui-avatars.com/api/?name=U'}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
                     <div>
                         <p class="text-sm font-black text-gray-800">${window.escapeHTML(item.profiles?.display_name || '官方認證')}</p>
-                        <p class="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-0.5">${isOfficial ? '👑 Official Creator' : 'Creator'}</p>
+                        <p class="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-0.5">${isOfficial ? 'OFFICIAL CREATOR' : 'CREATOR'}</p>
                     </div>
                 </div>
                 <div class="mb-8">
@@ -538,7 +525,7 @@ window.openProductModal = async function(productId) {
             </div>
         `;
     } catch (err) {
-        content.innerHTML = `<div class="p-20 text-center text-red-500 font-bold">載入失敗: ${err.message}</div>`;
+        content.innerHTML = `<div class="p-20 text-center text-red-500 font-bold text-sm">無法載入內容</div>`;
     }
 };
 
@@ -558,7 +545,7 @@ window.openComicReader = function(productId, imageUrlsString) {
     readerModal.innerHTML = `
         <header class="bg-black/80 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-10 border-b border-zinc-800">
             <div class="flex items-center gap-3">
-                <button onclick="window.closeComicReader()" class="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-full active:scale-90"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="window.closeComicReader()" class="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-full active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
                 <span class="font-bold text-sm">閱讀中 (${urls.length} 頁)</span>
             </div>
         </header>
@@ -566,7 +553,7 @@ window.openComicReader = function(productId, imageUrlsString) {
             ${urls.map((url, i) => `
                 <div class="relative w-full min-h-[50vh] flex items-center justify-center bg-zinc-900 border-b border-zinc-800 pb-1">
                     <img src="${url}" class="w-full h-auto relative z-10">
-                    <span class="absolute bottom-2 right-2 bg-black/50 text-white/50 text-[10px] px-2 py-1 rounded-full z-20">${i+1} / ${urls.length}</span>
+                    <span class="absolute bottom-2 right-2 bg-black/50 text-white/50 text-[10px] px-2 py-1 rounded-[4px] z-20">${i+1} / ${urls.length}</span>
                 </div>
             `).join('')}
             <div class="text-center py-10 text-zinc-600 font-bold text-sm">-- 已經到底囉 --</div>
@@ -593,7 +580,6 @@ window.initShop = function() {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 進入商城時自動初始化
     if (document.getElementById('shop-grid')) {
         window.initShop();
     }
