@@ -1,6 +1,6 @@
 /**
- * js/create.js - 2026 最終修復版
- * 針對 35KB 破圖問題進行 Canvas 繪製加固
+ * js/create.js - 2026 終極修復版
+ * 修正：解決檔名混亂、35KB 破圖、及 R2 讀取失敗問題
  */
 
 window.escapeHTML = function(str) {
@@ -12,16 +12,15 @@ window.escapeHTML = function(str) {
 
 /**
  * ✨ 影像處理引擎：加固版
- * 解決 35KB 破圖問題，確保 Canvas 真正抓到數據
+ * 確保解碼完成後再壓縮，並提供原檔回退機制
  */
 async function generateWebPBlob(file) {
     if (file.type.startsWith('video/')) return file;
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
         
-        // 使用 decode 確保瀏覽器已解析影像數據
         img.decode().then(() => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -37,8 +36,7 @@ async function generateWebPBlob(file) {
             canvas.width = width;
             canvas.height = height;
             
-            // 填滿白色背景防止透明區塊變黑
-            ctx.fillStyle = "white";
+            ctx.fillStyle = "white"; // 防止透明底變黑
             ctx.fillRect(0, 0, width, height);
             
             ctx.imageSmoothingEnabled = true;
@@ -46,28 +44,29 @@ async function generateWebPBlob(file) {
             ctx.drawImage(img, 0, 0, width, height);
 
             canvas.toBlob((blob) => {
-                if (!blob || blob.size < 1000) {
-                    reject(new Error("影像轉換失敗，產生的檔案過小"));
+                // 如果壓縮失敗或檔案太小，回退使用原檔
+                if (!blob || blob.size < 2000) {
+                    resolve(file);
                 } else {
                     resolve(blob);
                 }
                 URL.revokeObjectURL(img.src);
             }, 'image/webp', 0.85);
         }).catch(err => {
-            console.error("圖片解碼失敗:", err);
-            // 如果 Canvas 失敗，就直接傳原檔 (最後的保險)
+            console.error("Canvas 處理失敗，改用原檔:", err);
             resolve(file); 
         });
     });
 }
 
 /**
- * ✨ R2 上傳引擎：同步 creator.js 成功模式
+ * ✨ R2 上傳引擎
+ * 完全對接 creator.js 的三參數傳輸模式
  */
 async function uploadToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
     const formData = new FormData();
-    // 確保這裡帶入 Blob 與 檔名
+    // 關鍵：(鍵名, 數據流, 乾淨的檔名)
     formData.append('file', blob, fileName);
 
     const response = await fetch(WORKER_URL, {
@@ -75,21 +74,24 @@ async function uploadToR2(blob, fileName) {
         body: formData
     });
 
-    if (!response.ok) throw new Error(`HTTP 錯誤: ${response.status}`);
+    if (!response.ok) throw new Error(`R2 上傳失敗: ${response.status}`);
     
     const result = await response.json();
-    if (!result.success) throw new Error(result.error || 'Worker 回傳失敗');
+    if (!result.success) throw new Error(result.error || 'Worker 回傳異常');
     
     return result.url;
 }
 
-// --- UI 控制 (保持原樣) ---
+// --- UI 控制邏輯 ---
 
 let selectedFile = null;
 
 window.openUploadModal = function() {
     document.getElementById('upload-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('upload-panel').classList.remove('translate-y-full'), 10);
+    setTimeout(() => {
+        const panel = document.getElementById('upload-panel');
+        if(panel) panel.classList.remove('translate-y-full');
+    }, 10);
 };
 
 window.closeUploadModal = function() {
@@ -108,17 +110,18 @@ window.handleFileSelect = function(e) {
     
     const isVideo = file.type.startsWith('video/');
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
+    const other = isVideo ? document.getElementById('media-preview') : document.getElementById('video-preview');
     const placeholder = document.getElementById('media-placeholder');
     
-    // 清除舊預覽
-    document.getElementById('media-preview').classList.add('hidden');
-    document.getElementById('video-preview').classList.add('hidden');
+    if(other) other.classList.add('hidden');
     if(placeholder) placeholder.classList.add('hidden');
     
     const reader = new FileReader();
     reader.onload = function(event) {
-        preview.src = event.target.result;
-        preview.classList.remove('hidden');
+        if(preview) {
+            preview.src = event.target.result;
+            preview.classList.remove('hidden');
+        }
     };
     reader.readAsDataURL(file);
 };
@@ -130,15 +133,18 @@ function resetUploadForm() {
     document.getElementById('media-preview').classList.add('hidden');
     document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) fileInput.value = '';
 }
 
-// --- 🚀 發佈主邏輯 ---
+// --- 🚀 發佈主邏輯 (修正檔名生成) ---
 
 window.publishPost = async function() {
     const btn = document.querySelector('#upload-panel button.bg-sexify');
+    if(!btn) return;
     const originalText = btn.innerText;
     
-    btn.innerText = "驗證身分...";
+    btn.innerText = "驗證中...";
     btn.disabled = true;
 
     try {
@@ -152,18 +158,21 @@ window.publishPost = async function() {
         let mediaUrl = '';
 
         if (selectedFile) {
-            btn.innerText = "🚀 優化影像並上傳...";
-            const webpBlob = await generateWebPBlob(selectedFile);
+            btn.innerText = "🚀 上傳中...";
+            const blob = await generateWebPBlob(selectedFile);
             
-            // 檔名清洗
-            const safeName = selectedFile.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const fileName = selectedFile.type.startsWith('video/') ? `${Date.now()}_${safeName}` : `${Date.now()}_${safeName}.webp`;
+            // ✨ 核心修復：極簡命名法，杜絕 .webp.webp 的發生
+            // 隨機字串 + 時間戳，確保檔名唯一且乾淨
+            const randomString = Math.random().toString(36).substring(2, 8);
+            const extension = selectedFile.type.startsWith('video/') ? 'mp4' : 'webp';
+            const fileName = `${Date.now()}_${randomString}.${extension}`;
 
-            mediaUrl = await uploadToR2(webpBlob, fileName);
+            mediaUrl = await uploadToR2(blob, fileName);
+            console.log("R2 上傳成功，網址：", mediaUrl);
         }
 
         btn.innerText = "💾 存入資料庫...";
-        const { error } = await window.supabaseClient.from('posts').insert([{
+        const { error: dbError } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
             caption: window.escapeHTML(caption),
             media_url: mediaUrl,
@@ -171,14 +180,16 @@ window.publishPost = async function() {
             price: price
         }]);
 
-        if (error) throw error;
+        if (dbError) throw dbError;
 
-        alert('✨ 發佈成功！');
+        alert('✨ 貼文發佈成功！');
         window.closeUploadModal();
+        
+        // 刷新頁面確保看到新貼文
         location.reload(); 
 
     } catch (err) {
-        console.error("發佈失敗:", err);
+        console.error("發佈失敗詳情:", err);
         alert('發佈失敗: ' + err.message);
     } finally {
         btn.innerText = originalText;
