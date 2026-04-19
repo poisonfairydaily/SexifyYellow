@@ -95,7 +95,7 @@ window.renderDiscovery = async function(filterKeyword = '') {
                     
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-1.5 flex-1 min-w-0 pr-2 hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
-                            <img src="${safeAvatar}" class="w-5 h-5 flex-shrink-0 rounded-full object-cover border border-gray-100 bg-gray-50">
+                            <img src="${safeAvatar}" class="xhs-avatar">
                             <span class="text-gray-600 text-[11px] font-medium truncate">${safeName}</span>
                         </div>
 
