@@ -1,14 +1,42 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：分頁控制、雙軌收益統計、實體訂單發貨、✨ R2 多圖上傳 (含全自動 WebP 壓縮)
+ * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
 const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; // R2 Worker
 let selectedFiles = []; // 支援多圖
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.switchCreatorTab('dashboard');
+// ==========================================
+// 🛡️ 門禁系統：檢查是否具有創作者資格
+// ==========================================
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (!session) {
+            alert("請先登入");
+            window.location.href = 'index.html';
+            return;
+        }
+
+        // 檢查身分 (role 必須是 creator 或 admin，或者是 is_admin)
+        const { data: profile } = await window.supabaseClient
+            .from('profiles')
+            .select('role, is_admin')
+            .eq('id', session.user.id)
+            .single();
+
+        if (profile?.role !== 'creator' && profile?.role !== 'admin' && profile?.is_admin !== true) {
+            alert("🔒 您尚未開通創作者身分，請先申請！");
+            window.location.href = 'index.html'; // 踢回首頁或申請頁
+            return;
+        }
+
+        // 驗證通過，載入儀表板
+        window.switchCreatorTab('dashboard');
+    } catch (e) {
+        console.error("驗證身分時發生錯誤", e);
+    }
 });
 
 // ==========================================
@@ -41,9 +69,10 @@ window.loadCreatorDashboard = async function() {
         document.getElementById('stat-views').innerText = myProducts?.reduce((sum, p) => sum + (p.views || 0), 0) || 0;
 
         if (myProductIds.length > 0) {
+            // ✨ 修正點：簡化 profiles 的關聯語法，解決 PGRST200 報錯
             const { data: orders, error } = await window.supabaseClient
                 .from('orders')
-                .select(`id, amount, amount_usd, created_at, status, shipping_address, category, products(name), profiles:user_id(display_name, avatar_url)`)
+                .select(`id, amount, amount_usd, created_at, status, shipping_address, category, products(name), profiles(display_name, avatar_url)`)
                 .in('product_id', myProductIds)
                 .order('created_at', { ascending: false });
 
@@ -72,7 +101,8 @@ function renderCreatorStats(orders) {
         if (isPhysical) cashRev += netAmount; else tokenRev += netAmount;
         if (order.status === 'pending') pendingCount++;
 
-        const buyer = order.profiles || { display_name: '匿名買家' };
+        // 處理 profiles 若為陣列的情況
+        const buyer = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || { display_name: '匿名買家' });
         const statusText = order.status === 'pending' ? '待處理' : (order.status === 'shipped' ? '已發貨' : '已完成');
         const statusColor = order.status === 'pending' ? 'text-orange-500' : 'text-green-500';
 
@@ -171,7 +201,7 @@ window.handleProductFiles = function(input) {
     }
 };
 
-// ✨ 新增：Creator 端的 WebP 壓縮引擎
+// Creator 端的 WebP 壓縮引擎
 async function generateWebPBlob(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -191,7 +221,7 @@ async function generateWebPBlob(file) {
     });
 }
 
-// ✨ 修正：確保送給 R2 的是壓縮過的 WebP 並帶有正確檔名
+// 確保送給 R2 的是壓縮過的 WebP 並帶有正確檔名
 async function uploadToR2(blob, fileName) {
     const formData = new FormData();
     formData.append('file', blob, fileName);
@@ -219,11 +249,10 @@ window.publishProduct = async function() {
         btn.innerText = "壓縮並上傳中 (請勿關閉)...";
         btn.disabled = true;
 
-        // ✨ 處理多圖 WebP 轉換與上傳
         const uploadPromises = selectedFiles.map(async (file, index) => {
             const webpBlob = await generateWebPBlob(file);
             const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
-            const fileName = `${Date.now()}_${index}_${baseName}.webp`; // 強制附加 .webp
+            const fileName = `${Date.now()}_${index}_${baseName}.webp`; 
             return await uploadToR2(webpBlob, fileName);
         });
 
@@ -238,7 +267,7 @@ window.publishProduct = async function() {
             description: window.escapeHTML(desc),
             category: category,
             image_url: imageUrlsString,
-            status: 'pending', // 創作者上傳強制為 pending
+            status: 'pending', // 創作者上傳強制為 pending 待審核
             price: category === 'virtual' ? priceVal : 0,
             price_usd: category === 'physical' ? priceVal : 0
         };
@@ -293,7 +322,6 @@ window.loadMyProducts = async function() {
             const displayImg = firstImg.includes('r2.dev') ? `${WORKER_URL}media/${firstImg.split('/').pop()}` : firstImg;
             const isPhysical = p.category === 'physical';
             
-            // 如果被管理員深度封存，將顯示不同狀態
             let statusBadge = '';
             if(p.status === 'approved') statusBadge = '<span class="text-[8px] font-black px-2 py-0.5 rounded bg-green-100 text-green-600">已上架</span>';
             else if(p.status === 'rejected' || p.status === 'deleted') statusBadge = '<span class="text-[8px] font-black px-2 py-0.5 rounded bg-red-100 text-red-600">已遭下架</span>';
@@ -324,12 +352,15 @@ window.loadMyProducts = async function() {
 window.deleteProduct = async function(productId) {
     if (!confirm("確定要下架並刪除此商品嗎？")) return;
     try {
-        const { error: dbError } = await window.supabaseClient.from('products').delete().eq('id', productId);
+        // ✨ 修正點：加上 .select() 強制偵測 RLS 或外鍵保護狀態
+        const { data, error: dbError } = await window.supabaseClient.from('products').delete().eq('id', productId).select();
         
-        // 創作者端的防呆機制：如果有人買過了，創作者無法直接 delete，只能 archive 封存
-        if (dbError) {
+        // 創作者防呆機制：被擋下 (dbError) 或資料沒少 (!data)，代表已售出被保護
+        if (dbError || !data || data.length === 0) {
             await window.supabaseClient.from('products').update({ is_archived: true, status: 'rejected' }).eq('id', productId);
             alert("⚠️ 由於商品已有成交紀錄，已為您轉為「下架封存」狀態，不再於商城顯示。");
+        } else {
+            alert("🗑️ 商品已徹底刪除。");
         }
         
         window.loadMyProducts();
