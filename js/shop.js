@@ -1,23 +1,22 @@
 /**
- * shop.js - 專業商城正式營運版 (完美融合版)
- * 包含：進階篩選、實體美金/虛擬代幣結算、創作者資訊、官方認證、防 CORS 頭像、特價視覺、下架過濾、漫畫閱讀器、400/406錯誤修復
+ * shop.js - 專業商城正式營運版 (修正庫存空白 + 創作者資訊與描述補回版)
  */
 
 let cart = []; 
-let currentView = 'all'; // 'all', 'cart', 'owned'
+let currentView = 'all'; 
 let currentKeyword = ''; 
 
 window.shopFilterType = 'all'; 
 window.shopSortType = 'new';   
 
 const WORKER_URL = "https://sexify-uploader.poisonfairydaily.workers.dev";
-const EXCHANGE_RATE = 20; // 1 USD = 20 代幣
+const EXCHANGE_RATE = 20; 
 
 // ✨ 防 CORS 與破圖的預設頭像解決方案 (DiceBear)
 window.getAvatar = function(url, name) {
-    if (url && !url.includes('ui-avatars.com')) return url;
+    if (url && url.trim() !== '' && !url.includes('ui-avatars.com')) return url;
     const seed = name ? encodeURIComponent(name) : 'U';
-    return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=eeeeee&textColor=999999`;
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=f3f4f6&textColor=9b51e0`;
 }
 
 // --- 🛡️ 安全核心與輔助函數 ---
@@ -32,7 +31,7 @@ window.getSafeImageUrl = function(url, bucket = 'previews') {
     if (!url) return 'https://placehold.co/400x400/eeeeee/999999?text=No+Image';
     let firstUrl = url.split(',')[0];
     
-    // ✨ 核心修正：如果是外部網址 (包含 R2 或是 http)，直接回傳，避免送給 Supabase 處理
+    // 如果是外部網址 (包含 R2 或是 http)，直接回傳，避免送給 Supabase 處理
     if (firstUrl.includes('r2.dev')) {
         const fileName = firstUrl.split('/').pop();
         return `${WORKER_URL}/media/${fileName}`;
@@ -117,7 +116,6 @@ function ensureShopTabs() {
         </div>
     `;
 
-    // 只有在「商城」視圖才顯示篩選器
     if (currentView === 'all') {
         html += `
             <div class="flex gap-2 overflow-x-auto hide-scrollbar mt-2">
@@ -142,9 +140,6 @@ window.switchView = function(view) {
     window.renderShop(currentKeyword);
 };
 
-/**
- * 2. 商城主渲染
- */
 window.renderShop = async function(filterKeyword = '') {
     const grid = document.getElementById('shop-grid');
     if (!grid) return;
@@ -161,7 +156,7 @@ window.renderShop = async function(filterKeyword = '') {
 };
 
 /**
- * 3. 渲染網格 (完美整合所有功能)
+ * 3. 渲染網格
  */
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
@@ -169,19 +164,15 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        // ✨ 強制連結 profiles 以取得創作者名字、大頭貼、角色
         let query = window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)')
             .eq('status', 'approved')
             .eq('is_archived', false); 
 
         if (keyword) query = query.ilike('name', `%${keyword}%`);
-        
-        // 類別篩選
         if (currentView === 'all' && window.shopFilterType !== 'all') {
             query = query.eq('category', window.shopFilterType);
         }
 
-        // 排序邏輯
         if (currentView === 'all') {
             if (window.shopSortType === 'new') query = query.order('created_at', { ascending: false });
             if (window.shopSortType === 'hot') query = query.order('views', { ascending: false });
@@ -200,15 +191,21 @@ async function renderProductGrid(grid, keyword) {
         let displayProducts = products || [];
         
         if (currentView === 'owned') {
+            // ✨ 核心修正：避免空陣列丟給 Supabase 造成崩潰
+            if (purchasedIds.size === 0) {
+                grid.innerHTML = `<div class="col-span-2 text-center py-20 text-gray-400 font-bold text-sm">庫存內目前沒有商品</div>`;
+                return;
+            }
             const { data: ownedProducts } = await window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').in('id', Array.from(purchasedIds));
             displayProducts = ownedProducts || [];
         }
 
-        // 官方推薦置頂處理
         if (currentView === 'all' && window.shopSortType === 'official') {
             displayProducts.sort((a, b) => {
-                const aOff = (a.profiles?.role === 'admin') ? 1 : 0;
-                const bOff = (b.profiles?.role === 'admin') ? 1 : 0;
+                const profA = Array.isArray(a.profiles) ? a.profiles[0] : (a.profiles || {});
+                const profB = Array.isArray(b.profiles) ? b.profiles[0] : (b.profiles || {});
+                const aOff = profA.role === 'admin' ? 1 : 0;
+                const bOff = profB.role === 'admin' ? 1 : 0;
                 return bOff - aOff; 
             });
         }
@@ -225,7 +222,6 @@ async function renderProductGrid(grid, keyword) {
 
         let signedMap = {};
         if (unlockableFiles.length > 0) {
-            // 過濾掉外部網址，避免 Supabase createSignedUrls 報錯
             const internalFiles = unlockableFiles.filter(url => !url.startsWith('http'));
             if (internalFiles.length > 0) {
                 const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(internalFiles, 3600);
@@ -244,12 +240,12 @@ async function renderProductGrid(grid, keyword) {
                 displayImg = window.getSafeImageUrl(p.image_url, 'previews');
             }
 
-            // ✨ 創作者與認證邏輯
-            const creatorName = p.profiles?.display_name || 'Creator';
-            const creatorAvatar = window.getAvatar(p.profiles?.avatar_url, creatorName);
-            const isOfficial = p.profiles?.role === 'admin';
+            // ✨ 核心修正：更強健的提取創作者資訊，防止抓不到名字
+            const prof = Array.isArray(p.profiles) ? p.profiles[0] : (p.profiles || {});
+            const creatorName = prof.display_name || '匿名創作者';
+            const creatorAvatar = window.getAvatar(prof.avatar_url, creatorName);
+            const isOfficial = prof.role === 'admin';
             
-            // ✨ 實體商品與美金邏輯
             const isPhysical = p.category === 'physical';
             const originalPriceNum = p.original_price || Math.ceil((isPhysical ? p.price_usd : p.price) * 1.25);
             
@@ -292,19 +288,16 @@ async function renderProductGrid(grid, keyword) {
 }
 
 /**
- * 4. 商品入口 (處理已購買與未購買)
+ * 4. 商品入口
  */
 window.openProductModal = async function(productId) {
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     
-    // 確保抓取 profile 資料
     const { data: p } = await window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('id', productId).single();
     if (!p) return;
 
-    // 增加觀看次數
     await window.supabaseClient.from('products').update({ views: (p.views || 0) + 1 }).eq('id', p.id);
 
-    // ✨ 修正 406：若 user 不存在，不再強制查詢 orders 表
     let isUnlocked = false;
     if (user) {
         const { data: order } = await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).maybeSingle();
@@ -332,8 +325,6 @@ window.openProductModal = async function(productId) {
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
-    
-    // 過濾出內部與外部圖片
     const internalFiles = fileNames.filter(name => !name.startsWith('http'));
     let signedMap = {};
     
@@ -397,13 +388,12 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗 
+ * 購買詳情彈窗
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
     let displayImg;
     
-    // ✨ 核心修正：如果是外部網址，直接跳過 Supabase createSignedUrl，防止 400 Bad Request
     if (isUnlocked && firstFileName && !firstFileName.startsWith('http')) {
         const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(firstFileName, 600);
         displayImg = data?.signedUrl || window.getSafeImageUrl(p.image_url, 'previews');
@@ -411,12 +401,13 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
         displayImg = window.getSafeImageUrl(p.image_url, 'previews');
     }
 
-    const creatorName = p.profiles?.display_name || 'Creator';
-    const creatorAvatar = window.getAvatar(p.profiles?.avatar_url, creatorName);
-    const isOfficial = p.profiles?.role === 'admin';
+    // ✨ 核心修正：正確提取 Profile，確保名字跟頭像出來
+    const prof = Array.isArray(p.profiles) ? p.profiles[0] : (p.profiles || {});
+    const creatorName = prof.display_name || '匿名創作者';
+    const creatorAvatar = window.getAvatar(prof.avatar_url, creatorName);
+    const isOfficial = prof.role === 'admin';
     const isPhysical = p.category === 'physical';
     
-    // 計算代幣扣除與原價顯示
     const tokenCost = isPhysical ? (parseFloat(p.price_usd) * EXCHANGE_RATE) : parseInt(p.price);
     const originalPriceNum = p.original_price || Math.ceil((isPhysical ? p.price_usd : p.price) * 1.25);
     
@@ -451,6 +442,11 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
                     <h2 class="text-lg font-black text-gray-900 leading-tight">${window.escapeHTML(p.name)}</h2>
                     <p class="text-gray-400 text-xs mt-2 font-bold">${isPhysical ? '📦 實體商品 (需填寫收貨資訊)' : `包含 ${p.image_url?.split(',').length || 1} 項高清數位內容`}</p>
                     
+                    <div class="mt-4 mb-2">
+                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">作品描述</h4>
+                        <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50 p-4 rounded-xl border border-gray-100">${window.escapeHTML(p.description || '這件商品目前沒有詳細描述。')}</p>
+                    </div>
+
                     <div class="mt-6 flex flex-col gap-4">
                         <div class="flex items-end gap-2 bg-gray-50 p-3 rounded-xl ${isPhysical ? 'border border-blue-50' : 'border border-red-50'}">
                             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">限時特價</span>
@@ -477,9 +473,6 @@ async function renderPurchaseModal(modal, p, isUnlocked) {
     document.body.style.overflow = 'hidden';
 }
 
-/**
- * 檢舉、購買、購物車邏輯
- */
 window.reportProduct = async function(productId) {
     const reason = prompt("請說明檢舉原因 (濫用檢舉將被限制帳號)：");
     if (!reason) return;
@@ -494,7 +487,6 @@ window.reportProduct = async function(productId) {
     } catch (e) { alert("檢舉失敗"); }
 };
 
-// ✨ 使用 JS 端完整結算，完美支援實體美金轉代幣與虛擬代幣
 window.executeSecurePurchase = async function(productId, itemName, tokenCost, priceUsd, category) {
     const isPhysical = category === 'physical';
     const confirmMsg = isPhysical 
@@ -510,10 +502,8 @@ window.executeSecurePurchase = async function(productId, itemName, tokenCost, pr
         const { data: profile } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
         if (profile.balance < tokenCost) return alert("🪙 餘額不足，請先點擊右上角「+」儲值。");
 
-        // 扣除代幣
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - tokenCost }).eq('id', user.id);
         
-        // 建立訂單
         await window.supabaseClient.from('orders').insert({ 
             user_id: user.id, 
             product_id: productId, 
