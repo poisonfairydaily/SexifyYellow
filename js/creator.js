@@ -1,6 +1,6 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 智能視覺審核攔截
+ * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 智能視覺審核攔截 (升級版)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
@@ -200,7 +200,7 @@ window.handleProductFiles = function(input) {
     }
 };
 
-// ✨ 新增：將檔案轉換為 Base64 供 AI 讀取
+// 將檔案轉換為 Base64 供 AI 讀取
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -239,7 +239,7 @@ async function uploadToR2(blob, fileName) {
     return (await response.json()).url;
 }
 
-// ✨ 升級：加入 AI 審核的上架主邏輯
+// ✨ 升級：加入 AI 審核的上架主邏輯 (含標籤過濾與二次元防線)
 window.publishProduct = async function() {
     const btn = document.getElementById('upload-btn');
     const originalText = btn.innerText;
@@ -261,11 +261,12 @@ window.publishProduct = async function() {
         let uploadedUrls = [];
         let lastAiReport = null;
 
-        // ✨ 為了讓 AI 能一張一張擋下違規圖片，這裡改用循序的 for 迴圈
         for (let i = 0; i < selectedFiles.length; i++) {
             const file = selectedFiles[i];
             
-            // 1. AI 掃描階段
+            // ==========================================
+            // 1. AI 智能掃描與攔截階段
+            // ==========================================
             btn.innerText = `🔍 AI 掃描審核中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
@@ -275,18 +276,39 @@ window.publishProduct = async function() {
             if (auditError) throw new Error("AI 審核系統連線失敗");
 
             const safeSearch = audit.safeSearchAnnotation || audit;
+            const labels = audit.labelAnnotations || []; 
+
+            // ✨ 終極殺手鐧：生殖器與極端色情關鍵字黑名單
+            const nsfwKeywords = ['genitalia', 'penis', 'vagina', 'pornography', 'hentai', 'urine'];
+            
+            const foundBannedLabel = labels.find(label => 
+                label.description && nsfwKeywords.includes(label.description.toLowerCase())
+            );
+
+            if (foundBannedLabel) {
+                alert(`🚨 嚴重違規：系統偵測到受限特徵 (${foundBannedLabel.description})，已強制攔截！\n請移除違規圖片後再試。`);
+                throw new Error("圖片含有明確違規特徵");
+            }
 
             if (safeSearch) {
                 // 相容 Likelihood 命名格式
                 const valViolence = safeSearch.violence || safeSearch.violenceLikelihood;
                 const valMedical = safeSearch.medical || safeSearch.medicalLikelihood;
+                const valSpoof = safeSearch.spoof || safeSearch.spoofLikelihood;
+                const valRacy = safeSearch.racy || safeSearch.racyLikelihood;
                 
                 const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
                 
-                // 如果偵測到暴力血腥，直接拋出錯誤中斷整個上傳流程
+                // 暴力血腥防線
                 if (dangerLevels.includes(valViolence) || dangerLevels.includes(valMedical)) {
                     alert(`🚨 嚴重違規：圖片 "${window.escapeHTML(file.name)}" 偵測到暴力或血腥內容，上傳已強制中斷！\n請移除違規圖片後再試。`);
                     throw new Error("圖片含有暴力或血腥違規內容"); 
+                }
+
+                // ✨ 二次元專屬防線：如果是卡通畫風且有一點點挑逗，直接判定違規
+                if (['LIKELY', 'VERY_LIKELY'].includes(valSpoof) && ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'].includes(valRacy)) {
+                    alert(`🚨 違規：系統偵測到不適當的動漫/二次元內容，上傳已攔截！`);
+                    throw new Error("二次元色情攔截");
                 }
                 
                 lastAiReport = safeSearch; // 儲存安全報告供後台查看
@@ -295,7 +317,9 @@ window.publishProduct = async function() {
                 throw new Error("圖片含有其他違規內容");
             }
 
-            // 2. 轉換與上傳階段
+            // ==========================================
+            // 2. 轉換 WebP 與上傳 R2 階段
+            // ==========================================
             btn.innerText = `📦 壓縮並上傳中 (${i+1}/${selectedFiles.length})...`;
             const webpBlob = await generateWebPBlob(file);
             const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
@@ -335,7 +359,7 @@ window.publishProduct = async function() {
 
     } catch (e) {
         // 如果是我們自己拋出的違規錯誤，就不顯示系統原始報錯，讓 UI 乾淨點
-        if (!e.message.includes("違規")) {
+        if (!e.message.includes("違規") && !e.message.includes("攔截")) {
             alert("發佈失敗: " + e.message);
         }
     } finally {
