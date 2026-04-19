@@ -1,9 +1,9 @@
 /**
  * js/create.js - 究極修復完整版
- * 同步 creator.js 的成功上傳邏輯，徹底解決 R2 破圖問題
+ * 100% 同步 creator.js 成功的上傳邏輯
  */
 
-// --- 🛡️ 工具函數 ---
+// --- 🛡️ 0. 工具函數 ---
 window.escapeHTML = function(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -11,9 +11,10 @@ window.escapeHTML = function(str) {
     return div.innerHTML;
 };
 
-// 影像預處理 (完全同步 creator.js)
+// 影像預處理 - 完全複製自 creator.js
 async function generateWebPBlob(file) {
     if (file.type.startsWith('video/')) return file;
+
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
@@ -35,16 +36,16 @@ async function generateWebPBlob(file) {
     });
 }
 
-// R2 上傳函數 (完全同步 creator.js 成功的雙參數格式)
+// R2 上傳核心 - 完全複製自 creator.js (雙參數版本)
 async function uploadToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
     const formData = new FormData();
-    // ✨ 核心修復：強制以「二進制 Blob + 檔名」方式封裝
+    // ✨ 關鍵：這裡必須是 (鍵, 數據, 檔名)
     formData.append('file', blob, fileName);
 
-    const response = await fetch(WORKER_URL, {
-        method: 'POST',
-        body: formData
+    const response = await fetch(WORKER_URL, { 
+        method: 'POST', 
+        body: formData 
     });
 
     if (!response.ok) throw new Error('R2 伺服器拒絕上傳');
@@ -53,7 +54,7 @@ async function uploadToR2(blob, fileName) {
     return resData.url;
 }
 
-// --- 🖼️ UI 互動邏輯 ---
+// --- 🖼️ 1. UI 互動與預覽邏輯 ---
 
 window.openUploadModal = function() {
     document.getElementById('upload-modal').classList.remove('hidden');
@@ -69,6 +70,18 @@ window.closeUploadModal = function() {
     }, 300);
 };
 
+document.addEventListener('DOMContentLoaded', () => {
+    const uploadPanel = document.getElementById('upload-panel');
+    let startY = 0;
+    if (uploadPanel) {
+        uploadPanel.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
+        uploadPanel.addEventListener('touchmove', (e) => {
+            const currentY = e.touches[0].clientY;
+            if (currentY - startY > 80) window.closeUploadModal();
+        }, { passive: true });
+    }
+});
+
 let selectedFile = null;
 
 window.handleFileSelect = function(e) {
@@ -81,34 +94,40 @@ window.handleFileSelect = function(e) {
     const other = isVideo ? document.getElementById('media-preview') : document.getElementById('video-preview');
     
     if(other) { other.classList.add('hidden'); other.src = ''; }
-    document.getElementById('media-placeholder').classList.add('hidden');
+    const placeholder = document.getElementById('media-placeholder');
+    if(placeholder) placeholder.classList.add('hidden');
     
     const reader = new FileReader();
     reader.onload = function(event) {
-        preview.src = event.target.result;
-        preview.classList.remove('hidden');
-        document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
+        if(preview) {
+            preview.src = event.target.result;
+            preview.classList.remove('hidden');
+        }
+        const container = document.getElementById('media-preview-container');
+        if(container) container.dataset.mediaType = isVideo ? 'video' : 'image';
     };
     reader.readAsDataURL(file);
 };
 
 function resetUploadForm() {
     selectedFile = null;
-    const priceEl = document.getElementById('post-price');
-    const captionEl = document.getElementById('post-caption');
-    if (priceEl) priceEl.value = '';
-    if (captionEl) captionEl.value = '';
+    ['post-price', 'post-caption'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
     const mediaPreview = document.getElementById('media-preview');
     const videoPreview = document.getElementById('video-preview');
     if(mediaPreview) { mediaPreview.classList.add('hidden'); mediaPreview.src = ''; }
     if(videoPreview) { videoPreview.classList.add('hidden'); videoPreview.src = ''; }
-    document.getElementById('media-placeholder').classList.remove('hidden');
+    const placeholder = document.getElementById('media-placeholder');
+    if(placeholder) placeholder.classList.remove('hidden');
 }
 
-// --- 📝 發佈主邏輯 ---
+// --- 📝 2. 發佈主邏輯 ---
 
 window.publishPost = async function() {
     const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
+    if(!publishBtn) return;
     const originalBtnText = publishBtn.innerText;
     
     publishBtn.innerText = "驗證中...";
@@ -122,27 +141,28 @@ window.publishPost = async function() {
         const price = parseInt(document.getElementById('post-price').value) || 0;
         const isPaid = document.getElementById('view-paid').checked;
 
-        if (!selectedFile && !caption) throw new Error('請輸入內容或上傳檔案');
+        if (!selectedFile && !caption) throw new Error('內容不能為空');
 
         let finalMediaUrl = '';
 
         if (selectedFile) {
-            publishBtn.innerText = "🚀 正在優化並上傳...";
+            publishBtn.innerText = "優化並上傳中...";
             
-            // ✨ 這裡完全同步 creator.js 的執行順序
+            // 1. 生成 WebP Blob
             const webpBlob = await generateWebPBlob(selectedFile);
             
-            // 生成檔名：清洗掉非法字元
+            // 2. 生成與 creator.js 格式一致的檔名
             const baseName = selectedFile.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
             const extension = selectedFile.type.startsWith('video/') ? (selectedFile.name.split('.').pop() || 'mp4') : 'webp';
             const fileName = `${Date.now()}_post_${baseName}.${extension}`;
 
-            // 執行上傳
+            // 3. 上傳到 R2 (使用雙參數函數)
             finalMediaUrl = await uploadToR2(webpBlob, fileName);
+            console.log("上傳成功，網址為:", finalMediaUrl);
         }
 
-        publishBtn.innerText = "💾 存入資料庫...";
-        const { error: dbError } = await window.supabaseClient.from('posts').insert([{
+        publishBtn.innerText = "資料寫入中...";
+        const { error } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
             caption: window.escapeHTML(caption),
             media_url: finalMediaUrl,
@@ -150,14 +170,15 @@ window.publishPost = async function() {
             price: price
         }]);
 
-        if (dbError) throw dbError;
+        if (error) throw error;
 
         alert('✨ 發佈成功！');
         window.closeUploadModal();
         if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
 
     } catch (err) {
-        alert('發佈失敗: ' + err.message);
+        console.error("上傳失敗:", err);
+        alert(err.message);
     } finally {
         publishBtn.innerText = originalBtnText;
         publishBtn.disabled = false;
