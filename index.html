@@ -372,10 +372,11 @@
 
         <main class="flex-1 overflow-y-auto pb-24 relative bg-gray-100">
             <div id="home-tab" class="tab-content block h-full">
-                <div class="px-4 py-3 flex gap-3 overflow-x-auto border-b bg-white sticky top-0 z-40 hide-scrollbar">
-                    <button class="bg-black text-white px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap">為你推薦</button>
-                    <button class="bg-gray-200 text-gray-600 px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap">追蹤中</button>
-                </div>
+<div class="px-4 py-3 flex gap-3 overflow-x-auto border-b bg-white sticky top-0 z-40 hide-scrollbar" id="discovery-tabs">
+    <button onclick="switchDiscoveryTab(this, 'latest')" class="discovery-tab-btn bg-black text-white px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition">最新發佈</button>
+    <button onclick="switchDiscoveryTab(this, 'hot')" class="discovery-tab-btn bg-gray-200 text-gray-600 px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition">熱門推送</button>
+    <button onclick="switchDiscoveryTab(this, 'following')" class="discovery-tab-btn bg-gray-200 text-gray-600 px-5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition">追蹤中</button>
+</div>
                 <div id="discovery-grid" class="masonry-grid p-2 pb-20"></div>
             </div>
 
