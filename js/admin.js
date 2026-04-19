@@ -215,9 +215,16 @@ if (uploadBtn) {
                 const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
                 const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
-                if(statusText) statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
-                await supabaseClient.storage.from('products').upload(fileName, webpBlob);
-                await supabaseClient.storage.from('previews').upload(fileName, webpBlob);
+if(statusText) statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
+
+// ✨ 修正點：加入 contentType 確保 R2 識別為 webp
+const uploadOptions = {
+    contentType: 'image/webp',
+    upsert: true // 如果檔名重複則覆蓋
+};
+
+await supabaseClient.storage.from('products').upload(fileName, webpBlob, uploadOptions);
+await supabaseClient.storage.from('previews').upload(fileName, webpBlob, uploadOptions);
                 
                 uploadedFileNames.push(fileName);
             }
