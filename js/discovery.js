@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 現代化版面與 Haptic Touch 整合版
+// js/discovery.js - 乾淨佈局與 Haptic Touch 完美版
 // ==========================================
 
 let clickTimer = null;
@@ -46,8 +46,6 @@ window.renderDiscovery = async function(filterKeyword = '') {
             if (likeData) likeData.forEach(l => myLikes.add(l.post_id));
         }
 
-        const bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-
         grid.innerHTML = posts.map(post => {
             const safeName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
             const safeCaption = window.escapeHTML(post.caption || '');
@@ -56,62 +54,52 @@ window.renderDiscovery = async function(filterKeyword = '') {
 
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
-            
-            const isBookmarked = bookmarks.some(b => b.id === post.id);
-            const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-white';
-            const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-white';
+            const likeIcon = myLikes.has(post.id) ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
             
             const currentLikes = post.likes_count || post.likes || 0;
             const commentCount = post.comments_count || 0; 
             
+            // 收藏所需的字串化物件
             const postObjStr = encodeURIComponent(JSON.stringify({
                 id: post.id, caption: post.caption, media_url: post.media_url, authorName: safeName, authorAvatar: safeAvatar
             }));
 
-            // ✨ 全新佈局與手勢綁定
+            // ✨ 全新乾淨佈局：左下頭像、右下數據、移除圖片上方干擾物
             return `
             <div class="masonry-item relative shadow-sm border border-gray-100 bg-white overflow-hidden rounded-xl mb-2 select-none transition-transform duration-200"
                  style="touch-action: pan-y;"
+                 onclick="handleCardClick(event, '${post.id}')"
                  onpointerdown="startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
                  onpointerup="cancelLongPress(event, '${post.id}')"
-                 onpointerleave="cancelLongPress(event, '')"
+                 onpointerleave="cancelLongPress(event, '${post.id}')"
+                 onpointercancel="cancelLongPress(event, '${post.id}')"
                  oncontextmenu="event.preventDefault();">
 
-                <div class="relative bg-gray-100 min-h-[180px]">
+                <div class="relative bg-gray-100 min-h-[150px]">
                     ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字內容</div>`}
-
                     ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px]"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖 ${post.price || 99} 幣</span></div>` : ''}
-
-                    <div class="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex justify-between items-end z-20">
-                        <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition flex-1 pr-2" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
-                            <img src="${safeAvatar}" class="w-6 h-6 rounded-full border border-white/50 object-cover shadow-sm flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=User'">
-                            <span class="text-white text-[11px] font-bold shadow-sm tracking-wide truncate">${safeName}</span>
-                        </div>
-
-                        <div class="flex items-center gap-3 text-white flex-shrink-0">
-                            <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
-                                <i class="${likeIcon} text-[14px] transition-transform group-active:scale-125 drop-shadow-md"></i>
-                                <span class="text-[11px] font-bold drop-shadow-md">${currentLikes}</span>
-                            </button>
-                            <button onclick="event.stopPropagation(); viewPost('${post.id}')" class="flex items-center gap-1 group">
-                                <i class="fa-regular fa-comment text-[14px] transition-transform group-active:scale-125 drop-shadow-md"></i>
-                                <span class="text-[11px] font-bold drop-shadow-md">${commentCount}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="absolute top-2 right-2 flex flex-col gap-2 z-20">
-                        <button onclick="event.stopPropagation(); toggleBookmark(this, '${post.id}', '${postObjStr}')" class="bg-black/40 p-2 rounded-full backdrop-blur-md group shadow-lg">
-                            <i class="${bmIcon} text-[11px] transition-transform group-active:scale-125 text-white drop-shadow-md"></i>
-                        </button>
-                        <button onclick="event.stopPropagation(); handleShare('${post.id}', '${safeCaption}')" class="bg-black/40 p-2 rounded-full backdrop-blur-md group shadow-lg">
-                            <i class="fa-solid fa-share text-[11px] transition-transform group-active:scale-125 text-white drop-shadow-md"></i>
-                        </button>
-                    </div>
                 </div>
 
-                <div class="p-2.5 bg-white relative z-20">
-                    <p class="text-[12px] text-gray-800 line-clamp-2 leading-relaxed font-medium">${safeCaption}</p>
+                <div class="p-3 bg-white relative z-20">
+                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-relaxed font-medium mb-3">${safeCaption}</p>
+                    
+                    <div class="flex justify-between items-center pt-2 border-t border-gray-50">
+                        <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
+                            <img src="${safeAvatar}" class="w-5 h-5 rounded-full border border-gray-100 object-cover flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=User'">
+                            <span class="text-gray-600 text-[10px] font-bold truncate max-w-[80px]">${safeName}</span>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
+                                <i class="${likeIcon} text-[13px] transition-transform group-active:scale-125"></i>
+                                <span class="text-[11px] font-bold text-gray-500">${currentLikes}</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); window.viewPost('${post.id}')" class="flex items-center gap-1 group">
+                                <i class="fa-regular fa-comment text-[13px] text-gray-400 transition-transform group-active:scale-125"></i>
+                                <span class="text-[11px] font-bold text-gray-500">${commentCount}</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -131,12 +119,12 @@ window.toggleBookmark = function(btn, postId, postStr) {
         bookmarks.splice(index, 1);
         icon.classList.replace('fa-solid', 'fa-regular');
         icon.classList.remove('text-yellow-500');
-        icon.classList.add('text-white');
+        icon.classList.add('text-gray-300');
     } else {
         const postObj = JSON.parse(decodeURIComponent(postStr));
         bookmarks.push(postObj);
         icon.classList.replace('fa-regular', 'fa-solid');
-        icon.classList.remove('text-white');
+        icon.classList.remove('text-gray-300');
         icon.classList.add('text-yellow-500');
     }
     localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
@@ -161,7 +149,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
     try {
         if (isLiking) {
             icon.classList.replace('fa-regular', 'fa-solid');
-            icon.classList.remove('text-white');
+            icon.classList.remove('text-gray-400');
             icon.classList.add('text-sexify', 'scale-125');
             countSpan.innerText = count + 1;
 
@@ -177,7 +165,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
             const newCount = Math.max(0, count - 1);
             icon.classList.replace('fa-solid', 'fa-regular');
             icon.classList.remove('text-sexify', 'scale-125');
-            icon.classList.add('text-white');
+            icon.classList.add('text-gray-400');
             countSpan.innerText = newCount;
 
             await window.supabaseClient.from('likes').delete().match({ post_id: postId, user_id: myId });
@@ -195,6 +183,16 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
+
+// ✨ 加入過濾器：防止長按放開後誤觸發進入貼文
+window.handleCardClick = function(e, postId) {
+    if (window.isLongPressActive) {
+        window.isLongPressActive = false; // 剛結束長按，阻擋點擊
+        e.preventDefault();
+        return;
+    }
+    viewPost(postId);
+};
 
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
@@ -347,7 +345,6 @@ window.submitComment = async function() {
             content: text 
         });
         
-        // ✨ 同步增加留言計數
         const { data: post } = await window.supabaseClient.from('posts').select('comments_count').eq('id', window.currentViewedPostId).single();
         if(post) {
             await window.supabaseClient.from('posts').update({ comments_count: (post.comments_count || 0) + 1 }).eq('id', window.currentViewedPostId);
