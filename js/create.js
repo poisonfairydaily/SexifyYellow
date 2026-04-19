@@ -39,21 +39,40 @@ async function generateWebPBlob(file) {
 /**
  * R2 上傳核心 (完全同步 creator.js 成功函數)
  */
-async function uploadToR2(blob, fileName) {
-    const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
-    const formData = new FormData();
-    // ✨ 關鍵：使用與 creator.js 相同的三參數 append 方式
-    formData.append('file', blob, fileName);
+// ... (預覽、滑動關閉等 UI 邏輯保持不變，直接看上傳核心) ...
 
-    const response = await fetch(WORKER_URL, { 
-        method: 'POST', 
-        body: formData 
+async function uploadToR2(file) {
+    const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
+    
+    // 1. 壓縮圖片
+    const webpBlob = await generateWebPBlob(file);
+    
+    // 2. 準備檔名 (移除所有可能導致 Header 解析出錯的字元)
+    const timestamp = Date.now();
+    const extension = file.type.startsWith('video/') ? 'mp4' : 'webp';
+    const fileName = `${timestamp}_post.${extension}`;
+
+    // 3. ✨ 核心修復：強制封裝為標準 File 對象
+    // 這樣 Worker 的 formData.get('file') 拿到的才會是 File 對象，而不是字串
+    const fileToUpload = new File([webpBlob], fileName, { type: webpBlob.type });
+
+    const formData = new FormData();
+    formData.append('file', fileToUpload); // 不要傳第三個參數，直接傳 File 對象
+
+    const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        body: formData
     });
 
-    if (!response.ok) throw new Error('伺服器上傳失敗');
-    const resData = await response.json();
-    return resData.url;
+    if (!response.ok) throw new Error('R2 伺服器拒絕上傳');
+    
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error || '上傳失敗');
+    
+    return result.url;
 }
+
+// ... (其餘 publishPost 邏輯保持不變) ...
 
 // --- 🖼️ 1. UI 互動與預覽邏輯 ---
 
