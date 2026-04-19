@@ -1,10 +1,13 @@
 /**
- * admin.js - 管理員專用：WebP 轉換 + Google Vision API (18+ 專屬審核) + 全域內容中控
+ * admin.js - 管理員專用：WebP 轉換 + Google Vision API + 全域內容中控 (含 R2 修復)
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoc212YmVlYnV4c2Nudm5tbHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDU5MTgsImV4cCI6MjA5MDQyMTkxOH0.kK5A0RYj6RrzBJHMleKcFQp4wVq7hCm-lVDTbnxrFJQ';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// 你的 Worker 代理網址 (用於修復破圖)
+const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev';
 
 const loginSec = document.getElementById('login-section');
 const adminSec = document.getElementById('admin-section'); // 兼容舊版 HTML ID
@@ -185,22 +188,19 @@ if (uploadBtn) {
                 if (auditError) throw new Error("AI 審核系統連線失敗");
                 
                 // --- ✨ Google Vision SafeSearch 18+ 專屬邏輯 ---
-                // 取得 Google 回傳的 SafeSearch 節點 (依據你 Edge Function 的寫法，可能在 audit.safeSearchAnnotation 或 audit 裡面)
                 const safeSearch = audit.safeSearchAnnotation || audit;
 
                 if (safeSearch && safeSearch.violence) {
                     const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
                     
-                    // 1. 檢查暴力與血腥 (絕對零容忍)
                     const isViolent = dangerLevels.includes(safeSearch.violence);
                     const isMedicalGore = dangerLevels.includes(safeSearch.medical);
                     
                     if (isViolent || isMedicalGore) {
                         alert(`🚨 嚴重違規：圖片 "${escapeHTML(file.name)}" 偵測到暴力或血腥內容，已強制攔截！`);
-                        continue; // 跳過這張圖片，不予上傳
+                        continue; 
                     }
 
-                    // 2. 檢查成人與性感內容 (18+ 平台專屬放行)
                     const isAdult = dangerLevels.includes(safeSearch.adult);
                     const isRacy = dangerLevels.includes(safeSearch.racy);
                     
@@ -208,9 +208,8 @@ if (uploadBtn) {
                         console.log(`🔥 圖片 "${file.name}" 包含成人/性感內容，安全放行 (18+ 政策)。`);
                     }
                     
-                    lastAiReport = safeSearch; // 紀錄報告
+                    lastAiReport = safeSearch; 
                 } else if (audit && audit.safe === false) {
-                    // 兼容舊版 AI 回傳格式的防護
                     alert(`❌ 警告：圖片 "${escapeHTML(file.name)}" 偵測到違規 (${audit.reason})，已略過。`);
                     continue; 
                 }
@@ -223,6 +222,7 @@ if (uploadBtn) {
                 const fileName = `${Date.now()}_${i}_${baseName}.webp`;
 
                 if(statusText) statusText.innerText = `🚀 上傳儲存空間 (${i+1}/${files.length})...`;
+                // 管理員上架直接走 Supabase Storage (安全且為官方預設)
                 await supabaseClient.storage.from('products').upload(fileName, webpBlob);
                 await supabaseClient.storage.from('previews').upload(fileName, webpBlob);
                 
@@ -231,7 +231,6 @@ if (uploadBtn) {
 
             if (uploadedFileNames.length === 0) throw new Error("沒有符合安全規範的圖片可供上傳");
 
-            // 寫入資料庫：自動標記 status 為 approved 且 is_official 為 true
             const { error: dbError } = await supabaseClient.from('products').insert([{
                 name: rawName,
                 price: parseInt(price),
@@ -260,46 +259,89 @@ if (uploadBtn) {
 // 🛡️ 模塊 B：全域審查介面 (Products & Posts)
 // ==========================================
 
+// ✨ 修正版：專門抓取並顯示「待審核 (pending)」的商戶商品
 window.loadPendingProducts = async function() {
     const grid = document.getElementById('products-grid');
     if(!grid) return;
     grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
     
     try {
+        // 只抓 is_official=false 且 status='pending' 的商品
         const { data, error } = await supabaseClient.from('products')
             .select('*, profiles(display_name)')
             .eq('is_official', false)
-            .order('created_at', { ascending: false })
-            .limit(20);
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
             
         if (error) throw error;
         
-        if(data.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 font-bold py-10">目前沒有需要審核的商戶商品</div>';
+        if(!data || data.length === 0) {
+            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 font-bold py-10">🎉 目前沒有待審核的商品</div>';
             return;
         }
 
-        grid.innerHTML = data.map(item => `
+        grid.innerHTML = data.map(item => {
+            // ✨ 圖片防破圖核心邏輯
+            let firstImg = item.image_url.split(',')[0];
+            let imgPath = firstImg;
+            
+            if (firstImg.includes('r2.dev')) {
+                // 如果是舊的錯誤 R2 網址，強制替換成 Worker 代理網址
+                const fileName = firstImg.split('/').pop();
+                imgPath = `${WORKER_URL}/media/${fileName}`;
+            } else if (!firstImg.startsWith('http')) {
+                // 如果是存檔名 (Supabase 官方上傳)，則調用 getPublicUrl
+                imgPath = supabaseClient.storage.from('previews').getPublicUrl(firstImg).data.publicUrl;
+            }
+
+            return `
             <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
-                <div class="h-40 bg-gray-100 relative">
-                    <img src="${supabaseClient.storage.from('previews').getPublicUrl(item.image_url.split(',')[0]).data.publicUrl}" class="w-full h-full object-cover">
-                    <span class="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded">🪙 ${item.price}</span>
+                <div class="h-44 bg-gray-100 relative">
+                    <img src="${imgPath}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/400x400/eeeeee/999999?text=Image+Error'">
+                    <span class="absolute top-2 left-2 bg-yellow-400 text-black text-[10px] font-black px-2 py-1 rounded">待審核</span>
+                    <span class="absolute top-2 right-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded">🪙 ${item.price}</span>
                 </div>
                 <div class="p-4 flex-1 flex flex-col">
                     <h3 class="font-bold text-sm text-gray-900 mb-1 truncate">${escapeHTML(item.name)}</h3>
-                    <p class="text-[10px] text-gray-500 mb-3">創作者: ${escapeHTML(item.profiles?.display_name || '未知')}</p>
-                    <div class="mt-auto grid grid-cols-2 gap-2">
-                        <button onclick="deleteRecord('products', '${item.id}')" class="bg-red-50 text-red-600 border border-red-100 font-bold py-2 rounded-lg text-xs hover:bg-red-100 transition">刪除違規</button>
+                    <p class="text-[10px] text-gray-500 mb-4">創作者: ${escapeHTML(item.profiles?.display_name || '未知')}</p>
+                    
+                    <div class="mt-auto flex flex-col gap-2">
+                        <button onclick="approveProduct('${item.id}')" class="w-full bg-green-500 text-white font-bold py-2 rounded-lg text-xs hover:bg-green-600 transition">
+                            <i class="fa-solid fa-check mr-1"></i> 核准上架
+                        </button>
+                        <button onclick="deleteRecord('products', '${item.id}')" class="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-2 rounded-lg text-xs hover:bg-red-100 transition">
+                            <i class="fa-solid fa-trash mr-1"></i> 刪除違規
+                        </button>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
     } catch(e) {
-        grid.innerHTML = '<div class="col-span-full text-center text-red-500 font-bold">載入失敗</div>';
+        grid.innerHTML = '<div class="col-span-full text-center text-red-500 font-bold">載入失敗: ' + e.message + '</div>';
     }
 }
 
+// ✨ 新增：核准商品上架
+window.approveProduct = async function(productId) {
+    if(!confirm("確定要核准此商品上架到商城嗎？")) return;
+    
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .update({ status: 'approved' })
+            .eq('id', productId);
+
+        if (error) throw error;
+        
+        alert("✅ 商品已成功上架！");
+        loadPendingProducts(); 
+    } catch(e) {
+        alert("核准失敗：" + e.message);
+    }
+}
+
+// 載入一般用戶貼文
 window.loadRecentPosts = async function() {
     const grid = document.getElementById('posts-grid');
     if(!grid) return;
@@ -318,10 +360,18 @@ window.loadRecentPosts = async function() {
             return;
         }
 
-        grid.innerHTML = data.map(post => `
+        grid.innerHTML = data.map(post => {
+            // ✨ 貼文圖片防破圖邏輯
+            let imgPath = post.media_url;
+            if (imgPath && imgPath.includes('r2.dev')) {
+                const fileName = imgPath.split('/').pop();
+                imgPath = `${WORKER_URL}/media/${fileName}`;
+            }
+
+            return `
             <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
                 <div class="h-40 bg-gray-50 relative flex items-center justify-center">
-                    ${post.media_url ? `<img src="${escapeHTML(post.media_url)}" class="w-full h-full object-cover">` : `<span class="text-gray-300 text-xs font-bold">無圖片</span>`}
+                    ${imgPath ? `<img src="${escapeHTML(imgPath)}" class="w-full h-full object-cover">` : `<span class="text-gray-300 text-xs font-bold">無圖片</span>`}
                 </div>
                 <div class="p-4 flex-1 flex flex-col">
                     <p class="text-[12px] text-gray-800 line-clamp-3 mb-2">${escapeHTML(post.caption || '無文字內容')}</p>
@@ -331,8 +381,8 @@ window.loadRecentPosts = async function() {
                         <button onclick="deleteRecord('posts', '${post.id}')" class="w-full bg-red-500 text-white font-bold py-2 rounded-lg text-xs shadow-md hover:bg-red-600 transition active:scale-95">強制刪除</button>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
     } catch(e) {
         grid.innerHTML = '<div class="col-span-full text-center text-red-500 font-bold">載入失敗</div>';
