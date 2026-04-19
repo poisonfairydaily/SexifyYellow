@@ -48,15 +48,18 @@
             </button>
         </header>
 
-        <div class="bg-white px-6 border-b border-gray-200 flex gap-8">
-            <button onclick="switchTab('tab-upload')" class="tab-btn active pb-4 pt-5 text-gray-500 font-bold text-sm transition">
+        <div class="bg-white px-6 border-b border-gray-200 flex gap-8 overflow-x-auto">
+            <button onclick="switchTab('tab-upload')" class="tab-btn active pb-4 pt-5 whitespace-nowrap text-gray-500 font-bold text-sm transition">
                 <i class="fa-solid fa-cloud-arrow-up mr-2"></i>發布官方商品
             </button>
-            <button onclick="switchTab('tab-products')" class="tab-btn pb-4 pt-5 text-gray-500 font-bold text-sm transition">
-                <i class="fa-solid fa-store mr-2"></i>商戶商品審核 (Creators)
+            <button onclick="switchTab('tab-products')" class="tab-btn pb-4 pt-5 whitespace-nowrap text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-store mr-2"></i>商戶上架申請
             </button>
-            <button onclick="switchTab('tab-posts')" class="tab-btn pb-4 pt-5 text-gray-500 font-bold text-sm transition">
-                <i class="fa-solid fa-users mr-2"></i>用戶動態審核 (Users)
+            <button onclick="switchTab('tab-audit')" class="tab-btn pb-4 pt-5 whitespace-nowrap text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-shield-halved mr-2"></i>活躍商品監控 (Dashboard)
+            </button>
+            <button onclick="switchTab('tab-posts')" class="tab-btn pb-4 pt-5 whitespace-nowrap text-gray-500 font-bold text-sm transition">
+                <i class="fa-solid fa-users mr-2"></i>用戶動態審核
             </button>
         </div>
 
@@ -74,6 +77,10 @@
                         <input type="number" id="p-price" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="0">
                     </div>
                     <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">商品描述</label>
+                        <textarea id="p-desc" rows="3" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="輸入商品詳細描述..."></textarea>
+                    </div>
+                    <div>
                         <label class="block text-xs font-bold text-gray-400 mb-2 uppercase">上傳相片 (將自動進行 AI 安全掃描與 WebP 轉換)</label>
                         <input type="file" id="p-image" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-red-50 file:text-red-600 hover:file:bg-red-100 cursor-pointer" accept="image/*" multiple>
                     </div>
@@ -84,8 +91,8 @@
             </div>
 
             <div id="tab-products" class="tab-content">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-black text-gray-900">商戶上架申請 (Products)</h2>
+                <div class="flex justify-between items-center mb-6 mt-2">
+                    <h2 class="text-xl font-black text-gray-900">商戶上架申請 (待審核)</h2>
                     <button onclick="loadPendingProducts()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold active:scale-95"><i class="fa-solid fa-rotate-right mr-2"></i>重新整理</button>
                 </div>
                 <div id="products-grid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -93,8 +100,30 @@
                 </div>
             </div>
 
+            <div id="tab-audit" class="tab-content">
+                <div class="flex justify-between items-center mb-6 mt-2">
+                    <h2 class="text-xl font-black text-gray-900">活躍商品監控與 AI 報告</h2>
+                    <button onclick="loadAuditList()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold active:scale-95"><i class="fa-solid fa-rotate-right mr-2"></i>重新整理</button>
+                </div>
+                <div class="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                                <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">預覽圖</th>
+                                <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">商品資訊</th>
+                                <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">價格</th>
+                                <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">AI 報告</th>
+                                <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">管理操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-list" class="divide-y divide-gray-100 text-sm">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="tab-posts" class="tab-content">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-6 mt-2">
                     <h2 class="text-xl font-black text-gray-900">用戶日常動態 (Posts)</h2>
                     <button onclick="loadRecentPosts()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold active:scale-95"><i class="fa-solid fa-rotate-right mr-2"></i>重新整理</button>
                 </div>
