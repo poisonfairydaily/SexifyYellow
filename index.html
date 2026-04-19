@@ -30,6 +30,21 @@
             user-select: none;
             cursor: move;
         }
+
+        /* ✨ 終極殺手鐧：強制小紅書風格完美正圓頭像，無視任何外層 Flex 擠壓 */
+        .xhs-avatar {
+            width: 22px !important;
+            height: 22px !important;
+            min-width: 22px !important;
+            min-height: 22px !important;
+            max-width: 22px !important;
+            max-height: 22px !important;
+            border-radius: 50% !important;
+            object-fit: cover !important;
+            flex-shrink: 0 !important;
+            border: 1px solid #f3f4f6 !important;
+            background-color: #f9fafb !important;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
