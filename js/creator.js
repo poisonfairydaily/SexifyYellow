@@ -1,11 +1,15 @@
 /**
- * creator.js - 專業電商後台整合版
- * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 視覺檢測 (純紀錄模式：不攔截任何內容)
+ * creator.js - 2026 專業電商後台整合版
+ * 修正重點：
+ * 1. ✨ 雙桶分流對接：上傳檔名強制帶入 "product" 以存入 MY_BUCKET (products/)
+ * 2. 🛡️ 門禁審核：嚴格身分驗證
+ * 3. 📦 實體/虛擬雙軌：USD 與 代幣自動切換
+ * 4. 🔍 AI 視覺檢測：純紀錄模式 (存入資料庫供管理員查閱)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
-const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; // R2 Worker
-let selectedFiles = []; // 支援多圖
+const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; // R2 Worker 代理地址
+let selectedFiles = []; // 支援多圖預覽
 
 // ==========================================
 // 🛡️ 門禁系統：檢查是否具有創作者資格
@@ -247,7 +251,7 @@ async function uploadToR2(blob, fileName) {
     return resData.url;
 }
 
-// ✨ 修改版：AI 只負責記錄，不負責攔截
+// ✨ 修改版：AI 只負責記錄，上傳時觸發分流進入 MY_BUCKET
 window.publishProduct = async function() {
     const btn = document.getElementById('upload-btn');
     if(!btn) return;
@@ -273,24 +277,23 @@ window.publishProduct = async function() {
         for (let i = 0; i < selectedFiles.length; i++) {
             const file = selectedFiles[i];
             
-            // 1. AI 報告生成階段 (不再攔截)
-            btn.innerText = `🔍 AI 影像分析中 (${i+1}/${selectedFiles.length})...`;
+            // 1. AI 報告生成階段
+            btn.innerText = `🔍 AI 分析中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
             });
 
-            // 如果 AI 系統掛掉，依然允許繼續上傳 (純記錄模式)
             if (!auditError && audit) {
                 lastAiReport = audit.safeSearchAnnotation || audit;
-                console.log("AI 報告已生成:", lastAiReport);
             }
 
-            // 2. 轉換與上傳階段
-            btn.innerText = `📦 影像壓縮中 (${i+1}/${selectedFiles.length})...`;
+            // 2. 轉換與上傳
+            btn.innerText = `📦 優化影像中 (${i+1}/${selectedFiles.length})...`;
             const webpBlob = await generateWebPBlob(file);
-            const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
-            const fileName = `${Date.now()}_${i}_${baseName}.webp`; 
+            
+            // ✨【核心修復】檔名必須包含 "product"，觸發 Worker 存入 MY_BUCKET (products/)
+            const fileName = `product_${Date.now()}_${i}.webp`; 
             
             const uploadedUrl = await uploadToR2(webpBlob, fileName);
             uploadedUrls.push(uploadedUrl);
@@ -308,14 +311,15 @@ window.publishProduct = async function() {
             status: 'pending', 
             price: category === 'virtual' ? priceVal : 0,
             price_usd: category === 'physical' ? priceVal : 0,
-            ai_report: lastAiReport // ✨ 報告會存入，讓管理員在後台看
+            ai_report: lastAiReport
         };
 
         const { error } = await window.supabaseClient.from('products').insert([productData]);
         if (error) throw error;
 
-        alert("🎉 商品已成功送出！請等待管理員審核。");
+        alert("🎉 商品已成功送出！請等待審核。");
         
+        // 重置表單
         document.getElementById('p-name').value = '';
         document.getElementById('p-desc').value = '';
         document.getElementById('p-price').value = '';
@@ -359,8 +363,15 @@ window.loadMyProducts = async function() {
         }
 
         listEl.innerHTML = products.map(p => {
-            const firstImg = p.image_url ? p.image_url.split(',')[0] : 'https://placehold.co/150';
-            const displayImg = firstImg.includes('r2.dev') ? `${WORKER_URL}media/${firstImg.split('/').pop()}` : firstImg;
+            const firstImg = p.image_url ? p.image_url.split(',')[0] : '';
+            
+            // ✨【核心修復】對接雙桶邏輯：產品圖片應指向 Worker 的 products/ 資料夾
+            let displayImg = 'https://placehold.co/150';
+            if (firstImg) {
+                const fileName = firstImg.split('/').pop();
+                displayImg = `${WORKER_URL}products/${fileName}`;
+            }
+
             const isPhysical = p.category === 'physical';
             
             let statusBadge = '';
