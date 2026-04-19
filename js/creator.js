@@ -1,6 +1,6 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 視覺檢測 (已解除成人限制)
+ * 包含：門禁審核、分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳 (含 WebP) + ✨ AI 視覺檢測 (純紀錄模式：不攔截任何內容)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 檢查身分 (role 必須是 creator 或 admin，或者是 is_admin)
         const { data: profile } = await window.supabaseClient
             .from('profiles')
             .select('role, is_admin')
@@ -28,11 +27,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (profile?.role !== 'creator' && profile?.role !== 'admin' && profile?.is_admin !== true) {
             alert("🔒 您尚未開通創作者身分，請先申請！");
-            window.location.href = 'index.html'; // 踢回首頁或申請頁
+            window.location.href = 'index.html';
             return;
         }
 
-        // 驗證通過，載入儀表板
         window.switchCreatorTab('dashboard');
     } catch (e) {
         console.error("驗證身分時發生錯誤", e);
@@ -44,12 +42,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==========================================
 window.switchCreatorTab = function(tabName) {
     ['dashboard', 'publish', 'inventory'].forEach(t => {
-        document.getElementById(`btn-${t}`).classList.remove('active');
-        document.getElementById(`tab-${t}`).classList.add('hidden');
+        const btn = document.getElementById(`btn-${t}`);
+        const tab = document.getElementById(`tab-${t}`);
+        if(btn) btn.classList.remove('active');
+        if(tab) tab.classList.add('hidden');
     });
     
-    document.getElementById(`btn-${tabName}`).classList.add('active');
-    document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+    const targetBtn = document.getElementById(`btn-${tabName}`);
+    const targetTab = document.getElementById(`tab-${tabName}`);
+    if(targetBtn) targetBtn.classList.add('active');
+    if(targetTab) targetTab.classList.remove('hidden');
 
     if (tabName === 'dashboard') window.loadCreatorDashboard();
     if (tabName === 'inventory') window.loadMyProducts();
@@ -61,12 +63,13 @@ window.switchCreatorTab = function(tabName) {
 window.loadCreatorDashboard = async function() {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
-        if (!user) return alert("請先登入");
+        if (!user) return;
 
         const { data: myProducts } = await window.supabaseClient.from('products').select('id, views').eq('user_id', user.id);
         const myProductIds = myProducts?.map(p => p.id) || [];
         
-        document.getElementById('stat-views').innerText = myProducts?.reduce((sum, p) => sum + (p.views || 0), 0) || 0;
+        const viewEl = document.getElementById('stat-views');
+        if(viewEl) viewEl.innerText = myProducts?.reduce((sum, p) => sum + (p.views || 0), 0) || 0;
 
         if (myProductIds.length > 0) {
             const { data: orders, error } = await window.supabaseClient
@@ -87,9 +90,11 @@ function renderCreatorStats(orders) {
     const listEl = document.getElementById('sales-record-list');
     let tokenRev = 0, cashRev = 0, pendingCount = 0;
 
+    if (!listEl) return;
     if (!orders || orders.length === 0) {
         listEl.innerHTML = `<div class="text-center py-10 text-gray-400 font-bold">目前尚無成交記錄</div>`;
-        document.getElementById('stat-sales').innerText = '0';
+        const salesEl = document.getElementById('stat-sales');
+        if(salesEl) salesEl.innerText = '0';
         return;
     }
 
@@ -132,10 +137,15 @@ function renderCreatorStats(orders) {
         `;
     }).join('');
 
-    document.getElementById('stat-sales').innerText = orders.length;
-    document.getElementById('stat-revenue-token').innerText = tokenRev.toFixed(1);
-    document.getElementById('stat-revenue-cash').innerText = cashRev.toFixed(1);
-    document.getElementById('stat-pending').innerText = pendingCount;
+    const salesStat = document.getElementById('stat-sales');
+    const tokenStat = document.getElementById('stat-revenue-token');
+    const cashStat = document.getElementById('stat-revenue-cash');
+    const pendingStat = document.getElementById('stat-pending');
+
+    if(salesStat) salesStat.innerText = orders.length;
+    if(tokenStat) tokenStat.innerText = tokenRev.toFixed(1);
+    if(cashStat) cashStat.innerText = cashRev.toFixed(1);
+    if(pendingStat) pendingStat.innerText = pendingCount;
 }
 
 window.markAsShipped = async function(orderId) {
@@ -182,6 +192,7 @@ window.escapeHTML = function(str) {
 
 window.handleProductFiles = function(input) {
     const container = document.getElementById('preview-container');
+    if(!container) return;
     container.innerHTML = '';
     selectedFiles = Array.from(input.files);
 
@@ -232,11 +243,14 @@ async function uploadToR2(blob, fileName) {
     formData.append('file', blob, fileName);
     const response = await fetch(WORKER_URL, { method: 'POST', body: formData });
     if (!response.ok) throw new Error('伺服器上傳失敗');
-    return (await response.json()).url;
+    const resData = await response.json();
+    return resData.url;
 }
 
+// ✨ 修改版：AI 只負責記錄，不負責攔截
 window.publishProduct = async function() {
     const btn = document.getElementById('upload-btn');
+    if(!btn) return;
     const originalText = btn.innerText;
 
     try {
@@ -259,41 +273,21 @@ window.publishProduct = async function() {
         for (let i = 0; i < selectedFiles.length; i++) {
             const file = selectedFiles[i];
             
-            // ==========================================
-            // 1. AI 智能掃描與報告階段 (解封成人內容)
-            // ==========================================
-            btn.innerText = `🔍 AI 掃描審核中 (${i+1}/${selectedFiles.length})...`;
+            // 1. AI 報告生成階段 (不再攔截)
+            btn.innerText = `🔍 AI 影像分析中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
             });
 
-            if (auditError) throw new Error("AI 審核系統連線失敗");
-
-            const safeSearch = audit.safeSearchAnnotation || audit;
-
-            if (safeSearch) {
-                // 相容 Likelihood 命名格式
-                const valViolence = safeSearch.violence || safeSearch.violenceLikelihood;
-                const valMedical = safeSearch.medical || safeSearch.medicalLikelihood;
-                
-                const dangerLevels = ['POSSIBLE', 'LIKELY', 'VERY_LIKELY'];
-                
-                // 🛑 僅保留暴力血腥防線 (法律與平台底線)
-                if (dangerLevels.includes(valViolence) || dangerLevels.includes(valMedical)) {
-                    alert(`🚨 嚴重違規：圖片 "${window.escapeHTML(file.name)}" 偵測到暴力或血腥內容，上傳已強制中斷！`);
-                    throw new Error("圖片含有暴力或血腥內容"); 
-                }
-
-                // ✅ 解封：不再攔截成人、性暗示或二次元色情內容
-                // 僅將結果保存，供後台審核參考
-                lastAiReport = safeSearch; 
+            // 如果 AI 系統掛掉，依然允許繼續上傳 (純記錄模式)
+            if (!auditError && audit) {
+                lastAiReport = audit.safeSearchAnnotation || audit;
+                console.log("AI 報告已生成:", lastAiReport);
             }
 
-            // ==========================================
-            // 2. 轉換 WebP 與上傳 R2 階段
-            // ==========================================
-            btn.innerText = `📦 壓縮並上傳中 (${i+1}/${selectedFiles.length})...`;
+            // 2. 轉換與上傳階段
+            btn.innerText = `📦 影像壓縮中 (${i+1}/${selectedFiles.length})...`;
             const webpBlob = await generateWebPBlob(file);
             const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
             const fileName = `${Date.now()}_${i}_${baseName}.webp`; 
@@ -311,29 +305,28 @@ window.publishProduct = async function() {
             description: window.escapeHTML(desc),
             category: category,
             image_url: imageUrlsString,
-            status: 'pending', // 創作者上傳強制為 pending 待審核
+            status: 'pending', 
             price: category === 'virtual' ? priceVal : 0,
             price_usd: category === 'physical' ? priceVal : 0,
-            ai_report: lastAiReport
+            ai_report: lastAiReport // ✨ 報告會存入，讓管理員在後台看
         };
 
         const { error } = await window.supabaseClient.from('products').insert([productData]);
         if (error) throw error;
 
-        alert("🎉 商品上架申請已送出！請等待審核。");
+        alert("🎉 商品已成功送出！請等待管理員審核。");
         
         document.getElementById('p-name').value = '';
         document.getElementById('p-desc').value = '';
         document.getElementById('p-price').value = '';
-        document.getElementById('preview-container').innerHTML = '';
+        const preview = document.getElementById('preview-container');
+        if(preview) preview.innerHTML = '';
         selectedFiles = [];
         
         window.switchCreatorTab('inventory');
 
     } catch (e) {
-        if (!e.message.includes("內容")) {
-            alert("發佈失敗: " + e.message);
-        }
+        alert("發佈過程中斷: " + e.message);
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
@@ -345,6 +338,7 @@ window.publishProduct = async function() {
 // ==========================================
 window.loadMyProducts = async function() {
     const listEl = document.getElementById('my-products-list');
+    if(!listEl) return;
     listEl.innerHTML = `<div class="text-center py-10 text-gray-300 font-bold"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>載入中...</div>`;
 
     try {
