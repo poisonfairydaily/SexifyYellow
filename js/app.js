@@ -3,7 +3,7 @@
 // ==========================================
 
 // 1. 底部導航欄分頁切換
-function switchTab(tabId, btn) {
+window.switchTab = function(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(t => {
         t.classList.add('hidden');
         t.classList.remove('block', 'flex', 'flex-col');
@@ -38,10 +38,10 @@ function switchTab(tabId, btn) {
     if(tabId === 'home-tab' && typeof window.renderDiscovery === 'function') window.renderDiscovery();
     if(tabId === 'messages-tab' && typeof window.renderMessages === 'function') window.renderMessages();
     if(tabId === 'profile-tab' && typeof window.renderProfile === 'function') window.renderProfile();
-}
+};
 
 // 2. 左側：設定抽屜
-function toggleSettings() {
+window.toggleSettings = function() {
     const drawer = document.getElementById('settings-drawer');
     const panel = document.getElementById('settings-panel');
     if(!drawer || !panel) return;
@@ -52,10 +52,10 @@ function toggleSettings() {
         panel.classList.add('-translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
-}
+};
 
 // 3. 右側：通知抽屜
-async function toggleNotifications() {
+window.toggleNotifications = async function() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
     const badge = document.getElementById('notification-badge');
@@ -129,10 +129,10 @@ async function toggleNotifications() {
         panel.classList.add('translate-x-full');
         setTimeout(() => drawer.classList.add('hidden'), 300);
     }
-}
+};
 
 // 4. Modal 控制與個人資料處理
-function toggleSearch(show) {
+window.toggleSearch = function(show) {
     const overlay = document.getElementById('search-overlay');
     if (!overlay) return;
     if (show) {
@@ -151,9 +151,9 @@ function toggleSearch(show) {
             document.getElementById('searchResults').innerHTML = '<div class="text-center text-gray-400 mt-10 text-sm">請在上方輸入關鍵字開始搜尋...</div>';
         }, 300);
     }
-}
+};
 
-async function saveUserProfile(formData) {
+window.saveUserProfile = async function(formData) {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
 
@@ -181,28 +181,29 @@ async function saveUserProfile(formData) {
         if (resPrivate.error) throw resPrivate.error;
 
         alert("資料儲存成功！");
-        closeEditProfile();
+        window.closeEditProfile();
         if (typeof window.renderProfile === 'function') window.renderProfile();
     } catch (err) {
         console.error("更新個人資料失敗:", err);
         alert("更新失敗，請檢查資料格式。");
     }
-}
+};
 
-function openEditProfile() {
+window.openEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
-}
-function closeEditProfile() {
+};
+
+window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+};
 
 // 收藏、訂單與聯絡
-function openBookmarksModal() {
+window.openBookmarksModal = function() {
     toggleSettings();
     const modal = document.getElementById('bookmarks-modal');
     if(!modal) return;
@@ -226,74 +227,63 @@ function openBookmarksModal() {
             <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed">${b.caption || ''}</p>
         </div>
     `).join('');
-}
-function closeBookmarksModal() {
+};
+
+window.closeBookmarksModal = function() {
     const modal = document.getElementById('bookmarks-modal');
     if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+};
 
-function openOrdersModal() {
+window.openOrdersModal = function() {
     toggleSettings();
     const modal = document.getElementById('orders-modal');
     if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
-}
-function closeOrdersModal() {
+};
+
+window.closeOrdersModal = function() {
     const modal = document.getElementById('orders-modal');
     if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+};
 
-function openContactModal() {
+window.openContactModal = function() {
     toggleSettings();
     const modal = document.getElementById('contact-modal');
     if(!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
-}
-function closeContactModal() {
+};
+
+window.closeContactModal = function() {
     const modal = document.getElementById('contact-modal');
     if(!modal) return;
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-}
+};
 
-// 5. 核心：年齡驗證防卡死 + 背景安全同步
-window.verifyAge = async function() {
-    const ageGate = document.getElementById('age-gate');
-    if (ageGate) {
-        ageGate.style.display = 'none';
-        ageGate.classList.add('hidden', 'opacity-0');
-    }
-    localStorage.setItem('ageVerified', 'true');
-
-    if (typeof window.renderDiscovery === 'function') {
-        window.renderDiscovery();
-    }
-
-    try {
-        if (window.supabaseClient) {
-            const { data: { user } } = await window.supabaseClient.auth.getUser();
-            if (user) {
-                await window.supabaseClient.from('profiles').update({ is_adult: true }).eq('id', user.id);
-            }
-        }
-    } catch (e) {
-        console.warn("背景同步失敗，但允許進入", e);
+// ✨ 登出邏輯 (從 auth.js 移駕至此)
+window.logoutUser = async function() {
+    if (confirm("確定要登出帳號嗎？")) {
+        await window.supabaseClient.auth.signOut();
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = 'login.html'; // 直接導向登入頁
     }
 };
 
-window.confirmAge = window.verifyAge;
-window.enterSite = window.verifyAge;
-
-// 實時推播監聽
+// ==========================================
+// 實時推播監聽與初始化
+// ==========================================
 function setupGlobalRealtime(userId) {
+    if (!window.supabaseClient) return;
+    
     window.supabaseClient.channel('global-notifications')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, payload => {
         const badge = document.getElementById('notification-badge');
@@ -312,41 +302,34 @@ function setupGlobalRealtime(userId) {
     }).subscribe();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('ageVerified') === 'true') {
-        const ageGate = document.getElementById('age-gate');
-        if (ageGate) {
-            ageGate.style.display = 'none';
-            ageGate.classList.add('hidden', 'opacity-0');
+// 應用程式初始化
+document.addEventListener('DOMContentLoaded', async () => {
+    // 確保 Supabase 載入
+    if (!window.supabaseClient) return;
+
+    // 檢查登入狀態並啟動功能
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (session) {
+        const userId = session.user.id;
+        localStorage.setItem('userId', userId);
+        
+        // 啟動首頁內容
+        if (typeof window.renderDiscovery === 'function') {
+            window.renderDiscovery();
         }
-    }
 
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            if (confirm("確定要登出帳號嗎？")) {
-                localStorage.clear();
-                window.location.reload();
-            }
-        });
-    }
-});
-
-window.addEventListener('authReady', async () => {
-    const homeTab = document.getElementById('home-tab');
-    if (homeTab && !homeTab.classList.contains('hidden')) {
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
-    }
-
-    const userId = localStorage.getItem('userId');
-    if (userId) {
+        // 檢查未讀通知與訊息
         try {
             const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
             if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
             
             const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
             if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
-        } catch(e) {}
+        } catch(e) {
+            console.warn("載入未讀標記失敗", e);
+        }
+        
+        // 綁定 WebSocket 監聽
         setupGlobalRealtime(userId);
     }
 });
