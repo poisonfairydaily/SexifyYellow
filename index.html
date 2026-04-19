@@ -31,16 +31,23 @@
             cursor: move;
         }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (window.supabaseClient) {
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                if (!session) {
+                    window.location.href = 'login.html'; // 沒登入直接跳轉
+                } else {
+                    localStorage.setItem('userId', session.user.id);
+                }
+            }
+        });
+    </script>
 </head>
 <body class="text-gray-900 overflow-x-hidden bg-gray-50">
-
-    <div id="age-gate" class="fixed inset-0 z-[1000] bg-black flex items-center justify-center p-6 transition-opacity duration-500">
-        <div class="text-center">
-            <h1 class="text-white text-3xl font-black mb-4 italic tracking-tighter">SEXIFY</h1>
-            <p class="text-gray-400 mb-8 font-bold">進入即表示您確認已滿 18 歲，並願意觀看成人內容。</p>
-            <button onclick="verifyAge()" class="bg-sexify text-white font-bold py-4 px-14 rounded-full text-lg shadow-[0_0_30px_rgba(255,36,66,0.4)] active:scale-95 transition">我已滿18歲，進入</button>
-        </div>
-    </div>
 
     <div id="search-overlay" class="fixed inset-0 z-[1000] bg-white hidden flex-col transform transition-transform duration-300 translate-y-full">
         <div class="p-4 border-b flex items-center gap-3">
@@ -64,43 +71,6 @@
             </header>
             <div id="notification-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50 custom-scrollbar">
                 </div>
-        </div>
-    </div>
-
-    <div id="auth-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[900] flex flex-col justify-center px-6 hidden">
-        <div class="bg-white rounded-[2rem] p-8 shadow-2xl">
-            <h2 id="auth-title" class="text-3xl font-black mb-2 text-center text-gray-900 tracking-tighter">SEXIFY</h2>
-            <p id="auth-subtitle" class="text-gray-500 text-center mb-6 text-sm">登入以繼續探索</p>
-            <div class="space-y-4">
-                <div id="auth-register-only-fields" class="hidden space-y-4">
-                    <input type="text" id="auth-display-name" placeholder="顯示名稱" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-sexify outline-none">
-                    <input type="text" id="auth-username" placeholder="唯一帳號名" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-sexify outline-none">
-                    <select id="auth-gender" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm text-gray-500 outline-none">
-                        <option value="Unspecified" disabled selected>選擇您的性別</option>
-                        <option value="Male">男性</option><option value="Female">女性</option><option value="Other">其他</option>
-                    </select>
-                    <input type="date" id="auth-birthday" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none">
-                    <div class="flex items-start gap-2"><input type="checkbox" id="auth-tos" class="mt-1 accent-sexify"><label for="auth-tos" class="text-[10px] text-gray-400">我同意服務條款並確認年滿 18 歲。</label></div>
-                </div>
-                <input type="email" id="auth-email" placeholder="電子信箱" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify">
-                <input type="password" id="auth-password" placeholder="密碼" class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-sexify">
-                <button id="auth-btn" onclick="handleAuthAction()" class="w-full bg-sexify text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-95 transition mt-2">登入</button>
-            </div>
-            <div class="mt-6 text-center text-sm">
-                <span id="auth-switch-text" class="text-gray-500">還沒有帳號嗎？</span> 
-                <button onclick="toggleAuthMode()" id="auth-switch-btn" class="text-sexify font-bold">立即註冊</button>
-            </div>
-            <button onclick="toggleForgotModal(true)" class="w-full text-center text-[11px] text-gray-400 mt-4 hover:text-sexify transition">忘記密碼？</button>
-        </div>
-    </div>
-
-    <div id="forgot-password-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] hidden items-center justify-center p-6">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl relative animate-fade-in">
-            <button onclick="toggleForgotModal(false)" class="absolute top-6 right-6 text-gray-400 hover:text-black"><i class="fa-solid fa-xmark text-lg"></i></button>
-            <h2 class="text-2xl font-black text-gray-900 mb-8 text-center">找回密碼</h2>
-            <input type="email" id="modal-reset-email" placeholder="輸入註冊信箱" class="w-full p-4 bg-gray-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-black outline-none mb-4">
-            <button onclick="handleModalResetRequest()" id="modal-reset-btn" class="w-full bg-black text-white p-4 rounded-2xl font-bold active:scale-95 transition">發送重設郵件</button>
-            <p id="modal-message" class="text-center text-[11px] font-medium mt-4 min-h-[1rem]"></p>
         </div>
     </div>
 
@@ -355,7 +325,7 @@
         </div>
     </div>
 
-    <div id="app-content" class="blur-2xl pointer-events-none transition-all duration-500 h-screen overflow-hidden flex flex-col relative">
+    <div id="app-content" class="transition-all duration-500 h-screen overflow-hidden flex flex-col relative">
         <header class="bg-white/90 backdrop-blur-md px-4 py-3 flex justify-between items-center sticky top-0 z-50 border-b">
             <button onclick="toggleSettings(); window.loadSidebarProfile();" class="text-gray-700 w-8 active:scale-90 transition"><i class="fa-solid fa-bars text-xl"></i></button>
             <h1 class="text-2xl font-black italic tracking-tighter text-sexify flex-1 text-center">SEXIFY</h1>
@@ -428,10 +398,7 @@
         </nav>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase-config.js"></script>
     <script src="js/i18n.js"></script>
-    <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
     <script src="js/create.js"></script>
     <script src="js/discovery.js"></script>
