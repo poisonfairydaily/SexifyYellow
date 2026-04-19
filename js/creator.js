@@ -1,6 +1,6 @@
 /**
  * creator.js - 專業電商後台整合版
- * 包含：分頁控制、雙軌收益統計、實體訂單發貨、R2 多圖上傳、商品資料庫對接
+ * 包含：分頁控制、雙軌收益統計、實體訂單發貨、✨ R2 多圖上傳 (含全自動 WebP 壓縮)
  */
 
 const PLATFORM_FEE_RATE = 0.2; // 平台抽成 20%
@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 0. 分頁控制
 // ==========================================
 window.switchCreatorTab = function(tabName) {
-    // 按鈕 UI 切換
     ['dashboard', 'publish', 'inventory'].forEach(t => {
         document.getElementById(`btn-${t}`).classList.remove('active');
         document.getElementById(`tab-${t}`).classList.add('hidden');
@@ -24,7 +23,6 @@ window.switchCreatorTab = function(tabName) {
     document.getElementById(`btn-${tabName}`).classList.add('active');
     document.getElementById(`tab-${tabName}`).classList.remove('hidden');
 
-    // 觸發對應資料載入
     if (tabName === 'dashboard') window.loadCreatorDashboard();
     if (tabName === 'inventory') window.loadMyProducts();
 };
@@ -123,7 +121,7 @@ window.markAsShipped = async function(orderId) {
 };
 
 // ==========================================
-// 2. 動態表單與多圖上傳 (Publish)
+// 2. 動態表單與 WebP 多圖上傳 (Publish)
 // ==========================================
 window.togglePriceInput = function() {
     const category = document.getElementById('p-category').value;
@@ -173,11 +171,32 @@ window.handleProductFiles = function(input) {
     }
 };
 
-async function uploadToR2(file) {
+// ✨ 新增：Creator 端的 WebP 壓縮引擎
+async function generateWebPBlob(file) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const max_size = 1200; 
+            let width = img.width, height = img.height;
+            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
+            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
+            canvas.width = width; canvas.height = height;
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
+        };
+    });
+}
+
+// ✨ 修正：確保送給 R2 的是壓縮過的 WebP 並帶有正確檔名
+async function uploadToR2(blob, fileName) {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', blob, fileName);
     const response = await fetch(WORKER_URL, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('上傳失敗');
+    if (!response.ok) throw new Error('伺服器上傳失敗');
     return (await response.json()).url;
 }
 
@@ -197,24 +216,29 @@ window.publishProduct = async function() {
         if (!name || selectedFiles.length === 0) return alert("請輸入商品名稱並上傳至少一張圖片");
         if (priceVal <= 0) return alert("請設定有效的價格");
 
-        btn.innerText = "圖片上傳中 (請勿關閉)...";
+        btn.innerText = "壓縮並上傳中 (請勿關閉)...";
         btn.disabled = true;
 
-        // 處理多圖上傳
-        const uploadPromises = selectedFiles.map(file => uploadToR2(file));
+        // ✨ 處理多圖 WebP 轉換與上傳
+        const uploadPromises = selectedFiles.map(async (file, index) => {
+            const webpBlob = await generateWebPBlob(file);
+            const baseName = file.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
+            const fileName = `${Date.now()}_${index}_${baseName}.webp`; // 強制附加 .webp
+            return await uploadToR2(webpBlob, fileName);
+        });
+
         const urls = await Promise.all(uploadPromises);
         const imageUrlsString = urls.join(',');
 
         btn.innerText = "資料寫入中...";
         
-        // 寫入 Shop 專用的 products 資料表
         const productData = {
             user_id: user.id,
             name: window.escapeHTML(name),
             description: window.escapeHTML(desc),
             category: category,
             image_url: imageUrlsString,
-            status: 'approved', // 正式環境應設為 pending 待審核
+            status: 'pending', // 創作者上傳強制為 pending
             price: category === 'virtual' ? priceVal : 0,
             price_usd: category === 'physical' ? priceVal : 0
         };
@@ -222,9 +246,8 @@ window.publishProduct = async function() {
         const { error } = await window.supabaseClient.from('products').insert([productData]);
         if (error) throw error;
 
-        alert("🎉 商品上架成功！");
+        alert("🎉 商品上架申請已送出！請等待審核。");
         
-        // 重置表單並切換回庫存頁籤
         document.getElementById('p-name').value = '';
         document.getElementById('p-desc').value = '';
         document.getElementById('p-price').value = '';
@@ -269,6 +292,12 @@ window.loadMyProducts = async function() {
             const firstImg = p.image_url ? p.image_url.split(',')[0] : 'https://placehold.co/150';
             const displayImg = firstImg.includes('r2.dev') ? `${WORKER_URL}media/${firstImg.split('/').pop()}` : firstImg;
             const isPhysical = p.category === 'physical';
+            
+            // 如果被管理員深度封存，將顯示不同狀態
+            let statusBadge = '';
+            if(p.status === 'approved') statusBadge = '<span class="text-[8px] font-black px-2 py-0.5 rounded bg-green-100 text-green-600">已上架</span>';
+            else if(p.status === 'rejected' || p.status === 'deleted') statusBadge = '<span class="text-[8px] font-black px-2 py-0.5 rounded bg-red-100 text-red-600">已遭下架</span>';
+            else statusBadge = '<span class="text-[8px] font-black px-2 py-0.5 rounded bg-orange-100 text-orange-600">審核中</span>';
 
             return `
                 <div class="flex gap-4 bg-gray-50 p-3 rounded-2xl border border-gray-100">
@@ -276,7 +305,7 @@ window.loadMyProducts = async function() {
                     <div class="flex-1 min-w-0 flex flex-col justify-center">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-[8px] font-black px-2 py-0.5 rounded bg-gray-200 text-gray-500">${isPhysical ? '實體' : '虛擬'}</span>
-                            <span class="text-[8px] font-black px-2 py-0.5 rounded ${p.status === 'approved' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}">${p.status === 'approved' ? '已上架' : '審核中'}</span>
+                            ${statusBadge}
                         </div>
                         <h4 class="font-black text-sm text-gray-900 truncate mb-1">${window.escapeHTML(p.name)}</h4>
                         <p class="font-black text-xs ${isPhysical ? 'text-blue-600' : 'text-sexify'}">${isPhysical ? '$' + p.price_usd : '🪙' + p.price}</p>
@@ -295,8 +324,14 @@ window.loadMyProducts = async function() {
 window.deleteProduct = async function(productId) {
     if (!confirm("確定要下架並刪除此商品嗎？")) return;
     try {
-        const { error } = await window.supabaseClient.from('products').delete().eq('id', productId);
-        if (error) throw error;
+        const { error: dbError } = await window.supabaseClient.from('products').delete().eq('id', productId);
+        
+        // 創作者端的防呆機制：如果有人買過了，創作者無法直接 delete，只能 archive 封存
+        if (dbError) {
+            await window.supabaseClient.from('products').update({ is_archived: true, status: 'rejected' }).eq('id', productId);
+            alert("⚠️ 由於商品已有成交紀錄，已為您轉為「下架封存」狀態，不再於商城顯示。");
+        }
+        
         window.loadMyProducts();
         window.loadCreatorDashboard();
     } catch (e) { alert("刪除失敗"); }
