@@ -1,10 +1,10 @@
 /**
  * js/create.js - 2026 終極完整穩定版
  * 功能：
- * 1. 影像 WebP 預處理與二進位鎖定 (解決 35KB 破圖問題)
- * 2. 欄位精準對齊 (Posts 表使用 media_url)
- * 3. 檔名自動淨化 (防止長檔名導致 R2 讀取失敗)
- * 4. 完整的 UI 預覽與滑動關閉邏輯
+ * 1. 影像 WebP 預處理與二進位鎖定 (徹底解決 35KB 破圖問題)
+ * 2. 雙桶分流對接：確保貼文檔案進入 POST_BUCKET (media/ 目錄)
+ * 3. 欄位精準對齊：Supabase posts 表使用 media_url
+ * 4. 完整的 UI 預覽與觸控滑動關閉邏輯
  */
 
 // --- 🛡️ 0. 全域工具函數 ---
@@ -16,24 +16,25 @@ window.escapeHTML = function(str) {
 };
 
 /**
- * ✨ 影像處理：加固 WebP 版
- * 確保解碼完成後再壓縮，並提供原檔回退機制
+ * ✨ 影像處理引擎：加固 WebP 版
+ * 使用 decode() 確保數據完整，防止產出 [object File] 或空殼損毀檔案
  */
 async function generateWebPBlob(file) {
-    // 如果是影片，直接回傳原檔，不進行 WebP 轉換
+    // 如果是影片，不進行 WebP 轉換，直接回傳原檔
     if (file.type.startsWith('video/')) return file;
 
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
         
-        // 使用 decode 確保瀏覽器已完全解析影像數據，避免產出損毀的空殼檔案
+        // 核心加固：確保瀏覽器完全解析影像後才開始畫布處理
         img.decode().then(() => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const max_size = 1200; 
             let width = img.width, height = img.height;
 
+            // 等比例縮放計算
             if (width > height) {
                 if (width > max_size) { height *= max_size / width; width = max_size; }
             } else {
@@ -43,7 +44,7 @@ async function generateWebPBlob(file) {
             canvas.width = width;
             canvas.height = height;
             
-            // 填滿白色背景防止透明區塊在轉換時變黑
+            // 填滿白色底，防止 PNG 透明層變黑
             ctx.fillStyle = "white";
             ctx.fillRect(0, 0, width, height);
             
@@ -52,7 +53,7 @@ async function generateWebPBlob(file) {
             ctx.drawImage(img, 0, 0, width, height);
 
             canvas.toBlob((blob) => {
-                // 如果生成的 Blob 過小 (損毀)，則回退使用原始檔案
+                // 容錯機制：如果產出的 Blob 過小 (損毀)，改用原檔
                 if (!blob || blob.size < 2000) {
                     resolve(file);
                 } else {
@@ -61,19 +62,19 @@ async function generateWebPBlob(file) {
                 URL.revokeObjectURL(img.src);
             }, 'image/webp', 0.85);
         }).catch(err => {
-            console.error("影像解碼失敗，改用原始檔案:", err);
+            console.error("影像解碼失敗，採用原始檔案上傳:", err);
             resolve(file); 
         });
     });
 }
 
 /**
- * ✨ R2 上傳核心 (強制使用與商店版一致的二進位傳輸模式)
+ * ✨ R2 上傳核心
  */
 async function uploadToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
     const formData = new FormData();
-    // 關鍵：將處理後的數據流與乾淨檔名封裝
+    // 關鍵：將二進位數據與乾淨檔名封裝
     formData.append('file', blob, fileName);
 
     const response = await fetch(WORKER_URL, {
@@ -81,12 +82,12 @@ async function uploadToR2(blob, fileName) {
         body: formData
     });
 
-    if (!response.ok) throw new Error(`HTTP 錯誤: ${response.status}`);
+    if (!response.ok) throw new Error(`R2 上傳連線失敗: ${response.status}`);
     
     const result = await response.json();
-    if (!result.success) throw new Error(result.error || 'Worker 回傳異常');
+    if (!result.success) throw new Error(result.error || 'Worker 處理異常');
     
-    // 返回 Worker 代理網址，確保讀取時具備正確的 CORS 與標頭
+    // 返回代理後的 URL，這會經過 Worker 的 GET 邏輯 (自帶正確 MIME 與 CORS)
     return result.url;
 }
 
@@ -94,13 +95,22 @@ async function uploadToR2(blob, fileName) {
 
 let selectedFile = null;
 
+/**
+ * 開啟發佈面板
+ */
 window.openUploadModal = function() {
     const modal = document.getElementById('upload-modal');
     const panel = document.getElementById('upload-panel');
     if (modal) modal.classList.remove('hidden');
-    if (panel) setTimeout(() => panel.classList.remove('translate-y-full'), 10);
+    if (panel) {
+        // 小延遲觸發 CSS 過渡動畫
+        setTimeout(() => panel.classList.remove('translate-y-full'), 10);
+    }
 };
 
+/**
+ * 關閉發佈面板
+ */
 window.closeUploadModal = function() {
     const panel = document.getElementById('upload-panel');
     const modal = document.getElementById('upload-modal');
@@ -111,7 +121,9 @@ window.closeUploadModal = function() {
     }, 300);
 };
 
-// 處理媒體選擇預覽
+/**
+ * 處理檔案選擇與即時預覽
+ */
 window.handleFileSelect = function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -121,7 +133,7 @@ window.handleFileSelect = function(e) {
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
     const other = isVideo ? document.getElementById('media-preview') : document.getElementById('video-preview');
     
-    // 隱藏非活動的預覽框與佔位符
+    // 清理舊預覽
     if(other) { other.classList.add('hidden'); other.src = ''; }
     const placeholder = document.getElementById('media-placeholder');
     if(placeholder) placeholder.classList.add('hidden');
@@ -132,6 +144,7 @@ window.handleFileSelect = function(e) {
             preview.src = event.target.result;
             preview.classList.remove('hidden');
         }
+        // 紀錄媒體類型供後續處理參考
         const container = document.getElementById('media-preview-container');
         if(container) container.dataset.mediaType = isVideo ? 'video' : 'image';
     };
@@ -139,7 +152,7 @@ window.handleFileSelect = function(e) {
 };
 
 /**
- * 重置上傳表單狀態
+ * 重置表單狀態
  */
 function resetUploadForm() {
     selectedFile = null;
@@ -161,7 +174,9 @@ function resetUploadForm() {
     if (fileInput) fileInput.value = '';
 }
 
-// 觸控滑動關閉邏輯 (DOM 載入後執行)
+/**
+ * 觸控手勢關閉：滑動面板頂部可快速關閉
+ */
 document.addEventListener('DOMContentLoaded', () => {
     const uploadPanel = document.getElementById('upload-panel');
     let startY = 0;
@@ -169,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadPanel.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
         uploadPanel.addEventListener('touchmove', (e) => {
             const currentY = e.touches[0].clientY;
+            // 下滑超過 80 像素自動關閉
             if (currentY - startY > 80) window.closeUploadModal();
         }, { passive: true });
     }
@@ -199,25 +215,26 @@ window.publishPost = async function() {
         if (selectedFile) {
             btn.innerText = "🚀 優化媒體上傳中...";
             
-            // 1. 生成 WebP Blob (跟商店成功的邏輯一致)
+            // 1. 生成 WebP Blob
             const blob = await generateWebPBlob(selectedFile);
             
-            // 2. 檔名清洗：使用極簡命名法，杜絕特殊字元解析錯誤
+            // 2. ✨【分流密鑰】檔名不含 "product"，確保 Worker 存入 POST_BUCKET
             const randomID = Math.random().toString(36).substring(7);
             const extension = selectedFile.type.startsWith('video/') ? (selectedFile.name.split('.').pop() || 'mp4') : 'webp';
-            const cleanFileName = `${Date.now()}_${randomID}.${extension}`;
+            const cleanFileName = `post_${Date.now()}_${randomID}.${extension}`;
 
-            // 3. 執行 R2 上傳
+            // 3. 執行 R2 代理上傳
             mediaUrl = await uploadToR2(blob, cleanFileName);
+            console.log("R2 貼文上傳成功：", mediaUrl);
         }
 
         btn.innerText = "💾 存入資料庫...";
         
-        // ✨ 核心修正：將資料寫入 posts 表的 media_url 欄位
+        // ✨【欄位對齊】精準寫入 posts 表的 media_url
         const { error: dbError } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
             caption: window.escapeHTML(caption),
-            media_url: mediaUrl, // 貼文表使用 media_url
+            media_url: mediaUrl, 
             is_paid: isPaid,
             price: price
         }]);
@@ -227,7 +244,7 @@ window.publishPost = async function() {
         alert('✨ 貼文發佈成功！');
         window.closeUploadModal();
         
-        // 刷新頁面顯示新內容
+        // 刷新頁面顯示新貼文 (如果主頁有定義 renderDiscovery 則使用它，否則刷新全頁)
         if (typeof window.renderDiscovery === 'function') {
             window.renderDiscovery();
         } else {
@@ -244,7 +261,7 @@ window.publishPost = async function() {
 };
 
 /**
- * 貼文刪除功能
+ * 貼文刪除功能：管理員或擁有者使用
  */
 window.deletePost = async function(postId) {
     if (!confirm('確定要刪除這篇貼文嗎？此動作無法復原。')) return;
@@ -262,7 +279,11 @@ window.deletePost = async function(postId) {
         if (error) throw error;
 
         alert('🗑️ 貼文已刪除！');
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
+        if (typeof window.renderDiscovery === 'function') {
+            window.renderDiscovery();
+        } else {
+            location.reload();
+        }
     } catch (err) {
         alert('刪除失敗: ' + err.message);
     }
