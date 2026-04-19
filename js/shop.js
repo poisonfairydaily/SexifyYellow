@@ -62,7 +62,7 @@ window.refreshBalanceUI = async function() {
 window.updateRechargePreview = function(val) {
     const num = parseFloat(val) || 0;
     const preview = document.getElementById('rechargePreview');
-    if (preview) preview.innerText = `代幣 ${num * EXCHANGE_RATE}`;
+    if (preview) preview.innerText = `🪙 ${num * EXCHANGE_RATE}`;
 };
 
 window.handleRecharge = function(amount) {
@@ -93,8 +93,8 @@ window.handleRecharge = function(amount) {
                 <p class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1 relative z-10">支付金額</p>
                 <p class="text-gray-900 text-2xl font-black relative z-10">$${numAmount} <span class="text-xs text-gray-500 font-bold">USD</span></p>
                 <div class="h-px bg-gray-200 my-3"></div>
-                <p class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1 relative z-10">獲得代幣 (1:${EXCHANGE_RATE})</p>
-                <p class="text-sexify text-xl font-black relative z-10">代幣 ${tokensToGet}</p>
+                <p class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1 relative z-10">獲得 🪙 (1:${EXCHANGE_RATE})</p>
+                <p class="text-sexify text-xl font-black relative z-10">🪙 ${tokensToGet}</p>
             </div>
             <div class="space-y-3">
                 <button onclick="window.processNowPayments(${numAmount})" class="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-sexify transition active:scale-95 group">
@@ -215,7 +215,6 @@ async function renderProductGrid(grid, keyword) {
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         
-        // 關鍵修復：強制指定 !user_id 來解決關聯衝突 PGRST201
         let query = window.supabaseClient.from('products').select('*, profiles!user_id(display_name, avatar_url, role)').eq('status', 'approved').eq('is_archived', false); 
         
         if (keyword) query = query.ilike('name', `%${keyword}%`);
@@ -266,7 +265,7 @@ async function renderProductGrid(grid, keyword) {
 
             const priceDisplay = isPhysical 
                 ? `<span class="text-blue-600 font-black text-xs">$${p.price_usd}</span>`
-                : `<span class="text-sexify font-black text-xs">代幣 ${p.price}</span>`;
+                : `<span class="text-sexify font-black text-xs">🪙 ${p.price}</span>`;
 
             return `
                 <div onclick="window.openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95">
@@ -310,7 +309,7 @@ function renderCartInline(grid) {
             <div class="flex-1 overflow-hidden">
                 <h3 class="font-black text-sm text-gray-900 truncate mb-1">${window.escapeHTML(item.name)}</h3>
                 <p class="text-[10px] text-gray-500 font-bold mb-0.5">${item.isPhysical ? `實體商品 ($${item.priceUsd})` : '虛擬內容'}</p>
-                <p class="text-sexify font-black text-sm">代幣 ${item.tokenCost}</p>
+                <p class="text-sexify font-black text-sm">🪙 ${item.tokenCost}</p>
             </div>
             <button onclick="window.removeFromCart('${item.id}')" class="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center active:scale-90 transition">
                 <i class="fa-solid fa-trash-can text-sm"></i>
@@ -323,8 +322,8 @@ function renderCartInline(grid) {
             <div class="absolute right-0 top-0 w-24 h-24 bg-sexify/20 rounded-bl-[4rem] -z-0"></div>
             <div class="flex justify-between items-end relative z-10">
                 <div>
-                    <span class="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block mb-1">扣除總代幣</span>
-                    <span class="text-3xl font-black text-sexify leading-none">代幣 ${totalTokens}</span>
+                    <span class="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block mb-1">扣除總計 🪙</span>
+                    <span class="text-3xl font-black text-sexify leading-none">🪙 ${totalTokens}</span>
                 </div>
             </div>
             <button onclick="window.checkoutCart()" class="w-full bg-white text-black font-black py-4 rounded-xl active:scale-95 transition shadow-lg relative z-10 mt-2">一鍵安全結帳</button>
@@ -354,14 +353,14 @@ window.checkoutCart = async function() {
     if (cart.length === 0) return;
     const totalTokens = cart.reduce((sum, item) => sum + item.tokenCost, 0);
     
-    if (!confirm(`系統將從餘額扣除 ${totalTokens} 代幣來結帳清單，確定嗎？`)) return;
+    if (!confirm(`系統將從餘額扣除 🪙 ${totalTokens} 來結帳清單，確定嗎？`)) return;
 
     try {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         if (!user) throw new Error("請先登入帳號");
 
         const { data: profile } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
-        if (profile.balance < totalTokens) return alert("代幣餘額不足，請先點擊右上角「+」儲值。");
+        if (profile.balance < totalTokens) return alert("🪙 餘額不足，請先點擊右上角「+」儲值。");
 
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - totalTokens }).eq('id', user.id);
 
@@ -387,8 +386,8 @@ window.handlePurchase = async function(productId, price, priceUsd, category) {
     const tokenCost = isPhysical ? (parseFloat(priceUsd) * EXCHANGE_RATE) : parseInt(price);
 
     const confirmMsg = isPhysical 
-        ? `此實體商品定價為 $${priceUsd} USD。\n系統將自動換算並扣除 ${tokenCost} 代幣，確定購買嗎？`
-        : `確定要花費 ${tokenCost} 代幣單獨解鎖此項目嗎？`;
+        ? `此實體商品定價為 $${priceUsd} USD。\n系統將自動換算並扣除 🪙 ${tokenCost}，確定購買嗎？`
+        : `確定要花費 🪙 ${tokenCost} 單獨解鎖此項目嗎？`;
 
     if (!confirm(confirmMsg)) return;
 
@@ -397,7 +396,7 @@ window.handlePurchase = async function(productId, price, priceUsd, category) {
         if (!user) throw new Error("請先登入帳號");
 
         const { data: profile } = await window.supabaseClient.from('profiles').select('balance').eq('id', user.id).single();
-        if (profile.balance < tokenCost) return alert("代幣餘額不足，請先點擊右上角「+」儲值。");
+        if (profile.balance < tokenCost) return alert("🪙 餘額不足，請先點擊右上角「+」儲值。");
 
         await window.supabaseClient.from('profiles').update({ balance: profile.balance - tokenCost }).eq('id', user.id);
         await window.supabaseClient.from('orders').insert({ 
@@ -489,9 +488,9 @@ window.openProductModal = async function(productId) {
         const priceDisplayHTML = isPhysical
             ? ` <span class="text-[9px] font-bold uppercase tracking-widest mb-0.5 text-blue-600">實體定價</span>
                 <span class="text-xl font-black leading-none text-blue-600">$${item.price_usd}</span>
-                <span class="text-[9px] font-bold text-gray-400 mt-1">(扣除代幣 ${item.price_usd * EXCHANGE_RATE})</span>`
+                <span class="text-[9px] font-bold text-gray-400 mt-1">(扣除 🪙 ${item.price_usd * EXCHANGE_RATE})</span>`
             : ` <span class="text-[9px] font-bold uppercase tracking-widest mb-0.5 text-sexify">解鎖價</span>
-                <span class="text-xl font-black leading-none text-sexify">代幣 ${item.price}</span>`;
+                <span class="text-xl font-black leading-none text-sexify">🪙 ${item.price}</span>`;
 
         content.innerHTML = `
             <div class="relative bg-black flex items-center justify-center min-h-[40vh] sm:min-h-[50vh] overflow-hidden group cursor-zoom-in" onclick="window.zoomImage('${safeImg}')">
