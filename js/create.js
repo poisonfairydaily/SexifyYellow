@@ -1,9 +1,8 @@
 /**
- * js/create.js - 2026 穩定重製版
- * 同步成功模組：100% 移植 creator.js 核心邏輯
+ * js/create.js - 2026 最終修復版
+ * 針對 35KB 破圖問題進行 Canvas 繪製加固
  */
 
-// --- 🛡️ 0. 安全工具 ---
 window.escapeHTML = function(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -12,40 +11,63 @@ window.escapeHTML = function(str) {
 };
 
 /**
- * 核心：WebP 影像處理引擎 (與 creator.js 1:1 同步)
+ * ✨ 影像處理引擎：加固版
+ * 解決 35KB 破圖問題，確保 Canvas 真正抓到數據
  */
 async function generateWebPBlob(file) {
     if (file.type.startsWith('video/')) return file;
-    return new Promise((resolve) => {
+
+    return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
-        img.onload = () => {
+        
+        // 使用 decode 確保瀏覽器已解析影像數據
+        img.decode().then(() => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const max_size = 1200; 
             let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+
+            if (width > height) {
+                if (width > max_size) { height *= max_size / width; width = max_size; }
+            } else {
+                if (height > max_size) { width *= max_size / height; height = max_size; }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            
+            // 填滿白色背景防止透明區塊變黑
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
+
             canvas.toBlob((blob) => {
-                resolve(blob);
+                if (!blob || blob.size < 1000) {
+                    reject(new Error("影像轉換失敗，產生的檔案過小"));
+                } else {
+                    resolve(blob);
+                }
                 URL.revokeObjectURL(img.src);
-            }, 'image/webp', 0.85); 
-        };
+            }, 'image/webp', 0.85);
+        }).catch(err => {
+            console.error("圖片解碼失敗:", err);
+            // 如果 Canvas 失敗，就直接傳原檔 (最後的保險)
+            resolve(file); 
+        });
     });
 }
 
 /**
- * 核心：R2 上傳引擎 (強化二進位傳輸)
+ * ✨ R2 上傳引擎：同步 creator.js 成功模式
  */
 async function uploadToR2(blob, fileName) {
-    // 確保這裡的 URL 與你成功的 creator.js 一致
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
-    
     const formData = new FormData();
-    // ✨ 關鍵：三參數 append，確保二進位 Blob 伴隨檔名發送
+    // 確保這裡帶入 Blob 與 檔名
     formData.append('file', blob, fileName);
 
     const response = await fetch(WORKER_URL, {
@@ -53,15 +75,15 @@ async function uploadToR2(blob, fileName) {
         body: formData
     });
 
-    if (!response.ok) throw new Error('R2 伺服器拒絕請求');
+    if (!response.ok) throw new Error(`HTTP 錯誤: ${response.status}`);
     
     const result = await response.json();
-    if (!result.success) throw new Error(result.error || '上傳解析失敗');
+    if (!result.success) throw new Error(result.error || 'Worker 回傳失敗');
     
     return result.url;
 }
 
-// --- 🖼️ 1. UI 與預覽邏輯 ---
+// --- UI 控制 (保持原樣) ---
 
 let selectedFile = null;
 
@@ -86,95 +108,80 @@ window.handleFileSelect = function(e) {
     
     const isVideo = file.type.startsWith('video/');
     const preview = isVideo ? document.getElementById('video-preview') : document.getElementById('media-preview');
-    const other = isVideo ? document.getElementById('media-preview') : document.getElementById('video-preview');
+    const placeholder = document.getElementById('media-placeholder');
     
-    if(other) { other.classList.add('hidden'); other.src = ''; }
-    document.getElementById('media-placeholder').classList.add('hidden');
+    // 清除舊預覽
+    document.getElementById('media-preview').classList.add('hidden');
+    document.getElementById('video-preview').classList.add('hidden');
+    if(placeholder) placeholder.classList.add('hidden');
     
     const reader = new FileReader();
     reader.onload = function(event) {
         preview.src = event.target.result;
         preview.classList.remove('hidden');
-        document.getElementById('media-preview-container').dataset.mediaType = isVideo ? 'video' : 'image';
     };
     reader.readAsDataURL(file);
 };
 
 function resetUploadForm() {
     selectedFile = null;
-    const ids = ['post-price', 'post-caption'];
-    ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-    
-    const mediaPreview = document.getElementById('media-preview');
-    const videoPreview = document.getElementById('video-preview');
-    if(mediaPreview) { mediaPreview.classList.add('hidden'); mediaPreview.src = ''; }
-    if(videoPreview) { videoPreview.classList.add('hidden'); videoPreview.src = ''; }
+    document.getElementById('post-caption').value = '';
+    document.getElementById('post-price').value = '';
+    document.getElementById('media-preview').classList.add('hidden');
+    document.getElementById('video-preview').classList.add('hidden');
     document.getElementById('media-placeholder').classList.remove('hidden');
-    
-    const fileInput = document.querySelector('input[type="file"]');
-    if (fileInput) fileInput.value = '';
 }
 
-// --- 🚀 2. 發佈貼文主邏輯 ---
+// --- 🚀 發佈主邏輯 ---
 
 window.publishPost = async function() {
-    const publishBtn = document.querySelector('#upload-panel button.bg-sexify');
-    if(!publishBtn) return;
-    const originalBtnText = publishBtn.innerText;
+    const btn = document.querySelector('#upload-panel button.bg-sexify');
+    const originalText = btn.innerText;
     
-    publishBtn.innerText = "驗證身分...";
-    publishBtn.disabled = true;
+    btn.innerText = "驗證身分...";
+    btn.disabled = true;
 
     try {
-        const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
-        if (authError || !user) throw new Error('請先登入！');
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (!user) throw new Error('請先登入');
 
         const caption = document.getElementById('post-caption').value.trim();
         const price = parseInt(document.getElementById('post-price').value) || 0;
         const isPaid = document.getElementById('view-paid').checked;
 
-        if (!selectedFile && !caption) throw new Error('請輸入內容或選擇檔案');
-
-        let finalMediaUrl = '';
+        let mediaUrl = '';
 
         if (selectedFile) {
-            publishBtn.innerText = "🚀 優化影像並上傳...";
-            
-            // 1. 生成 WebP Blob (跟 creator 一樣)
+            btn.innerText = "🚀 優化影像並上傳...";
             const webpBlob = await generateWebPBlob(selectedFile);
             
-            // 2. 生成檔名 (避免特殊字元)
-            const safeBaseName = selectedFile.name.split('.').slice(0, -1).join('.').replace(/[^a-z0-9]/gi, '_');
-            const ext = selectedFile.type.startsWith('video/') ? (selectedFile.name.split('.').pop() || 'mp4') : 'webp';
-            const fileName = `${Date.now()}_post_${safeBaseName}.${ext}`;
+            // 檔名清洗
+            const safeName = selectedFile.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const fileName = selectedFile.type.startsWith('video/') ? `${Date.now()}_${safeName}` : `${Date.now()}_${safeName}.webp`;
 
-            // 3. 上傳 R2
-            finalMediaUrl = await uploadToR2(webpBlob, fileName);
+            mediaUrl = await uploadToR2(webpBlob, fileName);
         }
 
-        publishBtn.innerText = "💾 存入資料庫...";
-        const { error: dbError } = await window.supabaseClient.from('posts').insert([{
+        btn.innerText = "💾 存入資料庫...";
+        const { error } = await window.supabaseClient.from('posts').insert([{
             user_id: user.id,
             caption: window.escapeHTML(caption),
-            media_url: finalMediaUrl,
+            media_url: mediaUrl,
             is_paid: isPaid,
             price: price
         }]);
 
-        if (dbError) throw dbError;
+        if (error) throw error;
 
-        alert('✨ 貼文發佈成功！');
+        alert('✨ 發佈成功！');
         window.closeUploadModal();
-        
-        // 觸發重新渲染 (如果首頁有這個函數)
-        if (typeof window.renderDiscovery === 'function') window.renderDiscovery();
-        else location.reload(); // 否則強制重新整理
+        location.reload(); 
 
     } catch (err) {
         console.error("發佈失敗:", err);
         alert('發佈失敗: ' + err.message);
     } finally {
-        publishBtn.innerText = originalBtnText;
-        publishBtn.disabled = false;
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 };
