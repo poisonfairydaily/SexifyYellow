@@ -1,5 +1,5 @@
 // ==========================================
-// js/app.js - 全域邏輯、導航與安全驗證核心
+// js/app.js - 全域邏輯、導航、長按手勢與分享核心
 // ==========================================
 
 // 1. 底部導航欄分頁切換
@@ -153,13 +153,11 @@ function toggleSearch(show) {
     }
 }
 
-// 核心功能更新：分表儲存個人資料
 async function saveUserProfile(formData) {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
 
     try {
-        // 分割資料：公開 vs 私密
         const publicUpdate = {
             display_name: formData.display_name,
             avatar_url: formData.avatar_url,
@@ -168,16 +166,15 @@ async function saveUserProfile(formData) {
         };
 
         const privateUpdate = {
-            id: userId, // 確保 ID 一致
+            id: userId,
             birthday: formData.birthday,
             contact_email: formData.contact_email,
             updated_at: new Date()
         };
 
-        // 並行更新兩張表
         const [resPublic, resPrivate] = await Promise.all([
             window.supabaseClient.from('profiles').update(publicUpdate).eq('id', userId),
-            window.supabaseClient.from('user_private_data').upsert(privateUpdate) // 使用 upsert 避免初次建立時出錯
+            window.supabaseClient.from('user_private_data').upsert(privateUpdate) 
         ]);
 
         if (resPublic.error) throw resPublic.error;
@@ -315,6 +312,23 @@ function setupGlobalRealtime(userId) {
     }).subscribe();
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('ageVerified') === 'true') {
+        const ageGate = document.getElementById('age-gate');
+        if (ageGate) ageGate.style.display = 'none';
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            if (confirm("確定要登出帳號嗎？")) {
+                localStorage.clear();
+                window.location.reload();
+            }
+        });
+    }
+});
+
 window.addEventListener('authReady', async () => {
     const homeTab = document.getElementById('home-tab');
     if (homeTab && !homeTab.classList.contains('hidden')) {
@@ -334,19 +348,100 @@ window.addEventListener('authReady', async () => {
     }
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('ageVerified') === 'true') {
-        const ageGate = document.getElementById('age-gate');
-        if (ageGate) ageGate.style.display = 'none';
+// ==========================================
+// ✨ 全域分享功能 (Web Share API)
+// ==========================================
+window.handleShare = async function(postId, titleText) {
+    const shareData = {
+        title: 'SEXIFY 推薦',
+        text: titleText || '快來看看這則貼文！',
+        url: window.location.origin + '?post=' + postId
+    };
+    try {
+        if (navigator.share) {
+            await navigator.share(shareData);
+        } else {
+            await navigator.clipboard.writeText(shareData.url);
+            alert('連結已複製到剪貼簿！');
+        }
+    } catch (err) {
+        console.log('分享取消或發生錯誤', err);
+    }
+};
+
+// ==========================================
+// ✨ 觸覺反饋與長按全螢幕預覽 (Haptic Touch)
+// ==========================================
+window.longPressTimer = null;
+window.isLongPressActive = false;
+
+window.startLongPress = function(e, postId, mediaUrl) {
+    if (!mediaUrl) return; // 純文字不觸發預覽
+    window.isLongPressActive = false;
+    const card = e.currentTarget;
+    card.style.transform = 'scale(0.96)';
+
+    window.longPressTimer = setTimeout(() => {
+        window.isLongPressActive = true;
+        if (navigator.vibrate) navigator.vibrate(50); // Haptic Touch 輕微震動
+        window.showImagePreview(postId, mediaUrl);
+    }, 400); // 400 毫秒判定為長按
+};
+
+window.cancelLongPress = function(e, postId) {
+    clearTimeout(window.longPressTimer);
+    const card = e.currentTarget;
+    card.style.transform = 'scale(1)';
+
+    // 如果沒有觸發長按，且手指離開屏幕 (pointerup)，則視為一般點擊進入貼文
+    if (!window.isLongPressActive && e.type === 'pointerup') {
+        window.viewPost(postId);
+    }
+};
+
+// 動態注入全螢幕大圖 Modal
+window.showImagePreview = function(postId, mediaUrl) {
+    let previewModal = document.getElementById('haptic-preview-modal');
+    
+    // 如果 Modal 不存在，動態建立一個加到 body 裡
+    if (!previewModal) {
+        previewModal = document.createElement('div');
+        previewModal.id = 'haptic-preview-modal';
+        previewModal.className = 'fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md hidden flex-col items-center justify-center p-4 transition-opacity duration-300 opacity-0';
+        previewModal.innerHTML = `
+            <img id="haptic-preview-img" src="" class="max-w-full max-h-[75vh] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] object-contain transform scale-95 transition-transform duration-300">
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeImagePreview()" class="bg-white/20 text-white px-8 py-3 rounded-full font-bold backdrop-blur-sm active:scale-95 transition">關閉</button>
+                <button onclick="reportPost(window.currentPreviewPostId); closeImagePreview()" class="bg-red-500/90 text-white px-8 py-3 rounded-full font-bold backdrop-blur-sm active:scale-95 transition shadow-lg shadow-red-500/30">檢舉</button>
+            </div>
+        `;
+        document.body.appendChild(previewModal);
     }
 
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            if (confirm("確定要登出帳號嗎？")) {
-                localStorage.clear();
-                window.location.reload();
-            }
-        });
+    window.currentPreviewPostId = postId;
+    const img = document.getElementById('haptic-preview-img');
+    img.src = mediaUrl;
+
+    previewModal.classList.remove('hidden');
+    // 強制重繪以啟動 CSS 動畫
+    void previewModal.offsetWidth; 
+    
+    previewModal.classList.remove('opacity-0');
+    img.classList.remove('scale-95');
+    img.classList.add('scale-100');
+};
+
+window.closeImagePreview = function() {
+    const previewModal = document.getElementById('haptic-preview-modal');
+    if (previewModal) {
+        previewModal.classList.add('opacity-0');
+        const img = document.getElementById('haptic-preview-img');
+        img.classList.remove('scale-100');
+        img.classList.add('scale-95');
+        
+        setTimeout(() => {
+            previewModal.classList.add('hidden');
+            img.src = '';
+        }, 300);
     }
-});
+};
