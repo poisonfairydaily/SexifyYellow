@@ -278,17 +278,7 @@ window.publishProduct = async function() {
             const safeSearch = audit.safeSearchAnnotation || audit;
             const labels = audit.labelAnnotations || []; 
 
-            // ✨ 終極殺手鐧：生殖器與極端色情關鍵字黑名單
-            const nsfwKeywords = ['genitalia', 'penis', 'vagina', 'pornography', 'hentai', 'urine'];
-            
-            const foundBannedLabel = labels.find(label => 
-                label.description && nsfwKeywords.includes(label.description.toLowerCase())
-            );
 
-            if (foundBannedLabel) {
-                alert(`🚨 嚴重違規：系統偵測到受限特徵 (${foundBannedLabel.description})，已強制攔截！\n請移除違規圖片後再試。`);
-                throw new Error("圖片含有明確違規特徵");
-            }
 
             if (safeSearch) {
                 // 相容 Likelihood 命名格式
