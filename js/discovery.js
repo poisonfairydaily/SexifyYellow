@@ -1,5 +1,5 @@
 // ==========================================
-// js/discovery.js - 小紅書風格完美佈局版
+// js/discovery.js - 小紅書完美排版版
 // ==========================================
 
 let currentSortType = 'latest';
@@ -70,16 +70,13 @@ window.renderDiscovery = async function(filterKeyword = '') {
 
             const isLocked = post.is_paid;
             const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
-            
-            // 判斷是否按讚，給予對應的愛心樣式
             const isLiked = myLikes.has(post.id);
-            // 確保一定要有 fa-heart
-            const heartClass = isLiked ? 'fa-solid fa-heart text-sexify' : 'fa-regular fa-heart text-gray-400';
-            
+            // ✨ 保證愛心一定會渲染的 Class 組合
+            const heartClass = isLiked ? 'fa-solid fa-heart text-sexify' : 'fa-regular fa-heart text-gray-500';
             const currentLikes = post.likes_count || post.likes || 0;
 
             return `
-            <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-2xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
+            <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
                  style="touch-action: pan-y;"
                  oncontextmenu="event.preventDefault();">
 
@@ -94,18 +91,18 @@ window.renderDiscovery = async function(filterKeyword = '') {
                 </div>
 
                 <div class="p-3 bg-white" onclick="handleCardClick(event, '${post.id}')">
-                    <p class="text-[13px] text-gray-800 line-clamp-2 leading-snug font-medium mb-2">${safeCaption}</p>
+                    <p class="text-[13px] text-gray-900 line-clamp-2 leading-snug font-medium mb-2.5">${safeCaption}</p>
                     
-                    <div class="flex justify-between items-center mt-2">
+                    <div class="flex justify-between items-center">
                         <div class="flex items-center gap-1.5 flex-1 min-w-0 pr-2 hover:opacity-80 transition" onclick="event.stopPropagation(); if(typeof viewOtherProfile==='function') viewOtherProfile('${post.user_id}')">
-                            <img src="${safeAvatar}" class="w-5 h-5 rounded-full object-cover aspect-square shrink-0 border border-gray-100 bg-gray-50">
+                            <img src="${safeAvatar}" class="w-5 h-5 flex-shrink-0 rounded-full object-cover border border-gray-100 bg-gray-50">
                             <span class="text-gray-600 text-[11px] font-medium truncate">${safeName}</span>
                         </div>
 
-                        <div class="flex items-center shrink-0">
+                        <div class="flex items-center flex-shrink-0">
                             <button onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')" class="flex items-center gap-1 group">
-                                <i class="${heartClass} text-[13px] transition-transform group-active:scale-125"></i>
-                                <span class="text-[11px] font-medium text-gray-500">${currentLikes}</span>
+                                <i class="${heartClass} text-[14px] transition-transform group-active:scale-125"></i>
+                                <span class="text-[12px] font-medium text-gray-600">${currentLikes}</span>
                             </button>
                         </div>
                     </div>
@@ -138,7 +135,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
     try {
         if (isLiking) {
             icon.classList.replace('fa-regular', 'fa-solid');
-            icon.classList.remove('text-gray-400');
+            icon.classList.remove('text-gray-500');
             icon.classList.add('text-sexify', 'scale-125');
             countSpan.innerText = count + 1;
 
@@ -148,7 +145,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
             const newCount = Math.max(0, count - 1);
             icon.classList.replace('fa-solid', 'fa-regular');
             icon.classList.remove('text-sexify', 'scale-125');
-            icon.classList.add('text-gray-400');
+            icon.classList.add('text-gray-500');
             countSpan.innerText = newCount;
 
             await window.supabaseClient.from('likes').delete().match({ post_id: postId, user_id: myId });
@@ -176,7 +173,7 @@ window.handleCardClick = function(e, postId) {
     if (typeof viewPost === 'function') viewPost(postId);
 };
 
-// ... 以下保留你原本的 viewPost 等其他詳細頁面邏輯 ...
+// (底下如有 viewPost, renderComments 等詳情頁邏輯，請保留你原本的)
 // =====================================
 // 以下為詳情頁、留言等原生功能 (保持不變)
 // =====================================
