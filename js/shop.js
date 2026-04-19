@@ -1,6 +1,6 @@
 /**
  * shop.js - 專業商城正式營運版 (完美融合版)
- * 包含：進階篩選、實體美金/虛擬代幣結算、創作者資訊、官方認證、防 CORS 頭像、特價視覺、下架過濾、漫畫閱讀器
+ * 包含：進階篩選、實體美金/虛擬代幣結算、創作者資訊、官方認證、防 CORS 頭像、特價視覺、下架過濾、漫畫閱讀器、400/406錯誤修復
  */
 
 let cart = []; 
@@ -31,11 +31,17 @@ window.escapeHTML = function(str) {
 window.getSafeImageUrl = function(url, bucket = 'previews') {
     if (!url) return 'https://placehold.co/400x400/eeeeee/999999?text=No+Image';
     let firstUrl = url.split(',')[0];
+    
+    // ✨ 核心修正：如果是外部網址 (包含 R2 或是 http)，直接回傳，避免送給 Supabase 處理
     if (firstUrl.includes('r2.dev')) {
         const fileName = firstUrl.split('/').pop();
         return `${WORKER_URL}/media/${fileName}`;
     }
-    if (!firstUrl.startsWith('http') && window.supabaseClient) {
+    if (firstUrl.startsWith('http')) {
+        return firstUrl;
+    }
+    
+    if (window.supabaseClient) {
         return window.supabaseClient.storage.from(bucket).getPublicUrl(firstUrl).data.publicUrl;
     }
     return firstUrl;
@@ -186,7 +192,7 @@ async function renderProductGrid(grid, keyword) {
 
         const { data: products } = await query;
         const { data: orders } = user ? await window.supabaseClient.from('orders').select('product_id').eq('user_id', user.id) : { data: [] };
-        const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single() : { data: null };
+        const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).maybeSingle() : { data: null };
         
         const purchasedIds = new Set(orders?.map(o => o.product_id) || []);
         const isAdmin = profile?.is_admin || false;
@@ -219,8 +225,12 @@ async function renderProductGrid(grid, keyword) {
 
         let signedMap = {};
         if (unlockableFiles.length > 0) {
-            const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(unlockableFiles, 3600);
-            sData?.forEach(item => signedMap[item.path] = item.signedUrl);
+            // 過濾掉外部網址，避免 Supabase createSignedUrls 報錯
+            const internalFiles = unlockableFiles.filter(url => !url.startsWith('http'));
+            if (internalFiles.length > 0) {
+                const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(internalFiles, 3600);
+                sData?.forEach(item => signedMap[item.path] = item.signedUrl);
+            }
         }
 
         grid.innerHTML = displayProducts.map(p => {
@@ -276,7 +286,7 @@ async function renderProductGrid(grid, keyword) {
             `;
         }).join('');
     } catch (e) { 
-        console.error(e);
+        console.error("渲染清單崩潰:", e);
         grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 font-bold text-sm">無法載入商品資料</div>`;
     }
 }
@@ -294,9 +304,13 @@ window.openProductModal = async function(productId) {
     // 增加觀看次數
     await window.supabaseClient.from('products').update({ views: (p.views || 0) + 1 }).eq('id', p.id);
 
-    const { data: order } = user ? await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).single() : { data: null };
-    const { data: profile } = user ? await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).single() : { data: null };
-    const isUnlocked = order || profile?.is_admin;
+    // ✨ 修正 406：若 user 不存在，不再強制查詢 orders 表
+    let isUnlocked = false;
+    if (user) {
+        const { data: order } = await window.supabaseClient.from('orders').select('id').eq('product_id', productId).eq('user_id', user.id).maybeSingle();
+        const { data: profile } = await window.supabaseClient.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+        isUnlocked = !!order || !!profile?.is_admin;
+    }
 
     let modal = document.getElementById('product-modal-container');
     if (!modal) {
@@ -318,14 +332,25 @@ window.openProductModal = async function(productId) {
  */
 async function renderMangaViewer(modal, p) {
     const fileNames = p.image_url ? p.image_url.split(',') : []; 
-    const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(fileNames, 7200);
+    
+    // 過濾出內部與外部圖片
+    const internalFiles = fileNames.filter(name => !name.startsWith('http'));
+    let signedMap = {};
+    
+    if (internalFiles.length > 0) {
+        const { data: sData } = await window.supabaseClient.storage.from('products').createSignedUrls(internalFiles, 7200);
+        sData?.forEach(item => signedMap[item.path] = item.signedUrl);
+    }
 
-    const imgTags = sData ? sData.map((item, idx) => `
-        <div class="manga-page-container relative mb-1" data-page="${idx + 1}">
-            <img src="${item.signedUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto; display:block;">
-            <div class="text-[9px] text-gray-700 text-center py-2 bg-black">PAGE ${idx + 1} / ${fileNames.length}</div>
-        </div>
-    `).join('') : '<p class="text-white text-center py-20">載入圖片中...</p>';
+    const imgTags = fileNames.length > 0 ? fileNames.map((name, idx) => {
+        const imgUrl = name.startsWith('http') ? name : (signedMap[name] || window.getSafeImageUrl(name, 'products'));
+        return `
+            <div class="manga-page-container relative mb-1" data-page="${idx + 1}">
+                <img src="${imgUrl}" class="manga-page" loading="lazy" style="width:100%; max-width:800px; margin: 0 auto; display:block;">
+                <div class="text-[9px] text-gray-700 text-center py-2 bg-black">PAGE ${idx + 1} / ${fileNames.length}</div>
+            </div>
+        `;
+    }).join('') : '<p class="text-white text-center py-20">載入圖片中...</p>';
 
     modal.innerHTML = `
         <div id="manga-viewport" class="fixed inset-0 bg-black z-[5000] overflow-y-auto scroll-smooth flex flex-col">
@@ -372,14 +397,16 @@ async function renderMangaViewer(modal, p) {
 }
 
 /**
- * 購買詳情彈窗 (保留你的版面，寫入所有新邏輯)
+ * 購買詳情彈窗 
  */
 async function renderPurchaseModal(modal, p, isUnlocked) {
     const firstFileName = p.image_url?.split(',')[0];
     let displayImg;
-    if (isUnlocked) {
+    
+    // ✨ 核心修正：如果是外部網址，直接跳過 Supabase createSignedUrl，防止 400 Bad Request
+    if (isUnlocked && firstFileName && !firstFileName.startsWith('http')) {
         const { data } = await window.supabaseClient.storage.from('products').createSignedUrl(firstFileName, 600);
-        displayImg = data?.signedUrl;
+        displayImg = data?.signedUrl || window.getSafeImageUrl(p.image_url, 'previews');
     } else {
         displayImg = window.getSafeImageUrl(p.image_url, 'previews');
     }
