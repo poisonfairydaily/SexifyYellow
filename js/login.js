@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (error) throw error;
                 
                 showMessage('登入成功！正在跳轉...', false);
-                localStorage.setItem('userId', data.user.id);
+                // We no longer store userId in localStorage to avoid data exposure
                 // 使用 replace 避免瀏覽器歷史紀錄產生死循環
                 setTimeout(() => { window.location.replace('index.html'); }, 500);
             } catch (error) {

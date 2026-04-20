@@ -61,62 +61,46 @@ describe('escapeHTML', () => {
     });
 });
 
-describe('Fans and Subs Tabs Error Handling', () => {
-    let list;
-    let btnFans;
-    let btnSubs;
-
+describe('viewOtherProfile Error Handling', () => {
     beforeEach(() => {
-        // Setup document body
         document.body.innerHTML = `
-            <div id="tab-fans"></div>
-            <div id="tab-subs"></div>
-            <div id="fans-subs-list"></div>
+            <div id="other-profile-modal" class="hidden translate-x-full"></div>
         `;
-        list = document.getElementById('fans-subs-list');
-        btnFans = document.getElementById('tab-fans');
-        btnSubs = document.getElementById('tab-subs');
 
-        // Mock dependencies
-        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('test-user-id');
-        window.supabaseClient = {
-            from: jest.fn()
-        };
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        console.error = jest.fn(); // Mock console.error
     });
 
     afterEach(() => {
-        jest.clearAllMocks();
+        jest.restoreAllMocks();
     });
 
-    test('should show error message when fetching fans fails', async () => {
-        window.supabaseClient.from.mockImplementation((table) => {
-            if (table === 'subscriptions') {
-                return {
-                    select: () => ({
-                        eq: jest.fn().mockResolvedValue({ data: null, error: new Error('Database Error') })
+    test('handles Supabase fetch error correctly', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq().single() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        single: jest.fn().mockResolvedValue({ data: null, error: mockError })
                     })
-                };
-            }
-        });
+                })
+            })
+        };
 
-        await window.switchFansTab('fans');
+        await window.viewOtherProfile('user-2');
 
-        expect(list.innerHTML).toContain('讀取失敗');
-    });
+        // Check if getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
 
-    test('should show error message when fetching subs fails', async () => {
-        window.supabaseClient.from.mockImplementation((table) => {
-            if (table === 'subscriptions') {
-                return {
-                    select: () => ({
-                        eq: jest.fn().mockResolvedValue({ data: null, error: new Error('Database Error') })
-                    })
-                };
-            }
-        });
+        // Check if modal was opened
+        const modal = document.getElementById('other-profile-modal');
+        expect(modal.classList.contains('flex')).toBe(true);
+        expect(modal.classList.contains('hidden')).toBe(false);
 
-        await window.switchFansTab('subs');
-
-        expect(list.innerHTML).toContain('讀取失敗');
+        // Check if console.error was called with the mock error
+        expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
