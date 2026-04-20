@@ -206,6 +206,7 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 // --- 📖 4. 貼文詳情與留言系統 ---
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
+window.currentViewedPostCaption = ''; // 紀錄當前觀看的貼文原文內容供編輯用
 
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
@@ -236,6 +237,7 @@ window.viewPost = async function(postId) {
         if (error) throw error;
         
         window.currentViewedPostOwnerId = post.user_id;
+        window.currentViewedPostCaption = post.caption || ''; // 寫入供內聯編輯讀取
         const authorName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}`;
         const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
@@ -296,7 +298,7 @@ window.viewPost = async function(postId) {
                 </button>
             </div>
             
-            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed" id="detail-caption">${window.escapeHTML(post.caption || '')}</div>
+            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed transition-all" id="detail-caption">${window.escapeHTML(post.caption || '')}</div>
         `;
         
         window.renderComments();
@@ -390,15 +392,61 @@ window.editPostContent = async function(postId) {
     const menu = document.getElementById('post-options-menu');
     if(menu) menu.classList.add('hidden');
     
-    const newText = prompt("請輸入新的貼文內容：");
-    if (newText === null) return;
+    const captionElem = document.getElementById('detail-caption');
+    if(!captionElem) return;
+
+    // 將詳細內容區塊直接替換為內聯的 textarea 編輯器
+    captionElem.innerHTML = `
+        <div class="flex flex-col gap-3 mt-1 animate-fade-in">
+            <textarea id="inline-edit-textarea" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-sexify outline-none resize-none" rows="4" placeholder="請輸入新的貼文內容...">${window.escapeHTML(window.currentViewedPostCaption)}</textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="window.cancelInlineEdit()" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-full text-xs font-bold active:scale-95 transition">取消</button>
+                <button onclick="window.saveInlineEdit('${postId}')" class="px-5 py-2 bg-sexify text-white rounded-full text-xs font-bold active:scale-95 transition shadow-sm">完成儲存</button>
+            </div>
+        </div>
+    `;
+};
+
+// 新增：取消內聯編輯的邏輯
+window.cancelInlineEdit = function() {
+    const captionElem = document.getElementById('detail-caption');
+    if (captionElem) {
+        // 點擊取消時，恢復為全域紀錄的原始文字
+        captionElem.innerHTML = window.escapeHTML(window.currentViewedPostCaption || '');
+    }
+};
+
+// 新增：儲存內聯編輯的邏輯
+window.saveInlineEdit = async function(postId) {
+    const textarea = document.getElementById('inline-edit-textarea');
+    if (!textarea) return;
+    
+    const newText = textarea.value.trim();
+    const btn = document.querySelector(`button[onclick="window.saveInlineEdit('${postId}')"]`);
+    
+    if(btn) {
+        btn.disabled = true;
+        btn.innerText = "儲存中...";
+    }
+
     try {
         const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
         if(error) throw error;
+        
+        // 更新成功後，同步更新全域變數並恢復顯示
+        window.currentViewedPostCaption = newText;
         const captionElem = document.getElementById('detail-caption');
-        if(captionElem) captionElem.innerText = window.escapeHTML(newText);
+        if(captionElem) captionElem.innerHTML = window.escapeHTML(newText);
+        
+        // 同步更新首頁的瀑布流內容
         window.renderDiscovery();
-    } catch (err) { alert("編輯失敗"); }
+    } catch (err) { 
+        alert("編輯失敗：" + err.message); 
+        if(btn) {
+            btn.disabled = false;
+            btn.innerText = "完成儲存";
+        }
+    }
 };
 
 window.deletePostFromModal = async function(postId) {
