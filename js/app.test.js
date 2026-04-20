@@ -48,11 +48,11 @@ describe('window.handleShare', () => {
     });
 
     beforeEach(() => {
+        global.navigator.share = undefined;
+        global.navigator.clipboard = undefined;
         console.log = jest.fn();
-        window.alert = jest.fn();
-        // clear navigator overrides
-        Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
-        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+        global.alert = jest.fn();
+        global.navigator = {}; // Reset navigator mocks
     });
 
     test('should use navigator.share if available', async () => {
@@ -70,11 +70,9 @@ describe('window.handleShare', () => {
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
-        const mockWriteText = jest.fn().mockResolvedValue();
-        Object.defineProperty(navigator, 'clipboard', {
-            value: { writeText: mockWriteText },
-            configurable: true
-        });
+        global.navigator.clipboard = {
+            writeText: jest.fn().mockResolvedValue()
+        };
 
         await window.handleShare('123', 'Test Title');
 
@@ -97,11 +95,9 @@ describe('window.handleShare', () => {
     test('should log error if clipboard fallback fails', async () => {
         delete global.navigator.share;
         const error = new Error('Clipboard failed');
-        const mockWriteText = jest.fn().mockRejectedValue(error);
-        Object.defineProperty(navigator, 'clipboard', {
-            value: { writeText: mockWriteText },
-            configurable: true
-        });
+        global.navigator.clipboard = {
+            writeText: jest.fn().mockRejectedValue(error)
+        };
 
         await window.handleShare('123', 'Test Title');
 
