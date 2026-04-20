@@ -104,3 +104,60 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="fans-subs-modal" class="hidden">
+                <button id="tab-fans" class="text-gray-400 border-transparent"></button>
+                <button id="tab-subs" class="text-gray-400 border-transparent"></button>
+                <div id="fans-subs-list"></div>
+            </div>
+        `;
+
+        // Mock global authentication ID function
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('test-user-id');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly for fans tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe('<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>');
+    });
+
+    test('handles Supabase fetch error correctly for subs tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe('<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>');
+    });
+});
