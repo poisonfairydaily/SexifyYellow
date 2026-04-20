@@ -114,7 +114,7 @@ describe('switchFansTab Error Handling', () => {
         `;
 
         window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
-        jest.spyOn(console, 'error').mockImplementation(() => {});
+        console.error = jest.fn();
     });
 
     afterEach(() => {
