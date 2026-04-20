@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請 + 聊天室設定 + 更改群組名稱與刪除紀錄)
+// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請)
 // ==========================================
 
 window.activeRoomId = null;
@@ -334,15 +334,15 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     window.activeIsGroup = isGroup;
     window.activeChatTarget = targetId;
     
-    const chatOptBtn = document.getElementById('chat-options-btn');
+    const groupOptBtn = document.getElementById('group-options-btn');
 
     if (isGroup) {
         window.activeRoomId = targetId;
+        if(groupOptBtn) groupOptBtn.classList.remove('hidden');
     } else {
         window.activeRoomId = generateRoomId(myId, targetId);
+        if(groupOptBtn) groupOptBtn.classList.add('hidden');
     }
-    
-    if (chatOptBtn) chatOptBtn.classList.remove('hidden'); // ✨ 1v1和群組統一顯示設定按鈕
     
     if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = safeText(displayName);
     
@@ -546,161 +546,18 @@ window.handleCreateGroup = async function() {
     }
 };
 
-window.openChatSettings = async function() {
-    const modal = document.getElementById('chat-settings-modal');
+window.openGroupSettings = async function() {
+    const modal = document.getElementById('group-settings-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => modal.classList.remove('translate-y-full'), 10);
-    
-    const title = document.getElementById('chat-settings-title');
-    const addSection = document.getElementById('group-add-section');
-    const editSection = document.getElementById('group-edit-section'); // ✨ 更改名稱區塊
-    const list = document.getElementById('group-members-list');
-    const actionBtn = document.getElementById('leave-delete-btn');
-    const clearBtn = document.getElementById('clear-history-btn'); // ✨ 刪除紀錄按鈕
-
-    if (window.activeIsGroup) {
-        if (title) title.innerText = '群組成員與設定';
-        if (addSection) addSection.style.display = 'flex';
-        
-        // ✨ 群組顯示修改名稱區塊
-        if (editSection) {
-            editSection.classList.remove('hidden');
-            editSection.classList.add('flex');
-        }
-        
-        // ✨ 群組顯示刪除紀錄按鈕
-        if (clearBtn) {
-            clearBtn.classList.remove('hidden');
-            clearBtn.onclick = window.deleteChatRoom;
-        }
-
-        if (actionBtn) {
-            actionBtn.innerText = '退出群組';
-            actionBtn.onclick = window.leaveGroup;
-        }
-        await window.loadGroupMembers();
-    } else {
-        if (title) title.innerText = '聊天室設定';
-        if (addSection) addSection.style.display = 'none';
-        
-        // ✨ 1對1 隱藏修改名稱區塊
-        if (editSection) {
-            editSection.classList.add('hidden');
-            editSection.classList.remove('flex');
-        }
-        
-        // ✨ 1對1 隱藏額外的刪除紀錄按鈕 (由 actionBtn 取代)
-        if (clearBtn) clearBtn.classList.add('hidden');
-        
-        // Render the other person's info in the list for 1v1
-        if (list) {
-            list.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10 space-y-4">
-                    <div class="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
-                        <img src="${document.getElementById('chat-target-avatar').src}" class="w-full h-full object-cover">
-                    </div>
-                    <h3 class="font-black text-lg text-gray-900">${document.getElementById('chat-name').innerText}</h3>
-                    <p class="text-sm text-gray-400 font-bold">1 對 1 聊天室</p>
-                </div>
-            `;
-        }
-        
-        if (actionBtn) {
-            actionBtn.innerText = '刪除聊天紀錄';
-            actionBtn.onclick = window.deleteChatRoom;
-        }
-    }
+    await window.loadGroupMembers();
 };
 
-window.closeChatSettings = function() {
-    const modal = document.getElementById('chat-settings-modal');
+window.closeGroupSettings = function() {
+    const modal = document.getElementById('group-settings-modal');
     modal.classList.add('translate-y-full');
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-};
-
-// ✨ 新增：更新群組名稱函式
-window.updateGroupName = async function() {
-    if (!window.activeIsGroup || !window.activeRoomId) return;
-    
-    const input = document.getElementById('group-name-edit-input');
-    const newName = input.value.trim();
-    if (!newName) return alert('請輸入新的群組名稱');
-
-    try {
-        const { error } = await window.supabaseClient.from('chat_groups')
-            .update({ name: newName })
-            .eq('id', window.activeRoomId);
-
-        if (error) throw error;
-
-        alert('群組名稱更新成功！');
-        input.value = '';
-        
-        // 即時更新當前聊天視窗標題
-        const chatNameEl = document.getElementById('chat-name');
-        if (chatNameEl) chatNameEl.innerText = safeText(newName);
-        
-        // 重新渲染外層聊天列表
-        if(typeof window.renderMessages === 'function') window.renderMessages();
-    } catch (e) {
-        console.error('更新群組名稱失敗:', e);
-        alert('更新失敗，請確認網路連線或修改權限。');
-    }
-};
-
-// ✨ 修改：加入包含媒體資源一起清除的安全保護機制
-window.deleteChatRoom = async function() {
-    if (!confirm('確定要刪除此聊天室的所有紀錄嗎？這將無法復原。')) return;
-    try {
-        // 先刪除 Storage 中的媒體檔案以避免容量佔用
-        const { data: messages } = await window.supabaseClient.from('messages')
-            .select('image_url')
-            .eq('room_id', window.activeRoomId)
-            .not('image_url', 'is', null);
-
-        if (messages && messages.length > 0) {
-            const filePaths = messages.map(m => {
-                if (m.image_url && m.image_url.includes('/storage/v1/object/public/media/')) {
-                    return m.image_url.split('/storage/v1/object/public/media/')[1];
-                }
-                return null;
-            }).filter(p => p);
-
-            if (filePaths.length > 0) {
-                await window.supabaseClient.storage.from('media').remove(filePaths);
-            }
-        }
-
-        // 刪除對話紀錄
-        await window.supabaseClient.from('messages').delete().eq('room_id', window.activeRoomId);
-        
-        alert('聊天紀錄已刪除');
-        window.closeChatSettings();
-        window.closeChat();
-        if(typeof window.renderMessages === 'function') window.renderMessages();
-    } catch (e) {
-        console.error(e);
-        alert('刪除失敗，請檢查網路狀態或權限');
-    }
-};
-
-window.leaveGroup = async function() {
-    if (!confirm('確定要退出此群組嗎？')) return;
-    const myId = await getValidUserId();
-    try {
-        await window.supabaseClient.from('chat_group_members')
-            .delete()
-            .eq('group_id', window.activeRoomId)
-            .eq('user_id', myId);
-        alert('已退出群組');
-        window.closeChatSettings();
-        window.closeChat();
-        if(typeof window.renderMessages === 'function') window.renderMessages();
-    } catch (e) {
-        console.error(e);
-        alert('退出失敗，請檢查網路狀態或權限');
-    }
 };
 
 window.loadGroupMembers = async function() {
