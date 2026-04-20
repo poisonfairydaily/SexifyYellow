@@ -1,3 +1,13 @@
+window.escapeHTML = window.escapeHTML || function(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("searchInput");
     const searchResults = document.getElementById("searchResults");
@@ -40,11 +50,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             searchResults.innerHTML = users.map(user => {
-                const avatar = user.avatar_url || "https://ui-avatars.com/api/?name=User";
-                const name = user.display_name || user.username || "未命名";
-                const bio = user.bio ? user.bio.substring(0, 20) + '...' : "點擊查看主頁";
+                const avatar = window.escapeHTML(user.avatar_url) || "https://ui-avatars.com/api/?name=User";
+                const name = window.escapeHTML(user.display_name || user.username || "未命名");
+                const bio = window.escapeHTML(user.bio ? user.bio.substring(0, 20) + "..." : "點擊查看主頁");
                 return `
-                <div class="flex items-center gap-4 p-3 bg-white rounded-2xl shadow-sm mb-3 cursor-pointer border border-gray-100 active:scale-95 transition" onclick="toggleSearch(false); viewOtherProfile('${user.id}')">
+                <div data-id="${encodeURIComponent(user.id)}" class="search-result-item flex items-center gap-4 p-3 bg-white rounded-2xl shadow-sm mb-3 cursor-pointer border border-gray-100 active:scale-95 transition">
                     <img src="${avatar}" class="w-12 h-12 rounded-full object-cover">
                     <div class="flex-1 overflow-hidden">
                         <div class="font-bold text-gray-800 text-sm truncate">${name}</div>
@@ -52,6 +62,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 </div>`;
             }).join('');
+
+            // Add event listeners securely
+            searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = decodeURIComponent(item.getAttribute('data-id'));
+                    if (typeof toggleSearch === 'function') toggleSearch(false);
+                    if (typeof viewOtherProfile === 'function') viewOtherProfile(id);
+                });
+            });
 
         } catch (err) {
             console.error("搜尋例外錯誤:", err);
