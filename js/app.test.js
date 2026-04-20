@@ -70,8 +70,9 @@ describe('window.handleShare', () => {
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
+        const mockWriteText = jest.fn().mockResolvedValue();
         global.navigator.clipboard = {
-            writeText: jest.fn().mockResolvedValue()
+            writeText: mockWriteText
         };
 
         await window.handleShare('123', 'Test Title');
@@ -95,8 +96,9 @@ describe('window.handleShare', () => {
     test('should log error if clipboard fallback fails', async () => {
         delete global.navigator.share;
         const error = new Error('Clipboard failed');
+        const mockWriteText = jest.fn().mockRejectedValue(error);
         global.navigator.clipboard = {
-            writeText: jest.fn().mockRejectedValue(error)
+            writeText: mockWriteText
         };
 
         await window.handleShare('123', 'Test Title');
@@ -141,6 +143,7 @@ describe('window.saveUserProfile', () => {
 
     test('should return early if userId is not in localStorage', async () => {
         window.localStorage.getItem.mockReturnValue(null);
+        global.window.supabaseClient = { auth: { getSession: jest.fn().mockResolvedValue({ data: { session: null } }) } };
         const formData = { display_name: 'Test' };
 
         await window.saveUserProfile(formData);
@@ -154,6 +157,7 @@ describe('window.saveUserProfile', () => {
 
         const mockError = new Error('Public update failed');
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'user123' } } } }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
@@ -179,6 +183,7 @@ describe('window.saveUserProfile', () => {
 
         const mockError = new Error('Private update failed');
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'user123' } } } }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
@@ -203,6 +208,7 @@ describe('window.saveUserProfile', () => {
         const formData = { display_name: 'Test' };
 
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'user123' } } } }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
