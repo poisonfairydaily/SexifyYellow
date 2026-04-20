@@ -336,12 +336,19 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     
     const groupOptBtn = document.getElementById('group-options-btn');
 
+    // 修改：透過操作 style.display 強制覆蓋 Tailwind 潛在的類別衝突
     if (isGroup) {
         window.activeRoomId = targetId;
-        if(groupOptBtn) groupOptBtn.classList.remove('hidden');
+        if(groupOptBtn) {
+            groupOptBtn.classList.remove('hidden');
+            groupOptBtn.style.display = 'flex'; 
+        }
     } else {
         window.activeRoomId = generateRoomId(myId, targetId);
-        if(groupOptBtn) groupOptBtn.classList.add('hidden');
+        if(groupOptBtn) {
+            groupOptBtn.classList.add('hidden');
+            groupOptBtn.style.display = 'none'; 
+        }
     }
     
     if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = safeText(displayName);
