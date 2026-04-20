@@ -1,11 +1,12 @@
-🧪 Add Error Test for View Other Profile
-
 🎯 **What:**
-Added a test to cover the `viewOtherProfile` function in `js/profile.js:477`, verifying that when a Supabase query fetch fails, the function catches the error, correctly avoids crashing, and properly logs it out.
-Also fixed `app.test.js` to correctly define properties with `Object.defineProperty(navigator)` due to some Jest environment restrictions.
+Added a test suite for the `window.refreshBalanceUI` function located in `js/shop.js`.
 
 📊 **Coverage:**
-The scenario where viewing another profile fails due to Supabase returning an error object is now covered by testing error catch block and validating `console.error` logs.
+The tests now cover:
+- Early return for unauthenticated users.
+- Successful updating of the 3 DOM elements (`user-balance`, `shop-balance-display`, and `pc-balance`) when the balance is retrieved.
+- Handling missing elements gracefully.
+- Proper logging of errors if the API call fails.
 
 ✨ **Result:**
-Test coverage and test reliability across vanilla js functionality has improved.
+This improves our test coverage for `js/shop.js` and prevents regressions in the Balance UI Refresh functionality.
