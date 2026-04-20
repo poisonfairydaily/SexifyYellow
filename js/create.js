@@ -45,9 +45,9 @@ async function generateWebPBlob(file) {
 
 
 /**
- * ✨ R2 上傳核心
+ * ✨ R2 上傳核心 (已修改函數名稱，避免與 profile.js 衝突)
  */
-async function uploadToR2(blob, fileName) {
+async function uploadPostMediaToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
     const formData = new FormData();
     // 關鍵：將二進位數據與乾淨檔名封裝
@@ -200,8 +200,8 @@ window.publishPost = async function() {
             const extension = isVideo ? 'mp4' : 'webp';
             const cleanFileName = `post_${Date.now()}_${randomID}.${extension}`;
 
-            // 3. 執行 R2 代理上傳
-            mediaUrl = await uploadToR2(blob, cleanFileName);
+            // 3. 執行 R2 代理上傳 (已更新為新的專屬函數名稱)
+            mediaUrl = await uploadPostMediaToR2(blob, cleanFileName);
             console.log("R2 貼文上傳成功：", mediaUrl);
         }
 
