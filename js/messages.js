@@ -1,10 +1,10 @@
 // ==========================================
-// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請 + 退出群組)
+// js/messages.js - 完整升級版 (修復崩潰Bug + 完美自動捲動到底部)
 // ==========================================
 
 window.activeRoomId = null;
 window.activeChatTarget = null;
-window.activeIsGroup = false; // ✨ 新增：判斷當前是否為群組聊天
+window.activeIsGroup = false; 
 window.roomChannel = null;
 
 let mediaRecorder = null;
@@ -24,7 +24,6 @@ async function uploadMediaToSupabase(fileBlob, filePath) {
 
         if (error) throw error;
 
-        // 取得公開網址
         const { data: publicData } = window.supabaseClient.storage
             .from('media')
             .getPublicUrl(filePath);
@@ -36,7 +35,6 @@ async function uploadMediaToSupabase(fileBlob, filePath) {
     }
 }
 
-// 純 CSS 頭像產生器 (解決 UI-Avatars 的 CORS 報錯)
 function getFallbackAvatar(name) {
     const char = name ? name.charAt(0).toUpperCase() : 'U';
     return `<div class="w-full h-full rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53)">${char}</div>`;
@@ -62,24 +60,18 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_');
 }
 
-function scrollToBottom() {
+// ✨ 強化的捲動到底部函數 (保證準確)
+window.scrollToBottom = function() {
     const container = document.getElementById('chat-messages');
     if (container) {
-        // Use requestAnimationFrame to ensure DOM is updated before getting scrollHeight
-        requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
-        // Fallback with setTimeout
-        setTimeout(() => {
-            container.scrollTop = container.scrollHeight;
-        }, 100);
-        setTimeout(() => {
-            container.scrollTop = container.scrollHeight;
-        }, 300);
+        // 立刻捲動
+        container.scrollTop = container.scrollHeight;
+        // 加入延遲，防止動畫或圖片稍微延遲撐開高度
+        setTimeout(() => { if (container) container.scrollTop = container.scrollHeight; }, 100);
+        setTimeout(() => { if (container) container.scrollTop = container.scrollHeight; }, 300);
     }
-}
+};
 
-// 更新 UI 在線狀態 (修復假在線問題)
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
@@ -105,7 +97,6 @@ window.handleSendAction = async function() {
         const myId = await getValidUserId();
         if (!myId || !window.activeRoomId) return alert('請先登入');
 
-        // ✨ 修改：如果是群組，receiver 就直接塞自己的 ID（因為群組判斷只靠 room_id）
         const targetReceiver = window.activeIsGroup ? myId : window.activeChatTarget;
 
         const { error } = await window.supabaseClient.from('messages').insert([{
@@ -114,16 +105,15 @@ window.handleSendAction = async function() {
             receiver: targetReceiver,
             content: content,
             image_url: window.selectedMediaUrl,
-            is_read: window.activeIsGroup ? true : false // 群組的未讀靠 last_read_time 計算
+            is_read: window.activeIsGroup ? true : false
         }]);
 
         if (error) throw error;
         input.value = '';
-        window.selectedMediaUrl = null; // 發送後清空
-        await loadMessages();
-        scrollToBottom();
+        window.selectedMediaUrl = null; 
         
-        // 發送訊息後更新外層列表，將最後一句話推到最上面
+        await loadMessages();
+        
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
         alert('傳送失敗');
@@ -132,10 +122,8 @@ window.handleSendAction = async function() {
     }
 };
 
-// 渲染對話內容 (✨新增影片判斷與渲染)
-async function drawMessages(messages) {
-// 渲染對話內容 (✨新增傳入 profileMap 用於顯示群組發言人頭像)
-function drawMessages(messages, profileMap = null) {
+// ✨ 修復的渲染對話內容函數 (加上 async，確保資料拿到才畫畫面)
+async function drawMessages(messages, profileMap = null) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
     
@@ -143,92 +131,74 @@ function drawMessages(messages, profileMap = null) {
     let lastDate = null;
 
     container.innerHTML = messages.map(m => {
-            const isMine = m.sender_name === myId;
-            const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
-            const wrapperClass = isMine ? 'justify-end' : 'justify-start';
-            
-            const messageDate = new Date(m.created_at).toLocaleDateString();
-            let dateSeparator = '';
-            if (messageDate !== lastDate) {
-                const displayDate = messageDate === new Date().toLocaleDateString() ? '今天' : messageDate;
-                dateSeparator = `<div class="flex justify-center my-6"><span class="bg-gray-200 text-gray-500 text-[10px] px-3 py-1 rounded-full font-bold">${displayDate}</span></div>`;
-                lastDate = messageDate;
-            }
+        const isMine = m.sender_name === myId;
+        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
+        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+        
+        const messageDate = new Date(m.created_at).toLocaleDateString();
+        let dateSeparator = '';
+        if (messageDate !== lastDate) {
+            const displayDate = messageDate === new Date().toLocaleDateString() ? '今天' : messageDate;
+            dateSeparator = `<div class="flex justify-center my-6"><span class="bg-gray-200 text-gray-500 text-[10px] px-3 py-1 rounded-full font-bold">${displayDate}</span></div>`;
+            lastDate = messageDate;
+        }
 
-            const cleanContent = safeText(m.content);
-            const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            
-            // 判斷媒體類型
-            const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
-            const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
-            
-            let mediaHtml = '';
-            if (safeImgUrl) {
-                if (isAudio) {
-                    mediaHtml = `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>`;
-                } else if (isVideo) {
-                    mediaHtml = `<video src="${safeImgUrl}" controls playsinline class="rounded-lg mt-1 max-w-full shadow-sm max-h-48 bg-black object-cover"></video>`;
-                } else {
-                    mediaHtml = `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm object-cover">`;
-                }
-            }
-
-            // ✨ 新增：如果是群組聊天且不是自己發的，顯示發言人頭像和名字
-            let avatarHtml = '';
-            let nameHtml = '';
-            if (!isMine && window.activeIsGroup && profileMap && profileMap[m.sender_name]) {
-                const p = profileMap[m.sender_name];
-                avatarHtml = `<img src="${p.avatar_url || 'https://ui-avatars.com/api/?name='+encodeURIComponent(p.display_name)}" class="w-8 h-8 rounded-full mr-2 self-end mb-1 object-cover flex-shrink-0">`;
-                nameHtml = `<div class="text-[10px] text-gray-500 mb-0.5 ml-1 font-bold">${safeText(p.display_name)}</div>`;
-            }
-
-            return `
-                ${dateSeparator}
-                <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
-                    ${avatarHtml}
-                    <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[80%]">
-                        ${nameHtml}
-                        <div class="${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
-                            ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
-                            ${mediaHtml}
-                            <div class="text-[9px] opacity-50 mt-1 text-right">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-                            ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute ${isMine ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
-                        </div>
-                    </div>
-                </div>`;
-        }).join('');
-
-    // Wait for images to load before scrolling
-    const images = container.querySelectorAll('img');
-    let loadedCount = 0;
-    if (images.length > 0) {
-        images.forEach(img => {
-            if (img.complete) {
-                loadedCount++;
-                if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
+        const cleanContent = safeText(m.content);
+        const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
+        
+        const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
+        const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
+        
+        let mediaHtml = '';
+        if (safeImgUrl) {
+            if (isAudio) {
+                mediaHtml = `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>`;
+            } else if (isVideo) {
+                mediaHtml = `<video src="${safeImgUrl}" controls playsinline class="rounded-lg mt-1 max-w-full shadow-sm max-h-48 bg-black object-cover"></video>`;
             } else {
-                img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
-                };
-                img.onerror = () => {
-                    loadedCount++;
-                    if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
-                };
+                mediaHtml = `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm object-cover">`;
             }
-        });
-    } else {
-        setTimeout(scrollToBottom, 50);
-    }
+        }
+
+        let avatarHtml = '';
+        let nameHtml = '';
+        if (!isMine && window.activeIsGroup && profileMap && profileMap[m.sender_name]) {
+            const p = profileMap[m.sender_name];
+            avatarHtml = `<img src="${p.avatar_url || 'https://ui-avatars.com/api/?name='+encodeURIComponent(p.display_name)}" class="w-8 h-8 rounded-full mr-2 self-end mb-1 object-cover flex-shrink-0">`;
+            nameHtml = `<div class="text-[10px] text-gray-500 mb-0.5 ml-1 font-bold">${safeText(p.display_name)}</div>`;
+        }
+
+        return `
+            ${dateSeparator}
+            <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
+                ${avatarHtml}
+                <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[80%]">
+                    ${nameHtml}
+                    <div class="${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
+                        ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
+                        ${mediaHtml}
+                        <div class="text-[9px] opacity-50 mt-1 text-right">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                        ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute ${isMine ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    // ✨ 畫面畫好後，立刻捲動到底部
+    window.scrollToBottom();
+
+    // ✨ 監聽圖片，如果圖片載入撐開高度，再捲動一次
+    const images = container.querySelectorAll('img');
+    images.forEach(img => {
+        img.onload = () => window.scrollToBottom();
+    });
 }
 
-// 渲染訊息列表 (✨新增支援群組與 1v1 混排，並處理空群組顯示)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
     if (!container || !myId) return;
 
-    // ✨ 抓取我所屬的所有群組 (加入 created_at 以利排序)
     const { data: myGroups } = await window.supabaseClient.from('chat_group_members')
         .select('group_id, last_read_time, chat_groups(name, avatar_url, created_at)').eq('user_id', myId);
     
@@ -241,7 +211,6 @@ window.renderMessages = async function() {
         });
     }
 
-    // ✨ 組合查詢條件：包含 1v1 或我所屬的群組房間
     let orQuery = `sender_name.eq.${myId},receiver.eq.${myId}`;
     if (groupIds.length > 0) {
         orQuery += `,room_id.in.(${groupIds.join(',')})`;
@@ -251,18 +220,15 @@ window.renderMessages = async function() {
         .select('*').or(orQuery)
         .order('created_at', { ascending: false });
 
-    // 修改：防止新帳號無紀錄時發生錯誤，並確保能顯示空群組
     const msgs = msgData || [];
-
     const rooms = {};
     const unreadCounts = {};
 
     msgs.forEach(m => { 
-        if (!rooms[m.room_id]) rooms[m.room_id] = m; // 保留每個房間最新的一則訊息
+        if (!rooms[m.room_id]) rooms[m.room_id] = m; 
         
         const isGroup = groupIds.includes(m.room_id);
         
-        // 未讀計算邏輯區分群組與 1v1
         if (isGroup) {
             const groupInfo = groupMap[m.room_id];
             const msgTime = new Date(m.created_at).getTime();
@@ -277,7 +243,6 @@ window.renderMessages = async function() {
         }
     });
 
-    // ✨ 新增邏輯：如果群組內「還沒有任何訊息」，手動為它創建一條空顯示紀錄，確保它能出現在畫面上
     groupIds.forEach(gid => {
         if (!rooms[gid]) {
             rooms[gid] = {
@@ -290,10 +255,8 @@ window.renderMessages = async function() {
         }
     });
     
-    // ✨ 將所有房間依照時間重新排序，確保新群組置頂
     const sortedRooms = Object.values(rooms).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    // 找出所有 1v1 的目標用戶 ID 來抓取頭像
     const targetIds = sortedRooms.filter(m => !groupIds.includes(m.room_id)).map(m => m.sender_name === myId ? m.receiver : m.sender_name);
     const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', targetIds);
     const profMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
@@ -307,7 +270,6 @@ window.renderMessages = async function() {
         const isGroup = groupIds.includes(m.room_id);
         let name, avatarPart, onClickStr;
 
-        // UI 區分群組與 1v1
         if (isGroup) {
             const g = groupMap[m.room_id];
             name = g.name || '群組聊天';
@@ -325,7 +287,6 @@ window.renderMessages = async function() {
             onClickStr = `openChat('${tid}', '${safeText(name)}', '${p?.avatar_url || ''}', false)`;
         }
         
-        // 判斷最後一句話是不是媒體
         let lastMsg = '';
         if (m.content) {
             lastMsg = safeText(m.content);
@@ -367,7 +328,6 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     
     const groupOptBtn = document.getElementById('group-options-btn');
 
-    // 修改：透過操作 style.display 強制覆蓋 Tailwind 潛在的類別衝突，確保設置鍵可以顯示
     if (isGroup) {
         window.activeRoomId = targetId;
         if(groupOptBtn) {
@@ -387,7 +347,6 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     const avatarImg = document.getElementById('chat-target-avatar');
     if (avatarImg) {
         if (isGroup && !avatarUrl) {
-            // 群組沒頭像給預設 Icon
             avatarImg.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
         } else {
             avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
@@ -400,7 +359,6 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
-    // 消滅未讀紅點
     if (isGroup) {
         await window.supabaseClient.from('chat_group_members')
             .update({ last_read_time: new Date().toISOString() })
@@ -412,8 +370,9 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     if(typeof window.renderMessages === 'function') window.renderMessages();
     if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
     
+    // ✨ 載入訊息 (內部會自動呼叫 scrollToBottom)
     await loadMessages();
-    setTimeout(scrollToBottom, 50); // Ensure rendering is done before scrolling
+    
     setupChatRealtime();
 };
 
@@ -421,18 +380,16 @@ async function loadMessages() {
     if (!window.activeRoomId) return;
     const { data, error } = await window.supabaseClient.from('messages')
         .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
-    if (!error) await drawMessages(data);
     
     if (error) return;
 
-    // ✨ 如果是群組，需要預先抓取所有發言人的頭像
     if (window.activeIsGroup) {
         const senderIds = [...new Set(data.map(m => m.sender_name))];
         const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', senderIds);
         const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
-        drawMessages(data, profileMap);
+        await drawMessages(data, profileMap);
     } else {
-        drawMessages(data, null);
+        await drawMessages(data, null);
     }
 }
 
@@ -451,7 +408,6 @@ function setupChatRealtime() {
         }, async () => {
             const myId = await getValidUserId();
             
-            // 對方發新訊息，自動把狀態標成已讀
             if (window.activeIsGroup) {
                 await window.supabaseClient.from('chat_group_members')
                     .update({ last_read_time: new Date().toISOString() })
@@ -461,13 +417,12 @@ function setupChatRealtime() {
             }
             
             await loadMessages();
-            setTimeout(scrollToBottom, 50);
             
             if(typeof window.renderMessages === 'function') window.renderMessages();
             if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
         })
         .on('presence', { event: 'sync' }, () => {
-            if (window.activeIsGroup) return; // 群組先不顯示準確線上狀態
+            if (window.activeIsGroup) return; 
             const state = window.roomChannel.presenceState();
             const isOnline = Object.values(state).flat().some(p => p.user_id === window.activeChatTarget);
             updateOnlineStatusUI(isOnline);
@@ -523,7 +478,7 @@ window.closeCreateGroupModal = function() {
 
 window.handleCreateGroup = async function() {
     const nameInput = document.getElementById('new-group-name');
-    const membersInput = document.getElementById('new-group-members-input'); // ✨ 獲取新加入的輸入框
+    const membersInput = document.getElementById('new-group-members-input');
     const name = nameInput.value.trim();
     const membersStr = membersInput ? membersInput.value.trim() : '';
 
@@ -533,7 +488,6 @@ window.handleCreateGroup = async function() {
     if (!myId) return;
 
     try {
-        // 1. 寫入群組表
         const { data: groupData, error: groupErr } = await window.supabaseClient.from('chat_groups').insert([{
             name: name,
             owner_id: myId
@@ -541,17 +495,14 @@ window.handleCreateGroup = async function() {
 
         if (groupErr) throw groupErr;
 
-        // 準備要加入的成員陣列 (預設自己一定加入)
         const membersToInsert = [{
             group_id: groupData.id,
             user_id: myId
         }];
 
-        // ✨ 2. 解析邀請名單並模糊搜尋用戶
         if (membersStr) {
             const terms = membersStr.split(',').map(s => s.trim()).filter(s => s);
             if (terms.length > 0) {
-                // 組裝搜尋條件，支援搜尋 username 或 display_name
                 let orConditions = terms.map(t => `username.ilike.%${t}%,display_name.ilike.%${t}%`).join(',');
                 
                 const { data: foundUsers } = await window.supabaseClient.from('profiles')
@@ -571,12 +522,11 @@ window.handleCreateGroup = async function() {
             }
         }
 
-        // 3. 批量將自己與查找到的其他成員加入群組
         await window.supabaseClient.from('chat_group_members').insert(membersToInsert);
 
         window.closeCreateGroupModal();
         nameInput.value = '';
-        if (membersInput) membersInput.value = ''; // 清空輸入框
+        if (membersInput) membersInput.value = '';
         alert('群組建立成功！');
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (err) {
@@ -605,11 +555,9 @@ window.loadGroupMembers = async function() {
 
     const myId = await getValidUserId();
 
-    // 抓群主是誰
     const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
     const isOwner = groupData && groupData.owner_id === myId;
 
-    // 抓成員
     const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
     if (!members) {
         list.innerHTML = `<div class="text-center py-10 text-gray-400">載入失敗</div>`;
@@ -638,7 +586,6 @@ window.addGroupMember = async function() {
     const term = input.value.trim();
     if (!term) return;
 
-    // 以 username 或 display_name 搜尋用戶
     const { data: users } = await window.supabaseClient.from('profiles')
         .select('id')
         .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
@@ -673,7 +620,6 @@ window.kickGroupMember = async function(userId) {
     await window.loadGroupMembers();
 };
 
-// ✨ 新增：自行退出群組功能 (含群主自動移交或自動解散邏輯)
 window.leaveGroup = async function() {
     if (!confirm('確定要退出這個群組嗎？')) return;
     
@@ -681,20 +627,16 @@ window.leaveGroup = async function() {
     if (!myId || !window.activeRoomId) return;
 
     try {
-        // 檢查自己是否為群主
         const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
         
         if (groupData && groupData.owner_id === myId) {
-            // 若是群主，檢查群組內是否還有其他人
             const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
             const otherMembers = members.filter(m => m.user_id !== myId);
             
             if (otherMembers.length > 0) {
-                // 將群主自動轉讓給下一位成員
                 const newOwnerId = otherMembers[0].user_id;
                 await window.supabaseClient.from('chat_groups').update({ owner_id: newOwnerId }).eq('id', window.activeRoomId);
             } else {
-                // 若無其他成員，直接刪除該群組
                 await window.supabaseClient.from('chat_groups').delete().eq('id', window.activeRoomId);
                 window.closeGroupSettings();
                 window.closeChat();
@@ -703,7 +645,6 @@ window.leaveGroup = async function() {
             }
         }
 
-        // 刪除自己的成員記錄
         const { error } = await window.supabaseClient.from('chat_group_members')
             .delete()
             .eq('group_id', window.activeRoomId)
