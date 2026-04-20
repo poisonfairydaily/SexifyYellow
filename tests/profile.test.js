@@ -60,3 +60,113 @@ describe('escapeHTML', () => {
         expect(window.escapeHTML({ toString: () => '<obj>' })).toBe('&lt;obj&gt;');
     });
 });
+
+describe('uploadToR2', () => {
+    let originalFetch;
+    let originalSupabaseClient;
+    let originalDateNow;
+
+    beforeAll(() => {
+        originalFetch = global.fetch;
+        originalSupabaseClient = window.supabaseClient;
+        originalDateNow = Date.now;
+
+        // Mock Date.now to have predictable file names if needed
+        Date.now = jest.fn(() => 1234567890);
+
+        window.WORKER_URL = 'http://mock-worker-url';
+    });
+
+    afterAll(() => {
+        global.fetch = originalFetch;
+        window.supabaseClient = originalSupabaseClient;
+        Date.now = originalDateNow;
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+
+        // Mock getAuthenticatedUserId to return a valid user
+        window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'mock-user-id' } }, error: null })
+            }
+        };
+
+        // Suppress console.error in tests
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        console.error.mockRestore();
+    });
+
+    test('successful upload returns URL', async () => {
+        const mockUrl = 'https://example.com/avatar.webp';
+
+        global.fetch = jest.fn()
+            .mockImplementationOnce(() => Promise.resolve({
+                blob: () => Promise.resolve(new Blob(['mock data'], { type: 'image/png' }))
+            }))
+            .mockImplementationOnce(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ url: mockUrl })
+            }));
+
+        const url = await window.uploadToR2('data:image/png;base64,mock', 'avatar');
+
+        expect(url).toBe(mockUrl);
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(global.fetch.mock.calls[1][0]).toBe('http://mock-worker-url/upload');
+    });
+
+    test('throws error when worker returns failed status code', async () => {
+        global.fetch = jest.fn()
+            .mockImplementationOnce(() => Promise.resolve({
+                blob: () => Promise.resolve(new Blob(['mock data'], { type: 'image/png' }))
+            }))
+            .mockImplementationOnce(() => Promise.resolve({
+                ok: false,
+                status: 500
+            }));
+
+        await expect(window.uploadToR2('data:image/png;base64,mock', 'avatar'))
+            .rejects
+            .toThrow("Worker 回傳失敗狀態碼: 500");
+
+        expect(console.error).toHaveBeenCalled();
+    });
+
+    test('throws error when worker response is missing url', async () => {
+        global.fetch = jest.fn()
+            .mockImplementationOnce(() => Promise.resolve({
+                blob: () => Promise.resolve(new Blob(['mock data'], { type: 'image/png' }))
+            }))
+            .mockImplementationOnce(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ error: 'something went wrong' })
+            }));
+
+        await expect(window.uploadToR2('data:image/png;base64,mock', 'avatar'))
+            .rejects
+            .toThrow("Worker 回傳網址失敗");
+
+        expect(console.error).toHaveBeenCalled();
+    });
+
+    test('rethrows generic fetch errors', async () => {
+        const networkError = new Error("Network connection failed");
+
+        global.fetch = jest.fn()
+            .mockImplementationOnce(() => Promise.resolve({
+                blob: () => Promise.resolve(new Blob(['mock data'], { type: 'image/png' }))
+            }))
+            .mockImplementationOnce(() => Promise.reject(networkError));
+
+        await expect(window.uploadToR2('data:image/png;base64,mock', 'avatar'))
+            .rejects
+            .toThrow("Network connection failed");
+
+        expect(console.error).toHaveBeenCalledWith("R2 Upload Error:", networkError);
+    });
+});
