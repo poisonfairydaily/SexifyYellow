@@ -336,7 +336,7 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     
     const groupOptBtn = document.getElementById('group-options-btn');
 
-    // 修改：透過操作 style.display 強制覆蓋 Tailwind 潛在的類別衝突
+    // 修改：透過操作 style.display 強制覆蓋 Tailwind 潛在的類別衝突，確保設置鍵可以顯示
     if (isGroup) {
         window.activeRoomId = targetId;
         if(groupOptBtn) {
@@ -625,7 +625,7 @@ window.addGroupMember = async function() {
 
     if (error) {
         if (error.code === '23505') alert('該用戶已經在群組中了');
-        else alert('新增失敗，可能權限不足');
+        else alert('新增失敗，可能資料庫權限 (RLS) 不足');
     } else {
         input.value = '';
         alert('加入成功！');
@@ -686,7 +686,7 @@ window.leaveGroup = async function() {
         
     } catch (err) {
         console.error("退出群組失敗:", err);
-        alert('退出群組失敗，請稍後再試。');
+        alert('退出群組失敗，請確認 Supabase RLS 設定是否允許刪除自己的群組成員紀錄。');
     }
 };
 
