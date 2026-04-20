@@ -104,3 +104,38 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <button id="tab-fans"></button>
+            <button id="tab-subs"></button>
+            <div id="fans-subs-list"></div>
+        `;
+
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly when tab is fans', async () => {
+        const mockError = new Error('Database connection failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});
