@@ -1,13 +1,11 @@
-🧹 [Code Health] Remove Unused Success-Level Console Logs
+🧪 Add Error Test for View Other Profile
 
 🎯 **What:**
-Removed several unnecessary `console.log` statements that provided success-level feedback in production code (specifically in `js/admin.js`, `js/supabase-config.js`, and `js/messages.js`).
+Added a test to cover the `viewOtherProfile` function in `js/profile.js:477`, verifying that when a Supabase query fetch fails, the function catches the error, correctly avoids crashing, and properly logs it out.
+Also fixed `app.test.js` to correctly define properties with `Object.defineProperty(navigator)` due to some Jest environment restrictions.
 
-💡 **Why:**
-These logs provided no meaningful value in a production environment and cluttered the console output. Removing them improves the codebase's readability and follows the best practice of keeping the console clean of noise.
-
-✅ **Verification:**
-Verified the changes by manually confirming syntax correctness with `node -c` for the modified JavaScript files (`js/admin.js`, `js/supabase-config.js`, `js/messages.js`). Ensured that no runtime logic or dependencies were altered.
+📊 **Coverage:**
+The scenario where viewing another profile fails due to Supabase returning an error object is now covered by testing error catch block and validating `console.error` logs.
 
 ✨ **Result:**
-Cleaner console output, improving code maintainability without changing any existing application behavior.
+Test coverage and test reliability across vanilla js functionality has improved.
