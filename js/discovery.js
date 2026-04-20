@@ -475,7 +475,7 @@ window.toggleBookmark = async function(btn, postId, postObjStr) {
             icon.classList.remove('text-yellow-500');
             icon.classList.add('text-gray-300');
             await window.supabaseClient.from('bookmarks').delete().match({ post_id: postId, user_id: myId });
-            
+
             // Sync with localStorage for backward compatibility with old views
             let myBookmarksSet = new Set();
         if (myId) {
@@ -489,7 +489,7 @@ window.toggleBookmark = async function(btn, postId, postObjStr) {
             icon.classList.remove('text-gray-300');
             icon.classList.add('text-yellow-500');
             await window.supabaseClient.from('bookmarks').insert({ post_id: postId, user_id: myId });
-            
+
             // Sync with localStorage
             let myBookmarksSet = new Set();
         if (myId) {
@@ -513,7 +513,7 @@ window.recordHistory = async function(postId) {
     try {
         const myId = await getAuthenticatedUserId();
         if(!myId) return;
-        
+
         // Check if exists
         const { data } = await window.supabaseClient.from('history').select('id').match({ post_id: postId, user_id: myId }).single();
         if (data) {
