@@ -104,3 +104,43 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Followers Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <button id="tab-fans"></button>
+            <button id="tab-subs"></button>
+            <div id="fans-subs-list"></div>
+        `;
+
+        // Mock global getAuthenticatedUserId function
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase query error for followers tab gracefully', async () => {
+        const mockError = new Error('Failed to fetch followers');
+
+        // Mock window.supabaseClient.from().select().eq() chain for subscriptions query
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        // Execute function
+        await window.switchFansTab('fans');
+
+        // Verify that getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+
+        // Verify the UI is correctly updated with the error template
+        const listContainer = document.getElementById('fans-subs-list');
+        expect(listContainer.innerHTML).toContain('<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>');
+    });
+});
