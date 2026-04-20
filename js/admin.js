@@ -65,7 +65,6 @@ window.onload = async () => {
             adminSec.style.display = 'block';
         }
         
-        console.log("✅ 管理員驗證成功");
 
     } catch (err) {
         console.error("初始化失敗:", err);
