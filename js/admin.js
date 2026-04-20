@@ -161,27 +161,33 @@ if (uploadBtn) {
         if(statusText) statusText.innerText = "⏳ 執行管理員權限上傳中...";
 
         try {
-            let uploadedFileUrls = [];
-            let lastAiReport = null;
+            if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (0/${files.length})...`;
+            let completedCount = 0;
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (${i+1}/${files.length})...`;
-
+            const uploadPromises = Array.from(files).map(async (file, i) => {
                 const base64Str = await fileToBase64(file);
                 const { data: audit } = await supabaseClient.functions.invoke('vision-audit', {
                     body: { imageBase64: base64Str }
                 });
 
-                lastAiReport = audit?.safeSearchAnnotation || audit;
+                const aiReport = audit?.safeSearchAnnotation || audit;
 
                 const webpBlob = await generateWebPBlob(file);
                 // ✨【分流關鍵】檔名帶入 product_ 以觸發 Worker 存入 MY_BUCKET 的 products/
                 const fileName = `product_official_${Date.now()}_${i}.webp`;
 
                 const publicUrl = await uploadToR2(webpBlob, fileName);
-                uploadedFileUrls.push(publicUrl);
-            }
+
+                completedCount++;
+                if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (${completedCount}/${files.length})...`;
+
+                return { publicUrl, aiReport };
+            });
+
+            const results = await Promise.all(uploadPromises);
+
+            const uploadedFileUrls = results.map(r => r.publicUrl);
+            const lastAiReport = results.length > 0 ? results[results.length - 1].aiReport : null;
 
             const { error: dbError } = await supabaseClient.from('products').insert([{
                 name: rawName,
