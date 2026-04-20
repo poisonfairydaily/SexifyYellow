@@ -202,7 +202,6 @@ window.publishPost = async function() {
 
             // 3. 執行 R2 代理上傳
             mediaUrl = await uploadToR2(blob, cleanFileName);
-            console.log("R2 貼文上傳成功：", mediaUrl);
         }
 
         btn.innerText = "💾 存入資料庫...";
