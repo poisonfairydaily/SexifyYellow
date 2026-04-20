@@ -242,6 +242,9 @@ window.renderMessages = async function() {
                 </div>
             </div>`;
     }).join('');
+
+    // ✨ 確保外層列表更新時，底部的全域紅點也同步狀態
+    if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
 };
 
 window.openChat = async function(targetUid, displayName, avatarUrl) {
@@ -268,8 +271,9 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
     // 一打開就把該房間、對方傳給我的訊息標記為已讀
     await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
     
-    // 更新外層列表以消除紅點，但不加上 await 避免卡住開啟動畫
+    // ✨ 更新外層列表以消除紅點，同時同步全域底部紅點
     if(typeof window.renderMessages === 'function') window.renderMessages();
+    if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
     
     await loadMessages();
     scrollToBottom();
@@ -302,7 +306,10 @@ function setupChatRealtime() {
             
             await loadMessages();
             scrollToBottom();
-            if(typeof window.renderMessages === 'function') window.renderMessages(); // 同步更新外層最新文字
+            
+            // ✨ 同步更新外層最新文字與全域紅點
+            if(typeof window.renderMessages === 'function') window.renderMessages();
+            if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
         })
         .on('presence', { event: 'sync' }, () => {
             const state = window.roomChannel.presenceState();
