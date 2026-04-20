@@ -17,7 +17,13 @@ describe('window.handleShare', () => {
         global.window = {
             location: { origin: 'http://localhost' }
         };
-        global.navigator = {};
+
+        // Use defineProperty to bypass JSDOM's strict navigator mocking limitations
+        Object.defineProperty(global, 'navigator', {
+            value: {},
+            configurable: true
+        });
+
         global.document = {
             addEventListener: jest.fn() // to prevent errors when evaluating app.js
         };
@@ -29,7 +35,10 @@ describe('window.handleShare', () => {
 
     afterAll(() => {
         global.window = originalWindow;
-        global.navigator = originalNavigator;
+        Object.defineProperty(global, 'navigator', {
+            value: originalNavigator,
+            configurable: true
+        });
         console.log = originalConsoleLog;
         global.alert = originalAlert;
         delete global.document;
@@ -38,7 +47,8 @@ describe('window.handleShare', () => {
     beforeEach(() => {
         console.log = jest.fn();
         global.alert = jest.fn();
-        global.navigator = {}; // Reset navigator mocks
+        global.navigator.share = undefined;
+        global.navigator.clipboard = undefined;
     });
 
     test('should use navigator.share if available', async () => {
