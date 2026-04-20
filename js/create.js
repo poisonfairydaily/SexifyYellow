@@ -20,53 +20,29 @@ window.escapeHTML = function(str) {
  * 使用 decode() 確保數據完整，防止產出 [object File] 或空殼損毀檔案
  */
 async function generateWebPBlob(file) {
-    // 如果是影片，不進行 WebP 轉換，直接回傳原檔
     if (file.type.startsWith('video/')) return file;
-
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
-        
-        // 核心加固：確保瀏覽器完全解析影像後才開始畫布處理
-        img.decode().then(() => {
+        img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const max_size = 1200; 
             let width = img.width, height = img.height;
-
-            // 等比例縮放計算
-            if (width > height) {
-                if (width > max_size) { height *= max_size / width; width = max_size; }
-            } else {
-                if (height > max_size) { width *= max_size / height; height = max_size; }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            
-            // 填滿白色底，防止 PNG 透明層變黑
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, width, height);
-            
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
+            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
+            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
+            canvas.width = width; canvas.height = height;
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob((blob) => {
-                // 容錯機制：如果產出的 Blob 過小 (損毀)，改用原檔
-                if (!blob || blob.size < 2000) {
-                    resolve(file);
-                } else {
-                    resolve(blob);
-                }
-                URL.revokeObjectURL(img.src);
-            }, 'image/webp', 0.85);
-        }).catch(err => {
-            console.error("影像解碼失敗，採用原始檔案上傳:", err);
-            resolve(file); 
-        });
+            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85);
+        };
+        img.onerror = () => {
+            console.error("影像載入失敗，採用原始檔案上傳");
+            resolve(file);
+        };
     });
 }
+
 
 /**
  * ✨ R2 上傳核心
@@ -77,7 +53,7 @@ async function uploadToR2(blob, fileName) {
     // 關鍵：將二進位數據與乾淨檔名封裝
     formData.append('file', blob, fileName);
 
-    const response = await fetch(WORKER_URL, {
+    const response = await fetch(WORKER_URL + 'upload', {
         method: 'POST',
         body: formData
     });
@@ -220,7 +196,8 @@ window.publishPost = async function() {
             
             // 2. ✨【分流密鑰】檔名不含 "product"，確保 Worker 存入 POST_BUCKET
             const randomID = Math.random().toString(36).substring(7);
-            const extension = selectedFile.type.startsWith('video/') ? (selectedFile.name.split('.').pop() || 'mp4') : 'webp';
+            const isVideo = selectedFile.type.startsWith('video/');
+            const extension = isVideo ? 'mp4' : 'webp';
             const cleanFileName = `post_${Date.now()}_${randomID}.${extension}`;
 
             // 3. 執行 R2 代理上傳
