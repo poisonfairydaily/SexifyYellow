@@ -1,15 +1,27 @@
-🧹 [Refactor renderProductGrid]
 
-🎯 **What:** The code health issue addressed
-Refactored the overly long `renderProductGrid` function in `js/shop.js` by extracting the product card template generation into a separate `generateProductCardHTML` function.
+🎯 **What:**
+- The gap in testing for `window.saveUserProfile` handling Promise.all errors has been addressed.
+- The existing Jest test suite in `js/app.test.js` was modified to include the new test cases.
+- Additionally, previously broken tests for `window.handleShare` caused by JSDOM's read-only navigator object were resolved.
 
-💡 **Why:** How this improves maintainability
-This reduces the cyclomatic complexity and length of the `renderProductGrid` function. The function is now cleaner, easier to read, and isolates data-fetching/filtering logic from UI rendering logic, making both parts easier to test and maintain individually.
+📊 **Coverage:**
+The new test suite covers:
+- Early return for unauthenticated users (no `userId`).
+- Simulated failures during the public profile update process.
+- Simulated failures during the private data update process.
+- The happy path for successful user profile updates.
 
-✅ **Verification:** How you confirmed the change is safe
-- Confirmed the javascript syntax is correct via `node -c js/shop.js`.
-- Confirmed the existing tests in `js/shop.test.js` still pass successfully.
-- Code changes were reviewed to ensure identical output.
+✨ **Result:**
+- Test coverage has improved significantly.
+- All tests in the test suite pass correctly without polluting the environment or outputting untracked error messages.
+# 🔒 [security fix] Remove sensitive data from localStorage
 
-✨ **Result:** The improvement achieved
-`renderProductGrid` is shorter and focused on data orchestration. The UI logic is safely isolated in `generateProductCardHTML`.
+🎯 **What:** The application was storing sensitive user identifiers (`userId`, `myChatName`) in `localStorage` in various files. This exposes user data if an XSS vulnerability is exploited.
+
+⚠️ **Risk:** Storing user identifiers and sensitive metadata in `localStorage` increases the blast radius of XSS attacks, allowing malicious scripts to steal identities and interact with the application under the guise of an authenticated user.
+
+🛡️ **Solution:**
+- Removed all instances of `localStorage.setItem` that were caching `userId` and `myChatName`.
+- Updated all references to `localStorage.getItem('userId')` to securely and asynchronously fetch the user ID directly from `await window.supabaseClient.auth.getSession()`.
+- Updated tests (`tests/test_app_notifications.js`) to properly mock the Supabase session retrieval logic.
+- Adjusted `@babel/preset-env` and `navigator` global mocking in `app.test.js` to ensure the testing environment correctly runs the modern asynchronous code and updated JSDOM configurations.

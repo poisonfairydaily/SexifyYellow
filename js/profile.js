@@ -287,7 +287,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        localStorage.setItem('myChatName', updateData.display_name);
+        // We no longer store myChatName in localStorage
         window.closeEditProfile();
         // 嘗試更新首頁的頭像圖示
         const sidebarAvatar = document.getElementById('sidebar-avatar');
@@ -363,51 +363,6 @@ window.renderProfile = async function() {
     } catch (err) { container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`; }
 }
 
-window.openEditProfile = async function() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (!modal) return;
-
-    try {
-        const myId = await getAuthenticatedUserId();
-        if (!myId) return alert('請先登入');
-
-        const { data: profile } = await window.supabaseClient.from('profiles').select('*').eq('id', myId).single();
-
-        document.getElementById('edit-display-name').value = profile.display_name || '';
-        document.getElementById('edit-bio').value = profile.bio || '';
-        
-        // ✨ 頭像防破圖：加入 crossOrigin="anonymous" 允許跨域讀取，才能在 Canvas 上調整並轉存
-        isAvatarChanged = false;
-        if (profile.avatar_url && profile.avatar_url.startsWith('http')) {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                currentAvatarImage = img;
-                window.resetAvatarTransform();
-                isAvatarChanged = false; // 載入時不視為更動
-            };
-            img.src = profile.avatar_url;
-        } else {
-            currentAvatarImage = null;
-            const canvas = document.getElementById('avatar-canvas');
-            if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // 處理背景預覽
-        const bannerPreview = document.getElementById('edit-banner-preview');
-        const placeholder = document.getElementById('banner-placeholder');
-        if (profile.banner_url && profile.banner_url.startsWith('http')) {
-            if(bannerPreview) { bannerPreview.src = profile.banner_url; bannerPreview.classList.remove('hidden'); }
-            if(placeholder) placeholder.classList.add('hidden');
-        } else {
-            if(bannerPreview) { bannerPreview.src = ''; bannerPreview.classList.add('hidden'); }
-            if(placeholder) placeholder.classList.remove('hidden');
-        }
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    } catch (err) { alert("無法讀取個人資料"); }
-};
 
 window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
@@ -450,7 +405,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        localStorage.setItem('myChatName', updateData.display_name);
+        // We no longer store myChatName in localStorage
         closeEditProfile();
         renderProfile();
     } catch (err) { alert("更新失敗：" + err.message); } 
