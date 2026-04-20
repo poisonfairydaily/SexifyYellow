@@ -206,7 +206,6 @@ window.toggleLike = async function(btn, postId, postOwnerId) {
 // --- 📖 4. 貼文詳情與留言系統 ---
 window.currentViewedPostId = null;
 window.currentViewedPostOwnerId = null;
-window.currentViewedPostCaption = ''; // 紀錄當前觀看的貼文原文內容供編輯用
 
 window.viewPost = async function(postId) {
     window.currentViewedPostId = postId;
@@ -237,7 +236,7 @@ window.viewPost = async function(postId) {
         if (error) throw error;
         
         window.currentViewedPostOwnerId = post.user_id;
-        window.currentViewedPostCaption = post.caption || ''; // 寫入供內聯編輯讀取
+        window.recordHistory(postId);
         const authorName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}`;
         const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
@@ -264,8 +263,12 @@ window.viewPost = async function(postId) {
         const likeIcon = isLiked ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
 
         // 判斷收藏狀態
-        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-        const isBookmarked = bookmarks.some(b => b.id === post.id);
+        let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+        const isBookmarked = myBookmarksSet.has(post.id);
         const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
         
         const currentLikes = post.likes_count || post.likes || 0;
@@ -298,7 +301,7 @@ window.viewPost = async function(postId) {
                 </button>
             </div>
             
-            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed transition-all" id="detail-caption">${window.escapeHTML(post.caption || '')}</div>
+            <div class="p-4 text-sm text-gray-800 whitespace-pre-line leading-relaxed" id="detail-caption">${window.escapeHTML(post.caption || '')}</div>
         `;
         
         window.renderComments();
@@ -392,61 +395,15 @@ window.editPostContent = async function(postId) {
     const menu = document.getElementById('post-options-menu');
     if(menu) menu.classList.add('hidden');
     
-    const captionElem = document.getElementById('detail-caption');
-    if(!captionElem) return;
-
-    // 將詳細內容區塊直接替換為內聯的 textarea 編輯器
-    captionElem.innerHTML = `
-        <div class="flex flex-col gap-3 mt-1 animate-fade-in">
-            <textarea id="inline-edit-textarea" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-sexify outline-none resize-none" rows="4" placeholder="請輸入新的貼文內容...">${window.escapeHTML(window.currentViewedPostCaption)}</textarea>
-            <div class="flex justify-end gap-2">
-                <button onclick="window.cancelInlineEdit()" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-full text-xs font-bold active:scale-95 transition">取消</button>
-                <button onclick="window.saveInlineEdit('${postId}')" class="px-5 py-2 bg-sexify text-white rounded-full text-xs font-bold active:scale-95 transition shadow-sm">完成儲存</button>
-            </div>
-        </div>
-    `;
-};
-
-// 新增：取消內聯編輯的邏輯
-window.cancelInlineEdit = function() {
-    const captionElem = document.getElementById('detail-caption');
-    if (captionElem) {
-        // 點擊取消時，恢復為全域紀錄的原始文字
-        captionElem.innerHTML = window.escapeHTML(window.currentViewedPostCaption || '');
-    }
-};
-
-// 新增：儲存內聯編輯的邏輯
-window.saveInlineEdit = async function(postId) {
-    const textarea = document.getElementById('inline-edit-textarea');
-    if (!textarea) return;
-    
-    const newText = textarea.value.trim();
-    const btn = document.querySelector(`button[onclick="window.saveInlineEdit('${postId}')"]`);
-    
-    if(btn) {
-        btn.disabled = true;
-        btn.innerText = "儲存中...";
-    }
-
+    const newText = prompt("請輸入新的貼文內容：");
+    if (newText === null) return;
     try {
         const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
         if(error) throw error;
-        
-        // 更新成功後，同步更新全域變數並恢復顯示
-        window.currentViewedPostCaption = newText;
         const captionElem = document.getElementById('detail-caption');
-        if(captionElem) captionElem.innerHTML = window.escapeHTML(newText);
-        
-        // 同步更新首頁的瀑布流內容
+        if(captionElem) captionElem.innerText = window.escapeHTML(newText);
         window.renderDiscovery();
-    } catch (err) { 
-        alert("編輯失敗：" + err.message); 
-        if(btn) {
-            btn.disabled = false;
-            btn.innerText = "完成儲存";
-        }
-    }
+    } catch (err) { alert("編輯失敗"); }
 };
 
 window.deletePostFromModal = async function(postId) {
@@ -498,3 +455,73 @@ document.addEventListener('DOMContentLoaded', () => {
         window.renderDiscovery();
     }
 });
+
+window.toggleBookmark = async function(btn, postId, postObjStr) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    const icon = btn.querySelector('i');
+    const isBookmarked = icon.classList.contains('fa-solid');
+
+    try {
+        const myId = await getAuthenticatedUserId();
+        if(!myId) {
+            btn.disabled = false;
+            return alert("請先登入");
+        }
+
+        if (isBookmarked) {
+            icon.classList.replace('fa-solid', 'fa-regular');
+            icon.classList.remove('text-yellow-500');
+            icon.classList.add('text-gray-300');
+            await window.supabaseClient.from('bookmarks').delete().match({ post_id: postId, user_id: myId });
+            
+            // Sync with localStorage for backward compatibility with old views
+            let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+            bookmarks = bookmarks.filter(b => b.id !== postId);
+            localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+        } else {
+            icon.classList.replace('fa-regular', 'fa-solid');
+            icon.classList.remove('text-gray-300');
+            icon.classList.add('text-yellow-500');
+            await window.supabaseClient.from('bookmarks').insert({ post_id: postId, user_id: myId });
+            
+            // Sync with localStorage
+            let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+            const postObj = JSON.parse(decodeURIComponent(postObjStr));
+            if (!bookmarks.some(b => b.id === postId)) {
+                bookmarks.push(postObj);
+                localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+            }
+        }
+    } catch(e) {
+        console.error("收藏失敗", e);
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+window.recordHistory = async function(postId) {
+    try {
+        const myId = await getAuthenticatedUserId();
+        if(!myId) return;
+        
+        // Check if exists
+        const { data } = await window.supabaseClient.from('history').select('id').match({ post_id: postId, user_id: myId }).single();
+        if (data) {
+            await window.supabaseClient.from('history').update({ viewed_at: new Date().toISOString() }).eq('id', data.id);
+        } else {
+            await window.supabaseClient.from('history').insert({ post_id: postId, user_id: myId });
+        }
+    } catch (e) {
+        // ignore errors
+    }
+};
