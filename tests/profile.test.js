@@ -104,3 +104,57 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="tab-fans"></div>
+            <div id="tab-subs"></div>
+            <div id="fans-subs-list"></div>
+        `;
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        console.error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error for fans tab correctly', async () => {
+        const mockError = new Error('Database error');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+        expect(list.innerHTML).toContain('text-red-400');
+    });
+
+    test('handles Supabase fetch error for subs tab correctly', async () => {
+        const mockError = new Error('Database error');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+        expect(list.innerHTML).toContain('text-red-400');
+    });
+});
