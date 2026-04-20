@@ -158,6 +158,60 @@ window.renderShop = async function(filterKeyword = '') {
 /**
  * 3. 渲染網格
  */
+
+function generateProductCardHTML(p, purchasedIds, isAdmin, signedMap) {
+    const firstFileName = p.image_url?.split(',')[0];
+    const isUnlocked = purchasedIds.has(p.id) || isAdmin;
+
+    let displayImg;
+    if (isUnlocked && signedMap[firstFileName]) {
+        displayImg = signedMap[firstFileName];
+    } else {
+        displayImg = window.getSafeImageUrl(p.image_url, 'previews');
+    }
+
+    // ✨ 核心修正：更強健的提取創作者資訊，防止抓不到名字
+    const prof = Array.isArray(p.profiles) ? p.profiles[0] : (p.profiles || {});
+    const creatorName = prof.display_name || '匿名創作者';
+    const creatorAvatar = window.getAvatar(prof.avatar_url, creatorName);
+    const isOfficial = prof.role === 'admin';
+
+    const isPhysical = p.category === 'physical';
+    const originalPriceNum = p.original_price || Math.ceil((isPhysical ? p.price_usd : p.price) * 1.25);
+
+    const originalPriceDisplay = isPhysical ? `$${originalPriceNum}` : `🪙 ${originalPriceNum}`;
+    const currentPriceDisplay = isPhysical
+        ? `<span class="text-blue-600 font-black text-xs">$${p.price_usd}</span>`
+        : `<span class="text-sexify font-black text-xs">🪙 ${p.price}</span>`;
+
+    return `
+        <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
+            <div class="aspect-square w-full overflow-hidden bg-gray-50 relative">
+                <img src="${displayImg}" class="w-full h-full object-cover transition-all duration-700">
+                ${isOfficial ? `<div class="absolute top-2 left-2 bg-black/80 backdrop-blur text-white text-[8px] font-black px-2 py-1 rounded-sm uppercase tracking-widest z-10"><i class="fa-solid fa-crown text-yellow-400 mr-1"></i>Official</div>` : ''}
+                ${isPhysical && !isOfficial ? `<div class="absolute top-2 left-2 bg-blue-600/90 backdrop-blur text-white text-[8px] font-black px-2 py-1 rounded-sm uppercase tracking-widest z-10"><i class="fa-solid fa-box mr-1"></i>實體</div>` : ''}
+            </div>
+            <div class="p-3 flex flex-col justify-between flex-1">
+                <div>
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <img src="${creatorAvatar}" class="w-4 h-4 rounded-full border border-gray-100 object-cover">
+                        <span class="text-[9px] text-gray-500 font-bold truncate">${window.escapeHTML(creatorName)}</span>
+                        ${isOfficial ? '<i class="fa-solid fa-circle-check text-blue-500 text-[8px]" title="官方認證"></i>' : ''}
+                    </div>
+                    <h3 class="font-bold text-[11px] text-gray-900 line-clamp-2 leading-tight">${window.escapeHTML(p.name)}</h3>
+                </div>
+                <div class="flex justify-between items-end mt-2">
+                    <div class="flex flex-col">
+                        <span class="text-[9px] text-gray-400 line-through decoration-gray-300 font-bold">${originalPriceDisplay}</span>
+                        ${currentPriceDisplay}
+                    </div>
+                    ${isUnlocked ? '<span class="bg-green-100 text-green-600 text-[9px] px-2 py-1 rounded font-black">已解鎖</span>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 async function renderProductGrid(grid, keyword) {
     grid.innerHTML = `<div class="col-span-2 text-center py-20"><i class="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i></div>`;
     
@@ -229,58 +283,7 @@ async function renderProductGrid(grid, keyword) {
             }
         }
 
-        grid.innerHTML = displayProducts.map(p => {
-            const firstFileName = p.image_url?.split(',')[0];
-            const isUnlocked = purchasedIds.has(p.id) || isAdmin;
-            
-            let displayImg;
-            if (isUnlocked && signedMap[firstFileName]) {
-                displayImg = signedMap[firstFileName];
-            } else {
-                displayImg = window.getSafeImageUrl(p.image_url, 'previews');
-            }
-
-            // ✨ 核心修正：更強健的提取創作者資訊，防止抓不到名字
-            const prof = Array.isArray(p.profiles) ? p.profiles[0] : (p.profiles || {});
-            const creatorName = prof.display_name || '匿名創作者';
-            const creatorAvatar = window.getAvatar(prof.avatar_url, creatorName);
-            const isOfficial = prof.role === 'admin';
-            
-            const isPhysical = p.category === 'physical';
-            const originalPriceNum = p.original_price || Math.ceil((isPhysical ? p.price_usd : p.price) * 1.25);
-            
-            const originalPriceDisplay = isPhysical ? `$${originalPriceNum}` : `🪙 ${originalPriceNum}`;
-            const currentPriceDisplay = isPhysical 
-                ? `<span class="text-blue-600 font-black text-xs">$${p.price_usd}</span>`
-                : `<span class="text-sexify font-black text-xs">🪙 ${p.price}</span>`;
-
-            return `
-                <div onclick="openProductModal('${p.id}')" class="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col border border-gray-100 relative transition-all active:scale-95 hover:shadow-md">
-                    <div class="aspect-square w-full overflow-hidden bg-gray-50 relative">
-                        <img src="${displayImg}" class="w-full h-full object-cover transition-all duration-700">
-                        ${isOfficial ? `<div class="absolute top-2 left-2 bg-black/80 backdrop-blur text-white text-[8px] font-black px-2 py-1 rounded-sm uppercase tracking-widest z-10"><i class="fa-solid fa-crown text-yellow-400 mr-1"></i>Official</div>` : ''}
-                        ${isPhysical && !isOfficial ? `<div class="absolute top-2 left-2 bg-blue-600/90 backdrop-blur text-white text-[8px] font-black px-2 py-1 rounded-sm uppercase tracking-widest z-10"><i class="fa-solid fa-box mr-1"></i>實體</div>` : ''}
-                    </div>
-                    <div class="p-3 flex flex-col justify-between flex-1">
-                        <div>
-                            <div class="flex items-center gap-1.5 mb-1.5">
-                                <img src="${creatorAvatar}" class="w-4 h-4 rounded-full border border-gray-100 object-cover">
-                                <span class="text-[9px] text-gray-500 font-bold truncate">${window.escapeHTML(creatorName)}</span>
-                                ${isOfficial ? '<i class="fa-solid fa-circle-check text-blue-500 text-[8px]" title="官方認證"></i>' : ''}
-                            </div>
-                            <h3 class="font-bold text-[11px] text-gray-900 line-clamp-2 leading-tight">${window.escapeHTML(p.name)}</h3>
-                        </div>
-                        <div class="flex justify-between items-end mt-2">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-gray-400 line-through decoration-gray-300 font-bold">${originalPriceDisplay}</span>
-                                ${currentPriceDisplay}
-                            </div>
-                            ${isUnlocked ? '<span class="bg-green-100 text-green-600 text-[9px] px-2 py-1 rounded font-black">已解鎖</span>' : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        grid.innerHTML = displayProducts.map(p => generateProductCardHTML(p, purchasedIds, isAdmin, signedMap)).join('');
     } catch (e) { 
         console.error("渲染清單崩潰:", e);
         grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 font-bold text-sm">無法載入商品資料</div>`;
