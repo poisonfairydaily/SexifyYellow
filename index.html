@@ -58,7 +58,7 @@
                     if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
                         window.location.replace('login.html');
                     } else if (session) {
-                        localStorage.setItem('userId', session.user.id);
+                        // We no longer store userId in localStorage to avoid data exposure
                     }
                 });
             }

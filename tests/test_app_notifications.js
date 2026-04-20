@@ -74,6 +74,7 @@ async function testHappyPath() {
     ];
 
     global.window.supabaseClient = {
+        auth: { getSession: async () => ({ data: { session: { user: { id: 'test-user-id' } } } }) },
         from: (table) => {
             if (table === 'notifications') {
                 return {
@@ -133,6 +134,7 @@ async function testEmptyPath() {
     global.localStorage.getItem = (key) => key === 'userId' ? 'test-user-id' : null;
 
     global.window.supabaseClient = {
+        auth: { getSession: async () => ({ data: { session: { user: { id: 'test-user-id' } } } }) },
         from: (table) => {
             if (table === 'notifications') {
                 return {
@@ -183,6 +185,7 @@ async function testErrorPath() {
     global.console.error = () => { consoleErrorCalled = true; };
 
     global.window.supabaseClient = {
+        auth: { getSession: async () => ({ data: { session: { user: { id: 'test-user-id' } } } }) },
         from: (table) => {
             if (table === 'notifications') {
                 return {
