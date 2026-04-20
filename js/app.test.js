@@ -24,7 +24,11 @@ describe('window.handleShare', () => {
 
         // Load app.js
         const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf-8');
-        eval(appCode);
+
+        eval(`
+            const navigator = global.navigator;
+            ${appCode}
+        `);
     });
 
     afterAll(() => {
@@ -55,6 +59,7 @@ describe('window.handleShare', () => {
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
+        global.navigator.share = undefined; // Ensure share is not available
         global.navigator.clipboard = {
             writeText: jest.fn().mockResolvedValue()
         };
@@ -77,6 +82,7 @@ describe('window.handleShare', () => {
     });
 
     test('should log error if clipboard fallback fails', async () => {
+        global.navigator.share = undefined; // Ensure share is not available
         const error = new Error('Clipboard failed');
         global.navigator.clipboard = {
             writeText: jest.fn().mockRejectedValue(error)
