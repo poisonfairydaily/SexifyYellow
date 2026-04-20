@@ -288,6 +288,31 @@ window.logoutUser = async function() {
 };
 
 // ==========================================
+// 全域狀態：動態更新下方導覽列紅點
+// ==========================================
+window.updateGlobalMessageBadge = async function() {
+    const userId = localStorage.getItem('userId');
+    if (!userId || !window.supabaseClient) return;
+    
+    const msgBadge = document.getElementById('nav-msg-badge');
+    if (!msgBadge) return;
+
+    try {
+        const { count } = await window.supabaseClient.from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('receiver', userId).eq('is_read', false);
+
+        if (count > 0) {
+            msgBadge.classList.remove('hidden');
+        } else {
+            msgBadge.classList.add('hidden');
+        }
+    } catch(e) {
+        console.warn("更新全域訊息標記失敗", e);
+    }
+};
+
+// ==========================================
 // 實時推播監聽與初始化
 // ==========================================
 function setupGlobalRealtime(userId) {
@@ -332,8 +357,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
             if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
             
-            const { count: msgCount } = await window.supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('receiver', userId).eq('is_read', false);
-            if (msgCount > 0) document.getElementById('nav-msg-badge').classList.remove('hidden');
+            // ✨ 透過新增的全域函數計算紅點
+            await window.updateGlobalMessageBadge();
         } catch(e) {
             console.warn("載入未讀標記失敗", e);
         }
