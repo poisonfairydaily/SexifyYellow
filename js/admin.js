@@ -65,7 +65,6 @@ window.onload = async () => {
             adminSec.style.display = 'block';
         }
         
-        console.log("✅ 管理員驗證成功");
 
     } catch (err) {
         console.error("初始化失敗:", err);
@@ -106,45 +105,13 @@ if (pImageInput) {
     });
 }
 
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-    });
-}
 
-async function generateWebPBlob(file) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const max_size = 1200; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
-        };
-    });
-}
+
 
 /**
  * ✨ R2 代理上傳 (分流對接版)
  */
-async function uploadToR2(blob, fileName) {
-    const formData = new FormData();
-    formData.append('file', blob, fileName);
-    const response = await fetch(WORKER_URL, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('R2 代理上傳失敗');
-    const resData = await response.json();
-    return resData.url;
-}
+
 
 // --- 🚀 4. 官方商品上架 (自動進入 MY_BUCKET) ---
 const uploadBtn = document.getElementById('upload-btn');
@@ -161,27 +128,33 @@ if (uploadBtn) {
         if(statusText) statusText.innerText = "⏳ 執行管理員權限上傳中...";
 
         try {
-            let uploadedFileUrls = [];
-            let lastAiReport = null;
+            if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (0/${files.length})...`;
+            let completedCount = 0;
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (${i+1}/${files.length})...`;
-
+            const uploadPromises = Array.from(files).map(async (file, i) => {
                 const base64Str = await fileToBase64(file);
                 const { data: audit } = await supabaseClient.functions.invoke('vision-audit', {
                     body: { imageBase64: base64Str }
                 });
 
-                lastAiReport = audit?.safeSearchAnnotation || audit;
+                const aiReport = audit?.safeSearchAnnotation || audit;
 
-                const webpBlob = await generateWebPBlob(file);
+                const webpBlob = await window.generateWebPBlob(file);
                 // ✨【分流關鍵】檔名帶入 product_ 以觸發 Worker 存入 MY_BUCKET 的 products/
                 const fileName = `product_official_${Date.now()}_${i}.webp`;
 
                 const publicUrl = await uploadToR2(webpBlob, fileName);
-                uploadedFileUrls.push(publicUrl);
-            }
+
+                completedCount++;
+                if(statusText) statusText.innerText = `🔍 AI 掃描與壓縮中 (${completedCount}/${files.length})...`;
+
+                return { publicUrl, aiReport };
+            });
+
+            const results = await Promise.all(uploadPromises);
+
+            const uploadedFileUrls = results.map(r => r.publicUrl);
+            const lastAiReport = results.length > 0 ? results[results.length - 1].aiReport : null;
 
             const { error: dbError } = await supabaseClient.from('products').insert([{
                 name: rawName,

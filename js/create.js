@@ -34,7 +34,7 @@ async function generateWebPBlob(file) {
             canvas.width = width; canvas.height = height;
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85);
+            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
         };
         img.onerror = () => {
             console.error("影像載入失敗，採用原始檔案上傳");

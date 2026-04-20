@@ -214,42 +214,10 @@ window.handleProductFiles = function(input) {
     }
 };
 
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-    });
-}
 
-async function generateWebPBlob(file) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const max_size = 1200; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
-        };
-    });
-}
 
-async function uploadToR2(blob, fileName) {
-    const formData = new FormData();
-    formData.append('file', blob, fileName);
-    const response = await fetch(WORKER_URL, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('伺服器上傳失敗');
-    const resData = await response.json();
-    return resData.url;
-}
+
+
 
 // ✨ 修改版：AI 只負責記錄，上傳時觸發分流進入 MY_BUCKET
 window.publishProduct = async function() {
@@ -271,32 +239,41 @@ window.publishProduct = async function() {
 
         btn.disabled = true;
 
-        let uploadedUrls = [];
-        let lastAiReport = null;
+        btn.innerText = `🔍 影像分析與優化中 (0/${selectedFiles.length})...`;
 
-        for (let i = 0; i < selectedFiles.length; i++) {
-            const file = selectedFiles[i];
-            
+        let processedCount = 0;
+        const uploadPromises = selectedFiles.map(async (file, i) => {
             // 1. AI 報告生成階段
-            btn.innerText = `🔍 AI 分析中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
             });
 
+            let aiReport = null;
             if (!auditError && audit) {
-                lastAiReport = audit.safeSearchAnnotation || audit;
+                aiReport = audit.safeSearchAnnotation || audit;
             }
 
             // 2. 轉換與上傳
-            btn.innerText = `📦 優化影像中 (${i+1}/${selectedFiles.length})...`;
-            const webpBlob = await generateWebPBlob(file);
+            const webpBlob = await window.generateWebPBlob(file);
             
             // ✨【核心修復】檔名必須包含 "product"，觸發 Worker 存入 MY_BUCKET (products/)
             const fileName = `product_${Date.now()}_${i}.webp`; 
-            
-            const uploadedUrl = await uploadToR2(webpBlob, fileName);
-            uploadedUrls.push(uploadedUrl);
+            const uploadedUrl = await window.uploadToR2File(webpBlob, fileName);
+
+            processedCount++;
+            btn.innerText = `🔍 影像分析與優化中 (${processedCount}/${selectedFiles.length})...`;
+
+            return { uploadedUrl, aiReport };
+        });
+
+        const results = await Promise.all(uploadPromises);
+        const uploadedUrls = results.map(r => r.uploadedUrl);
+
+        // 取得最後一個成功的 AI 報告 (保留原邏輯：lastAiReport 會是迴圈中最後一個有效值)
+        let lastAiReport = null;
+        for (const res of results) {
+            if (res.aiReport) lastAiReport = res.aiReport;
         }
 
         btn.innerText = "資料寫入中...";

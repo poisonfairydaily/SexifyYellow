@@ -338,7 +338,6 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
             const filePath = mediaUrl.split('/storage/v1/object/public/media/')[1];
             if (filePath) {
                 await window.supabaseClient.storage.from('media').remove([filePath]);
-                console.log("Supabase Storage 檔案已連動刪除:", filePath);
             }
         }
 

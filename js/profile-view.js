@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 防止自己看自己，如果是自己就跳回首頁的「我」
-    if(targetUserId === localStorage.getItem('userId')) {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if(targetUserId === session?.user?.id) {
         window.location.href = 'index.html';
         return;
     }
