@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請)
+// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請 + 退出群組)
 // ==========================================
 
 window.activeRoomId = null;
@@ -632,6 +632,55 @@ window.kickGroupMember = async function(userId) {
         .delete()
         .eq('group_id', window.activeRoomId).eq('user_id', userId);
     await window.loadGroupMembers();
+};
+
+// ✨ 新增：自行退出群組功能 (含群主自動移交或自動解散邏輯)
+window.leaveGroup = async function() {
+    if (!confirm('確定要退出這個群組嗎？')) return;
+    
+    const myId = await getValidUserId();
+    if (!myId || !window.activeRoomId) return;
+
+    try {
+        // 檢查自己是否為群主
+        const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
+        
+        if (groupData && groupData.owner_id === myId) {
+            // 若是群主，檢查群組內是否還有其他人
+            const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
+            const otherMembers = members.filter(m => m.user_id !== myId);
+            
+            if (otherMembers.length > 0) {
+                // 將群主自動轉讓給下一位成員
+                const newOwnerId = otherMembers[0].user_id;
+                await window.supabaseClient.from('chat_groups').update({ owner_id: newOwnerId }).eq('id', window.activeRoomId);
+            } else {
+                // 若無其他成員，直接刪除該群組
+                await window.supabaseClient.from('chat_groups').delete().eq('id', window.activeRoomId);
+                window.closeGroupSettings();
+                window.closeChat();
+                if(typeof window.renderMessages === 'function') window.renderMessages();
+                return;
+            }
+        }
+
+        // 刪除自己的成員記錄
+        const { error } = await window.supabaseClient.from('chat_group_members')
+            .delete()
+            .eq('group_id', window.activeRoomId)
+            .eq('user_id', myId);
+
+        if (error) throw error;
+
+        alert('已成功退出群組');
+        window.closeGroupSettings();
+        window.closeChat();
+        if(typeof window.renderMessages === 'function') window.renderMessages();
+        
+    } catch (err) {
+        console.error("退出群組失敗:", err);
+        alert('退出群組失敗，請稍後再試。');
+    }
 };
 
 // ==========================================
