@@ -104,3 +104,64 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <button id="tab-fans"></button>
+            <button id="tab-subs"></button>
+            <div id="fans-subs-list"></div>
+        `;
+
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly for fans tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        // Check if getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+
+        // Check if error message is displayed
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles Supabase fetch error correctly for subs tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        // Check if getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+
+        // Check if error message is displayed
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});
