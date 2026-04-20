@@ -64,9 +64,17 @@ function generateRoomId(id1, id2) {
 function scrollToBottom() {
     const container = document.getElementById('chat-messages');
     if (container) {
+        // Use requestAnimationFrame to ensure DOM is updated before getting scrollHeight
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+        // Fallback with setTimeout
         setTimeout(() => {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }, 150);
+            container.scrollTop = container.scrollHeight;
+        }, 100);
+        setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+        }, 300);
     }
 }
 
@@ -115,15 +123,14 @@ window.handleSendAction = async function() {
 };
 
 // 渲染對話內容 (✨新增影片判斷與渲染)
-function drawMessages(messages) {
+async function drawMessages(messages) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
     
-    window.supabaseClient.auth.getUser().then(({data: {user}}) => {
-        const myId = user?.id;
-        let lastDate = null;
+    const myId = await getValidUserId();
+    let lastDate = null;
 
-        container.innerHTML = messages.map(m => {
+    container.innerHTML = messages.map(m => {
             const isMine = m.sender_name === myId;
             const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
             const wrapperClass = isMine ? 'justify-end' : 'justify-start';
@@ -165,7 +172,29 @@ function drawMessages(messages) {
                     </div>
                 </div>`;
         }).join('');
-    });
+
+    // Wait for images to load before scrolling
+    const images = container.querySelectorAll('img');
+    let loadedCount = 0;
+    if (images.length > 0) {
+        images.forEach(img => {
+            if (img.complete) {
+                loadedCount++;
+                if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
+            } else {
+                img.onload = () => {
+                    loadedCount++;
+                    if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
+                };
+                img.onerror = () => {
+                    loadedCount++;
+                    if (loadedCount === images.length) setTimeout(scrollToBottom, 50);
+                };
+            }
+        });
+    } else {
+        setTimeout(scrollToBottom, 50);
+    }
 }
 
 // 渲染訊息列表 (✨新增未讀數量計算)
@@ -276,7 +305,7 @@ window.openChat = async function(targetUid, displayName, avatarUrl) {
     if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
     
     await loadMessages();
-    scrollToBottom();
+    setTimeout(scrollToBottom, 50); // Ensure rendering is done before scrolling
     setupChatRealtime();
 };
 
@@ -284,7 +313,7 @@ async function loadMessages() {
     if (!window.activeRoomId) return;
     const { data, error } = await window.supabaseClient.from('messages')
         .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
-    if (!error) drawMessages(data);
+    if (!error) await drawMessages(data);
 }
 
 function setupChatRealtime() {
@@ -305,7 +334,7 @@ function setupChatRealtime() {
             await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
             
             await loadMessages();
-            scrollToBottom();
+            setTimeout(scrollToBottom, 50);
             
             // ✨ 同步更新外層最新文字與全域紅點
             if(typeof window.renderMessages === 'function') window.renderMessages();
