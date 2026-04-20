@@ -1,5 +1,5 @@
 // ==========================================
-// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復)
+// js/messages.js - 完整升級版 (支援群組聊天 + 影片支援 + 在線狀態修復 + 空群組顯示與創建邀請)
 // ==========================================
 
 window.activeRoomId = null;
@@ -191,15 +191,15 @@ function drawMessages(messages, profileMap = null) {
     });
 }
 
-// 渲染訊息列表 (✨新增支援群組與 1v1 混排)
+// 渲染訊息列表 (✨新增支援群組與 1v1 混排，並處理空群組顯示)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
     if (!container || !myId) return;
 
-    // ✨ 抓取我所屬的所有群組
+    // ✨ 抓取我所屬的所有群組 (加入 created_at 以利排序)
     const { data: myGroups } = await window.supabaseClient.from('chat_group_members')
-        .select('group_id, last_read_time, chat_groups(name, avatar_url)').eq('user_id', myId);
+        .select('group_id, last_read_time, chat_groups(name, avatar_url, created_at)').eq('user_id', myId);
     
     const groupMap = {};
     const groupIds = [];
@@ -220,12 +220,13 @@ window.renderMessages = async function() {
         .select('*').or(orQuery)
         .order('created_at', { ascending: false });
 
-    if (!msgData) return;
+    // 修改：防止新帳號無紀錄時發生錯誤，並確保能顯示空群組
+    const msgs = msgData || [];
 
     const rooms = {};
     const unreadCounts = {};
 
-    msgData.forEach(m => { 
+    msgs.forEach(m => { 
         if (!rooms[m.room_id]) rooms[m.room_id] = m; // 保留每個房間最新的一則訊息
         
         const isGroup = groupIds.includes(m.room_id);
@@ -244,8 +245,23 @@ window.renderMessages = async function() {
             }
         }
     });
+
+    // ✨ 新增邏輯：如果群組內「還沒有任何訊息」，手動為它創建一條空顯示紀錄，確保它能出現在畫面上
+    groupIds.forEach(gid => {
+        if (!rooms[gid]) {
+            rooms[gid] = {
+                room_id: gid,
+                content: '群組已建立，快來發送第一則訊息吧！',
+                created_at: groupMap[gid].created_at || new Date().toISOString(),
+                sender_name: myId,
+                receiver: myId
+            };
+        }
+    });
     
-    const sortedRooms = Object.values(rooms);
+    // ✨ 將所有房間依照時間重新排序，確保新群組置頂
+    const sortedRooms = Object.values(rooms).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
     // 找出所有 1v1 的目標用戶 ID 來抓取頭像
     const targetIds = sortedRooms.filter(m => !groupIds.includes(m.room_id)).map(m => m.sender_name === myId ? m.receiver : m.sender_name);
     const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', targetIds);
@@ -468,7 +484,10 @@ window.closeCreateGroupModal = function() {
 
 window.handleCreateGroup = async function() {
     const nameInput = document.getElementById('new-group-name');
+    const membersInput = document.getElementById('new-group-members-input'); // ✨ 獲取新加入的輸入框
     const name = nameInput.value.trim();
+    const membersStr = membersInput ? membersInput.value.trim() : '';
+
     if (!name) return alert('請輸入群組名稱');
     
     const myId = await getValidUserId();
@@ -483,14 +502,42 @@ window.handleCreateGroup = async function() {
 
         if (groupErr) throw groupErr;
 
-        // 2. 將自己加入群組成員
-        await window.supabaseClient.from('chat_group_members').insert([{
+        // 準備要加入的成員陣列 (預設自己一定加入)
+        const membersToInsert = [{
             group_id: groupData.id,
             user_id: myId
-        }]);
+        }];
+
+        // ✨ 2. 解析邀請名單並模糊搜尋用戶
+        if (membersStr) {
+            const terms = membersStr.split(',').map(s => s.trim()).filter(s => s);
+            if (terms.length > 0) {
+                // 組裝搜尋條件，支援搜尋 username 或 display_name
+                let orConditions = terms.map(t => `username.ilike.%${t}%,display_name.ilike.%${t}%`).join(',');
+                
+                const { data: foundUsers } = await window.supabaseClient.from('profiles')
+                    .select('id')
+                    .or(orConditions);
+
+                if (foundUsers && foundUsers.length > 0) {
+                    foundUsers.forEach(u => {
+                        if (u.id !== myId) {
+                            membersToInsert.push({
+                                group_id: groupData.id,
+                                user_id: u.id
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
+        // 3. 批量將自己與查找到的其他成員加入群組
+        await window.supabaseClient.from('chat_group_members').insert(membersToInsert);
 
         window.closeCreateGroupModal();
         nameInput.value = '';
+        if (membersInput) membersInput.value = ''; // 清空輸入框
         alert('群組建立成功！');
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (err) {
