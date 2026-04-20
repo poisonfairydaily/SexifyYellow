@@ -104,3 +104,54 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="tab-fans" class=""></div>
+            <div id="tab-subs" class=""></div>
+            <div id="fans-subs-list"></div>
+        `;
+
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error for fans tab', async () => {
+        const mockError = new Error('Fans fetch failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles Supabase fetch error for subs tab', async () => {
+        const mockError = new Error('Subs fetch failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});
