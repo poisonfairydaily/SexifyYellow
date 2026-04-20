@@ -212,9 +212,9 @@ window.renderProfile = async function() {
     if (!container) return;
 
     const myId = await getAuthenticatedUserId();
-    if (!myId) { 
-        container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`; 
-        return; 
+    if (!myId) {
+        container.innerHTML = `<div class="p-10 text-center text-gray-400 mt-20">請先登入</div>`;
+        return;
     }
 
     // Initialize global tab state if not set
@@ -241,10 +241,10 @@ window.renderProfile = async function() {
         const followersCount = followersRes.count || 0;
 
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
-        
+
         const bannerUrl = (profile.banner_url && profile.banner_url.startsWith('http')) ? profile.banner_url : null;
-        const bannerHtml = bannerUrl 
-            ? `<img src="${bannerUrl}" class="w-full h-40 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div class="hidden w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>` 
+        const bannerHtml = bannerUrl
+            ? `<img src="${bannerUrl}" class="w-full h-40 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div class="hidden w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`
             : `<div class="w-full h-40 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400"></div>`;
 
         let html = `
@@ -294,7 +294,7 @@ window.renderProfile = async function() {
                     </div>
                 </div>
             </div>
-            
+
             <div class="bg-gray-50 pt-3 pb-32 min-h-[300px]"><div class="masonry-grid px-2" id="profile-masonry-grid">
             </div></div>`;
             container.innerHTML = html;
@@ -611,9 +611,9 @@ window.handleProfileSearch = function(val) {
 window.renderProfileGrid = async function() {
     const grid = document.getElementById('profile-masonry-grid');
     if(!grid) return;
-    
+
     grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-3xl"></i></div>`;
-    
+
     try {
         const myId = await getAuthenticatedUserId();
         if(!myId) return;
@@ -697,14 +697,14 @@ window.renderProfileGrid = async function() {
                      onpointerup="window.cancelLongPress()"
                      onpointerleave="window.cancelLongPress()"
                      onpointercancel="window.cancelLongPress()">
-                     
+
                     ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字</div>`}
                     ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖內容</span></div>` : ''}
                 </div>
 
                 <div class="p-3 bg-white">
                     <p class="text-[13px] text-gray-900 line-clamp-2 leading-snug font-medium mb-2.5">${safeCaption}</p>
-                    
+
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-1.5 min-w-0" onclick="event.stopPropagation(); window.viewCreatorProfile('${post.user_id}')">
                             <img src="${safeAvatar}" class="w-4 h-4 rounded-full object-cover shrink-0" loading="lazy">
