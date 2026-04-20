@@ -226,7 +226,7 @@
                 <button onclick="window.closeChat()" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition">
                     <i class="fa-solid fa-chevron-left text-xl"></i>
                 </button>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 cursor-pointer" onclick="if(window.activeIsGroup) window.openGroupSettings()">
                     <img id="chat-target-avatar" src=""
                          class="w-10 h-10 rounded-full object-cover bg-gray-100 border border-gray-100"
                          onerror="this.src='https://ui-avatars.com/api/?name=User&background=random'">
@@ -236,7 +236,7 @@
                     </div>
                 </div>
             </div>
-            <button id="group-options-btn" onclick="window.openGroupSettings()" class="hidden text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition">
+            <button id="group-options-btn" onclick="window.openGroupSettings()" style="display: none;" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition bg-gray-100 rounded-full">
                 <i class="fa-solid fa-ellipsis-vertical text-xl"></i>
             </button>
         </header>
