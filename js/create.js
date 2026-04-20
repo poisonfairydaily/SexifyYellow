@@ -19,53 +19,13 @@ window.escapeHTML = function(str) {
  * ✨ 影像處理引擎：加固 WebP 版
  * 使用 decode() 確保數據完整，防止產出 [object File] 或空殼損毀檔案
  */
-async function generateWebPBlob(file) {
-    if (file.type.startsWith('video/')) return file;
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const max_size = 1200; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85);
-        };
-        img.onerror = () => {
-            console.error("影像載入失敗，採用原始檔案上傳");
-            resolve(file);
-        };
-    });
-}
+
 
 
 /**
  * ✨ R2 上傳核心
  */
-async function uploadToR2(blob, fileName) {
-    const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
-    const formData = new FormData();
-    // 關鍵：將二進位數據與乾淨檔名封裝
-    formData.append('file', blob, fileName);
 
-    const response = await fetch(WORKER_URL + 'upload', {
-        method: 'POST',
-        body: formData
-    });
-
-    if (!response.ok) throw new Error(`R2 上傳連線失敗: ${response.status}`);
-    
-    const result = await response.json();
-    if (!result.success) throw new Error(result.error || 'Worker 處理異常');
-    
-    // 返回代理後的 URL，這會經過 Worker 的 GET 邏輯 (自帶正確 MIME 與 CORS)
-    return result.url;
-}
 
 // --- 🖼️ 1. UI 控制與預覽邏輯 ---
 
@@ -192,7 +152,7 @@ window.publishPost = async function() {
             btn.innerText = "🚀 優化媒體上傳中...";
             
             // 1. 生成 WebP Blob
-            const blob = await generateWebPBlob(selectedFile);
+            const blob = await window.generateWebPBlob(selectedFile);
             
             // 2. ✨【分流密鑰】檔名不含 "product"，確保 Worker 存入 POST_BUCKET
             const randomID = Math.random().toString(36).substring(7);
@@ -201,7 +161,7 @@ window.publishPost = async function() {
             const cleanFileName = `post_${Date.now()}_${randomID}.${extension}`;
 
             // 3. 執行 R2 代理上傳
-            mediaUrl = await uploadToR2(blob, cleanFileName);
+            mediaUrl = await window.uploadToR2File(blob, cleanFileName);
         }
 
         btn.innerText = "💾 存入資料庫...";
