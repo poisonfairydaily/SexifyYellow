@@ -11,6 +11,8 @@ describe('window.handleShare', () => {
         originalWindow = global.window;
         originalConsoleLog = console.log;
         originalAlert = global.alert;
+        originalShare = global.navigator.share;
+        originalClipboard = global.navigator.clipboard;
 
         global.window = {
             location: { origin: 'http://localhost' }
@@ -93,6 +95,7 @@ describe('window.handleShare', () => {
     });
 
     test('should log error if clipboard fallback fails', async () => {
+        delete global.navigator.share;
         const error = new Error('Clipboard failed');
         const mockWriteText = jest.fn().mockRejectedValue(error);
         Object.defineProperty(navigator, 'clipboard', {
