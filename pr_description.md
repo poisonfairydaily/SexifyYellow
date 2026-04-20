@@ -1,13 +1,18 @@
-🧹 [Code Health] Remove Unused Success-Level Console Logs
+🧪 [testing improvement description]
+====================================
 
 🎯 **What:**
-Removed several unnecessary `console.log` statements that provided success-level feedback in production code (specifically in `js/admin.js`, `js/supabase-config.js`, and `js/messages.js`).
+- The gap in testing for `window.saveUserProfile` handling Promise.all errors has been addressed.
+- The existing Jest test suite in `js/app.test.js` was modified to include the new test cases.
+- Additionally, previously broken tests for `window.handleShare` caused by JSDOM's read-only navigator object were resolved.
 
-💡 **Why:**
-These logs provided no meaningful value in a production environment and cluttered the console output. Removing them improves the codebase's readability and follows the best practice of keeping the console clean of noise.
-
-✅ **Verification:**
-Verified the changes by manually confirming syntax correctness with `node -c` for the modified JavaScript files (`js/admin.js`, `js/supabase-config.js`, `js/messages.js`). Ensured that no runtime logic or dependencies were altered.
+📊 **Coverage:**
+The new test suite covers:
+- Early return for unauthenticated users (no `userId`).
+- Simulated failures during the public profile update process.
+- Simulated failures during the private data update process.
+- The happy path for successful user profile updates.
 
 ✨ **Result:**
-Cleaner console output, improving code maintainability without changing any existing application behavior.
+- Test coverage has improved significantly.
+- All tests in the test suite pass correctly without polluting the environment or outputting untracked error messages.
