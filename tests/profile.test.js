@@ -60,3 +60,63 @@ describe('escapeHTML', () => {
         expect(window.escapeHTML({ toString: () => '<obj>' })).toBe('&lt;obj&gt;');
     });
 });
+
+describe('Fans and Subs Tabs Error Handling', () => {
+    let list;
+    let btnFans;
+    let btnSubs;
+
+    beforeEach(() => {
+        // Setup document body
+        document.body.innerHTML = `
+            <div id="tab-fans"></div>
+            <div id="tab-subs"></div>
+            <div id="fans-subs-list"></div>
+        `;
+        list = document.getElementById('fans-subs-list');
+        btnFans = document.getElementById('tab-fans');
+        btnSubs = document.getElementById('tab-subs');
+
+        // Mock dependencies
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('test-user-id');
+        window.supabaseClient = {
+            from: jest.fn()
+        };
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+
+    test('should show error message when fetching fans fails', async () => {
+        window.supabaseClient.from.mockImplementation((table) => {
+            if (table === 'subscriptions') {
+                return {
+                    select: () => ({
+                        eq: jest.fn().mockResolvedValue({ data: null, error: new Error('Database Error') })
+                    })
+                };
+            }
+        });
+
+        await window.switchFansTab('fans');
+
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('should show error message when fetching subs fails', async () => {
+        window.supabaseClient.from.mockImplementation((table) => {
+            if (table === 'subscriptions') {
+                return {
+                    select: () => ({
+                        eq: jest.fn().mockResolvedValue({ data: null, error: new Error('Database Error') })
+                    })
+                };
+            }
+        });
+
+        await window.switchFansTab('subs');
+
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});

@@ -36,9 +36,10 @@ describe('window.handleShare', () => {
     });
 
     beforeEach(() => {
+        global.navigator.share = undefined;
+        global.navigator.clipboard = undefined;
         console.log = jest.fn();
         global.alert = jest.fn();
-        global.navigator = {}; // Reset navigator mocks
     });
 
     test('should use navigator.share if available', async () => {
@@ -58,6 +59,7 @@ describe('window.handleShare', () => {
         global.navigator.clipboard = {
             writeText: jest.fn().mockResolvedValue()
         };
+        global.navigator.share = undefined;
 
         await window.handleShare('123', 'Test Title');
 
@@ -81,6 +83,7 @@ describe('window.handleShare', () => {
         global.navigator.clipboard = {
             writeText: jest.fn().mockRejectedValue(error)
         };
+        global.navigator.share = undefined;
 
         await window.handleShare('123', 'Test Title');
 
