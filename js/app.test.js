@@ -17,7 +17,7 @@ describe('window.handleShare', () => {
         global.window = {
             location: { origin: 'http://localhost' }
         };
-        global.navigator = {};
+        Object.defineProperty(global, 'navigator', { value: {}, writable: true });
         global.document = {
             addEventListener: jest.fn() // to prevent errors when evaluating app.js
         };

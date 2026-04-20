@@ -1,13 +1,11 @@
-🧹 [Code Health] Remove Unused Success-Level Console Logs
+# 🔒 [security fix] Remove sensitive data from localStorage
 
-🎯 **What:**
-Removed several unnecessary `console.log` statements that provided success-level feedback in production code (specifically in `js/admin.js`, `js/supabase-config.js`, and `js/messages.js`).
+🎯 **What:** The application was storing sensitive user identifiers (`userId`, `myChatName`) in `localStorage` in various files. This exposes user data if an XSS vulnerability is exploited.
 
-💡 **Why:**
-These logs provided no meaningful value in a production environment and cluttered the console output. Removing them improves the codebase's readability and follows the best practice of keeping the console clean of noise.
+⚠️ **Risk:** Storing user identifiers and sensitive metadata in `localStorage` increases the blast radius of XSS attacks, allowing malicious scripts to steal identities and interact with the application under the guise of an authenticated user.
 
-✅ **Verification:**
-Verified the changes by manually confirming syntax correctness with `node -c` for the modified JavaScript files (`js/admin.js`, `js/supabase-config.js`, `js/messages.js`). Ensured that no runtime logic or dependencies were altered.
-
-✨ **Result:**
-Cleaner console output, improving code maintainability without changing any existing application behavior.
+🛡️ **Solution:**
+- Removed all instances of `localStorage.setItem` that were caching `userId` and `myChatName`.
+- Updated all references to `localStorage.getItem('userId')` to securely and asynchronously fetch the user ID directly from `await window.supabaseClient.auth.getSession()`.
+- Updated tests (`tests/test_app_notifications.js`) to properly mock the Supabase session retrieval logic.
+- Adjusted `@babel/preset-env` and `navigator` global mocking in `app.test.js` to ensure the testing environment correctly runs the modern asynchronous code and updated JSDOM configurations.

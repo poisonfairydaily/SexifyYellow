@@ -174,8 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. 立即檢查一次 Session
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) {
-        localStorage.setItem('userId', session.user.id);
-        localStorage.setItem('myChatName', session.user.user_metadata?.display_name || "使用者");
+        // We no longer store userId or myChatName in localStorage to avoid data exposure
         updateUIAccess(true);
         window.dispatchEvent(new Event('authReady'));
     } else {
