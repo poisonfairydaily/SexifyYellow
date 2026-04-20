@@ -1,4 +1,3 @@
-
 const fs = require('fs');
 const path = require('path');
 
@@ -7,7 +6,7 @@ const path = require('path');
  */
 
 // Load the production code
-const shopJs = fs.readFileSync(path.resolve(__dirname, 'shop.js'), 'utf8');
+const shopJs = fs.readFileSync(path.resolve(__dirname, '../js/shop.js'), 'utf8');
 
 describe('getSafeImageUrl', () => {
     let getSafeImageUrl;
@@ -105,5 +104,90 @@ describe('getSafeImageUrl', () => {
 
         getSafeImageUrl(internalPath);
         expect(global.window.supabaseClient.storage.from).toHaveBeenCalledWith('previews');
+    });
+});
+
+describe('renderProductGrid', () => {
+    let mockGrid;
+    let mockQuery;
+
+    beforeEach(() => {
+        global.window = {
+            escapeHTML: jest.fn(str => str),
+            getSafeImageUrl: jest.fn(url => url || 'safe-image-url.jpg'),
+            shopFilterType: 'all',
+            shopSortType: 'new',
+            getAvatar: jest.fn(url => url || 'default-avatar.jpg')
+        };
+        global.document = {
+            createElement: jest.fn(),
+            addEventListener: jest.fn(),
+            getElementById: jest.fn(),
+            body: {
+                appendChild: jest.fn(),
+                style: {}
+            }
+        };
+        global.currentView = 'all';
+
+        mockGrid = {
+            innerHTML: ''
+        };
+
+        mockQuery = {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            ilike: jest.fn().mockReturnThis(),
+            order: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            then: jest.fn((resolve) => resolve({ data: [] }))
+        };
+
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user123' } } })
+            },
+            from: jest.fn().mockReturnValue(mockQuery)
+        };
+
+        // Execute script
+        eval(shopJs);
+    });
+
+    afterEach(() => {
+        delete global.window;
+        delete global.document;
+        delete global.currentView;
+        delete global.renderProductGrid;
+    });
+
+    test('error path: handles rejection when loading user', async () => {
+        eval(shopJs + '\n global.renderProductGrid = renderProductGrid;');
+        const testError = new Error('Network error');
+        global.window.supabaseClient.auth.getUser.mockRejectedValue(testError);
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await global.renderProductGrid(mockGrid, 'test-keyword');
+
+        expect(consoleSpy).toHaveBeenCalledWith("渲染清單崩潰:", testError);
+        expect(mockGrid.innerHTML).toContain('無法載入商品資料');
+
+        consoleSpy.mockRestore();
+    });
+
+    test('error path: handles rejection from products query', async () => {
+        eval(shopJs + '\n global.renderProductGrid = renderProductGrid;');
+        const testError = new Error('DB Error');
+        mockQuery.then = jest.fn((resolve, reject) => reject(testError));
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await global.renderProductGrid(mockGrid, 'test-keyword');
+
+        expect(consoleSpy).toHaveBeenCalledWith("渲染清單崩潰:", testError);
+        expect(mockGrid.innerHTML).toContain('無法載入商品資料');
+
+        consoleSpy.mockRestore();
     });
 });
