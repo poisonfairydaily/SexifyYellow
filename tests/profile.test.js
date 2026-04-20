@@ -104,3 +104,57 @@ describe('viewOtherProfile Error Handling', () => {
         expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <button id="tab-fans"></button>
+            <button id="tab-subs"></button>
+            <div id="fans-subs-list"></div>
+        `;
+
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly when loading fans', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myId)
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles Supabase fetch error correctly when loading subs', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myId)
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});
