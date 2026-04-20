@@ -12,7 +12,6 @@ window.R2_PUBLIC_URL = "https://pub-2915df0675504948a36a7921daf79af1.r2.dev"; //
 // 3. 建立連線並設為全域變數
 if (window.supabase) {
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log("✅ Supabase 連線已成功初始化！");
 } else {
     console.error("❌ 找不到 Supabase 核心套件，請確認 index.html 有正確引入。");
 }
