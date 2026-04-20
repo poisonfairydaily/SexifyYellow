@@ -410,7 +410,11 @@
                 <div class="absolute left-1/2 -translate-x-1/2 -top-6 z-50">
                     <button onclick="openUploadModal()" class="w-14 h-14 bg-sexify text-white rounded-full flex items-center justify-center border-4 border-white shadow-xl active:scale-90 transition"><i class="fa-solid fa-plus text-2xl text-white"></i></button>
                 </div>
-                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative"><i class="fa-solid fa-comment-dots mb-1 text-xl"></i><span class="text-[10px] font-bold" data-i18n="nav_msg">訊息</span></button>
+                <button onclick="switchTab('messages-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1 pl-6 relative">
+                    <i class="fa-solid fa-comment-dots mb-1 text-xl"></i>
+                    <span class="text-[10px] font-bold" data-i18n="nav_msg">訊息</span>
+                    <span id="nav-msg-badge" class="absolute top-1 right-[20%] w-2 h-2 bg-red-500 rounded-full hidden"></span>
+                </button>
                 <button onclick="switchTab('profile-tab', this)" class="nav-btn text-gray-400 flex flex-col items-center flex-1"><i class="fa-regular fa-user mb-1 text-xl"></i><span class="text-[10px] font-bold" data-i18n="nav_me">我</span></button>
             </div>
         </nav>
