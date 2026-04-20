@@ -236,7 +236,7 @@
                     </div>
                 </div>
             </div>
-            <button id="group-options-btn" onclick="window.openGroupSettings()" class="hidden text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition">
+            <button id="chat-options-btn" onclick="window.openChatSettings()" class="hidden text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition">
                 <i class="fa-solid fa-ellipsis-vertical text-xl"></i>
             </button>
         </header>
@@ -266,17 +266,20 @@
        </div>
     </div>
 
-    <div id="group-settings-modal" class="fixed inset-0 z-[1100] hidden bg-black/60 backdrop-blur-sm flex-col transform translate-y-full transition-transform duration-300">
+    <div id="chat-settings-modal" class="fixed inset-0 z-[1100] hidden bg-black/60 backdrop-blur-sm flex-col transform translate-y-full transition-transform duration-300">
        <div class="bg-white flex-1 mt-20 rounded-t-[2.5rem] overflow-hidden flex flex-col shadow-2xl">
            <header class="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-               <h2 class="font-black text-xl">群組成員</h2>
-               <button onclick="window.closeGroupSettings()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
+               <h2 id="chat-settings-title" class="font-black text-xl">群組成員</h2>
+               <button onclick="window.closeChatSettings()" class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 active:scale-90 transition"><i class="fa-solid fa-xmark"></i></button>
            </header>
-           <div class="p-4 border-b flex gap-2 bg-white">
+           <div id="group-add-section" class="p-4 border-b flex gap-2 bg-white">
                <input type="text" id="group-add-user-input" placeholder="輸入用戶的顯示名稱或 Username" class="flex-1 bg-gray-50 rounded-xl p-3 outline-none text-sm focus:ring-2 focus:ring-sexify">
                <button onclick="window.addGroupMember()" class="bg-black text-white px-5 rounded-xl font-bold text-sm active:scale-95 transition">邀請</button>
            </div>
            <div id="group-members-list" class="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-2"></div>
+           <div class="p-6 border-t bg-white">
+               <button id="leave-delete-btn" class="w-full bg-red-50 text-red-500 font-bold py-3.5 rounded-2xl active:scale-95 transition shadow-sm">退出群組</button>
+           </div>
        </div>
     </div>
 
