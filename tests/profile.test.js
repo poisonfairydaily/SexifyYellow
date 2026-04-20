@@ -60,3 +60,85 @@ describe('escapeHTML', () => {
         expect(window.escapeHTML({ toString: () => '<obj>' })).toBe('&lt;obj&gt;');
     });
 });
+
+describe('openEditProfile try/catch block', () => {
+    let originalAlert;
+    let originalGetAuthenticatedUserId;
+
+    beforeEach(() => {
+        // Mock DOM elements
+        document.body.innerHTML = `
+            <div id="edit-profile-modal" class="hidden"></div>
+            <input id="edit-display-name" />
+            <input id="edit-bio" />
+            <img id="edit-banner-preview" />
+            <div id="banner-placeholder"></div>
+            <canvas id="avatar-canvas"></canvas>
+        `;
+
+        originalAlert = window.alert;
+        window.alert = jest.fn();
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({
+                data: {
+                    display_name: 'Test User',
+                    bio: 'Test Bio',
+                    avatar_url: 'http://example.com/avatar.jpg',
+                    banner_url: 'http://example.com/banner.jpg'
+                }
+            })
+        };
+
+        window.resetAvatarTransform = jest.fn();
+
+        originalGetAuthenticatedUserId = global.getAuthenticatedUserId;
+        global.getAuthenticatedUserId = jest.fn().mockResolvedValue('test-user-id');
+        window.getAuthenticatedUserId = global.getAuthenticatedUserId;
+    });
+
+    afterEach(() => {
+        window.alert = originalAlert;
+        global.getAuthenticatedUserId = originalGetAuthenticatedUserId;
+        window.getAuthenticatedUserId = originalGetAuthenticatedUserId;
+    });
+
+    test('catches error when getAuthenticatedUserId fails and alerts "無法讀取個人資料"', async () => {
+        global.getAuthenticatedUserId = jest.fn().mockRejectedValue(new Error('Auth failed'));
+        window.getAuthenticatedUserId = global.getAuthenticatedUserId;
+
+        await window.openEditProfile();
+
+        expect(window.alert).toHaveBeenCalledWith('無法讀取個人資料');
+
+        const modal = document.getElementById('edit-profile-modal');
+        expect(modal.classList.contains('hidden')).toBe(true);
+        expect(modal.classList.contains('flex')).toBe(false);
+    });
+
+    test('catches error when Supabase fails and alerts "無法讀取個人資料"', async () => {
+        window.supabaseClient.single = jest.fn().mockRejectedValue(new Error('DB connection failed'));
+
+        await window.openEditProfile();
+
+        expect(window.alert).toHaveBeenCalledWith('無法讀取個人資料');
+
+        const modal = document.getElementById('edit-profile-modal');
+        expect(modal.classList.contains('hidden')).toBe(true);
+        expect(modal.classList.contains('flex')).toBe(false);
+    });
+
+    test('successfully populates DOM on valid profile load', async () => {
+        await window.openEditProfile();
+
+        expect(document.getElementById('edit-display-name').value).toBe('Test User');
+        expect(document.getElementById('edit-bio').value).toBe('Test Bio');
+
+        const modal = document.getElementById('edit-profile-modal');
+        expect(modal.classList.contains('hidden')).toBe(false);
+        expect(modal.classList.contains('flex')).toBe(true);
+    });
+});

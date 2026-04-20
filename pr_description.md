@@ -1,13 +1,13 @@
-🧹 [Code Health] Remove Unused Success-Level Console Logs
+🧪 Add tests for window.openEditProfile try/catch block
 
 🎯 **What:**
-Removed several unnecessary `console.log` statements that provided success-level feedback in production code (specifically in `js/admin.js`, `js/supabase-config.js`, and `js/messages.js`).
+Added a new test suite to `tests/profile.test.js` to cover the `try/catch` block inside `window.openEditProfile`.
 
-💡 **Why:**
-These logs provided no meaningful value in a production environment and cluttered the console output. Removing them improves the codebase's readability and follows the best practice of keeping the console clean of noise.
-
-✅ **Verification:**
-Verified the changes by manually confirming syntax correctness with `node -c` for the modified JavaScript files (`js/admin.js`, `js/supabase-config.js`, `js/messages.js`). Ensured that no runtime logic or dependencies were altered.
+📊 **Coverage:**
+The added test suite `openEditProfile try/catch block` covers:
+- Simulating a rejection from `getAuthenticatedUserId()` and verifying that the correct error alert is displayed.
+- Simulating a rejection from `window.supabaseClient.from().select().eq().single()` when fetching the profile and verifying that the error is correctly handled.
+- Simulating a successful load to ensure DOM elements correctly receive the profile data.
 
 ✨ **Result:**
-Cleaner console output, improving code maintainability without changing any existing application behavior.
+Improved the testing reliability of the profile editing modal functionality. Handled potential async failures during initialization and increased overall codebase test coverage.

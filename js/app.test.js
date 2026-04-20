@@ -2,47 +2,46 @@ const fs = require('fs');
 const path = require('path');
 
 describe('window.handleShare', () => {
-    let originalWindow;
-    let originalNavigator;
     let originalConsoleLog;
     let originalAlert;
+    let originalShare;
+    let originalClipboard;
 
     beforeAll(() => {
-        // Set up globals
-        originalWindow = global.window;
-        originalNavigator = global.navigator;
         originalConsoleLog = console.log;
         originalAlert = global.alert;
+        originalShare = global.navigator.share;
+        originalClipboard = global.navigator.clipboard;
 
-        global.window = {
-            location: { origin: 'http://localhost' }
-        };
-        global.navigator = {};
-        global.document = {
-            addEventListener: jest.fn() // to prevent errors when evaluating app.js
-        };
+        // Clean way to handle window.location
+        delete global.window.location;
+        global.window.location = new URL('http://localhost');
 
-        // Load app.js
+        global.document.addEventListener = jest.fn();
+
         const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf-8');
         eval(appCode);
     });
 
     afterAll(() => {
-        global.window = originalWindow;
-        global.navigator = originalNavigator;
         console.log = originalConsoleLog;
         global.alert = originalAlert;
-        delete global.document;
+        global.navigator.share = originalShare;
+        global.navigator.clipboard = originalClipboard;
     });
 
     beforeEach(() => {
         console.log = jest.fn();
         global.alert = jest.fn();
-        global.navigator = {}; // Reset navigator mocks
+
+        global.navigator.share = jest.fn();
+        global.navigator.clipboard = {
+            writeText: jest.fn()
+        };
     });
 
     test('should use navigator.share if available', async () => {
-        global.navigator.share = jest.fn().mockResolvedValue();
+        global.navigator.share.mockResolvedValue();
 
         await window.handleShare('123', 'Test Title');
 
@@ -55,9 +54,8 @@ describe('window.handleShare', () => {
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
-        global.navigator.clipboard = {
-            writeText: jest.fn().mockResolvedValue()
-        };
+        delete global.navigator.share;
+        global.navigator.clipboard.writeText.mockResolvedValue();
 
         await window.handleShare('123', 'Test Title');
 
@@ -68,7 +66,7 @@ describe('window.handleShare', () => {
 
     test('should log error if navigator.share fails', async () => {
         const error = new Error('Share failed');
-        global.navigator.share = jest.fn().mockRejectedValue(error);
+        global.navigator.share.mockRejectedValue(error);
 
         await window.handleShare('123', 'Test Title');
 
@@ -77,10 +75,9 @@ describe('window.handleShare', () => {
     });
 
     test('should log error if clipboard fallback fails', async () => {
+        delete global.navigator.share;
         const error = new Error('Clipboard failed');
-        global.navigator.clipboard = {
-            writeText: jest.fn().mockRejectedValue(error)
-        };
+        global.navigator.clipboard.writeText.mockRejectedValue(error);
 
         await window.handleShare('123', 'Test Title');
 
