@@ -7,6 +7,20 @@ describe('window.handleShare', () => {
     let originalClipboard;
 
     beforeAll(() => {
+        // Set up globals
+        originalWindow = global.window;
+        originalNavigator = global.navigator;
+        originalConsoleLog = console.log;
+        originalAlert = global.alert;
+
+        global.window = {
+            location: { origin: 'http://localhost' }
+        };
+        Object.defineProperty(global, 'navigator', { value: {}, writable: true });
+        global.document = {
+            addEventListener: jest.fn() // to prevent errors when evaluating app.js
+        };
+
         // Load app.js
         const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf-8');
         // Let's create a script element and append it to JSDOM's document body
