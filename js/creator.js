@@ -271,32 +271,41 @@ window.publishProduct = async function() {
 
         btn.disabled = true;
 
-        let uploadedUrls = [];
-        let lastAiReport = null;
+        btn.innerText = `🔍 影像分析與優化中 (0/${selectedFiles.length})...`;
 
-        for (let i = 0; i < selectedFiles.length; i++) {
-            const file = selectedFiles[i];
-            
+        let processedCount = 0;
+        const uploadPromises = selectedFiles.map(async (file, i) => {
             // 1. AI 報告生成階段
-            btn.innerText = `🔍 AI 分析中 (${i+1}/${selectedFiles.length})...`;
             const base64Str = await fileToBase64(file);
             const { data: audit, error: auditError } = await window.supabaseClient.functions.invoke('vision-audit', {
                 body: { imageBase64: base64Str }
             });
 
+            let aiReport = null;
             if (!auditError && audit) {
-                lastAiReport = audit.safeSearchAnnotation || audit;
+                aiReport = audit.safeSearchAnnotation || audit;
             }
 
             // 2. 轉換與上傳
-            btn.innerText = `📦 優化影像中 (${i+1}/${selectedFiles.length})...`;
             const webpBlob = await generateWebPBlob(file);
             
             // ✨【核心修復】檔名必須包含 "product"，觸發 Worker 存入 MY_BUCKET (products/)
             const fileName = `product_${Date.now()}_${i}.webp`; 
-            
             const uploadedUrl = await uploadToR2(webpBlob, fileName);
-            uploadedUrls.push(uploadedUrl);
+
+            processedCount++;
+            btn.innerText = `🔍 影像分析與優化中 (${processedCount}/${selectedFiles.length})...`;
+
+            return { uploadedUrl, aiReport };
+        });
+
+        const results = await Promise.all(uploadPromises);
+        const uploadedUrls = results.map(r => r.uploadedUrl);
+
+        // 取得最後一個成功的 AI 報告 (保留原邏輯：lastAiReport 會是迴圈中最後一個有效值)
+        let lastAiReport = null;
+        for (const res of results) {
+            if (res.aiReport) lastAiReport = res.aiReport;
         }
 
         btn.innerText = "資料寫入中...";
