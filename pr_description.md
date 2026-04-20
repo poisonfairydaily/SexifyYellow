@@ -1,13 +1,11 @@
-🧹 [Code Health] Remove Unused Success-Level Console Logs
+🧪 Testing improvement for executeSecurePurchase
 
-🎯 **What:**
-Removed several unnecessary `console.log` statements that provided success-level feedback in production code (specifically in `js/admin.js`, `js/supabase-config.js`, and `js/messages.js`).
-
-💡 **Why:**
-These logs provided no meaningful value in a production environment and cluttered the console output. Removing them improves the codebase's readability and follows the best practice of keeping the console clean of noise.
-
-✅ **Verification:**
-Verified the changes by manually confirming syntax correctness with `node -c` for the modified JavaScript files (`js/admin.js`, `js/supabase-config.js`, `js/messages.js`). Ensured that no runtime logic or dependencies were altered.
-
-✨ **Result:**
-Cleaner console output, improving code maintainability without changing any existing application behavior.
+🎯 **What:** The `executeSecurePurchase` functionality in `js/shop.js` lacked sufficient test coverage, leaving error paths and side effects like balance modifications untested.
+📊 **Coverage:** This change implements 6 new tests that mock the browser globals and `supabaseClient`. The tests cover:
+- Unauthenticated user rejection.
+- Database error handling.
+- Insufficient balance rejection.
+- Cancellation via confirm dialogs.
+- Successful digital purchase paths (balance deduction, order creation).
+- Successful physical item purchase paths.
+✨ **Result:** A fully tested critical flow that guarantees reliability for purchase executions, significantly improving the overall safety of refactoring within the `js/shop.js` module.

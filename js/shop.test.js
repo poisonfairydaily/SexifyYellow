@@ -107,3 +107,180 @@ describe('getSafeImageUrl', () => {
         expect(global.window.supabaseClient.storage.from).toHaveBeenCalledWith('previews');
     });
 });
+
+describe('executeSecurePurchase', () => {
+    beforeEach(() => {
+        global.document = {
+            createElement: (tag) => ({ textContent: '', innerHTML: '' }),
+            addEventListener: () => {},
+            getElementById: () => null,
+            body: { style: {} }
+        };
+        global.window = {};
+        global.alert = jest.fn();
+        global.confirm = jest.fn(() => true);
+        global.prompt = jest.fn();
+
+        // Load shop.js
+        const shopJsPath = path.join(__dirname, 'shop.js');
+        const shopJsCode = fs.readFileSync(shopJsPath, 'utf8');
+        eval(shopJsCode);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('should alert when not logged in', async () => {
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: null } })
+            }
+        };
+
+        await window.executeSecurePurchase('prod_1', 'Test Item', 100, 5, 'digital');
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('交易異常'));
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('請先登入帳號'));
+    });
+
+    test('should return early and not call DB if user cancels', async () => {
+        global.confirm.mockReturnValueOnce(false);
+
+        const getUserMock = jest.fn().mockResolvedValue({ data: { user: { id: 'user1' } } });
+        global.window.supabaseClient = {
+            auth: { getUser: getUserMock }
+        };
+
+        await window.executeSecurePurchase('prod_1', 'Test Item', 100, 5, 'digital');
+        expect(getUserMock).not.toHaveBeenCalled();
+    });
+
+    test('should alert when balance is insufficient', async () => {
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user1' } } })
+            },
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'profiles') {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                single: jest.fn().mockResolvedValue({ data: { balance: 50 } })
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.executeSecurePurchase('prod_1', 'Test Item', 100, 5, 'digital');
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('餘額不足'));
+    });
+
+    test('should update balance and insert order on successful purchase', async () => {
+        global.window.showNotification = jest.fn();
+        global.window.closeProductModal = jest.fn();
+        global.window.refreshBalanceUI = jest.fn();
+        global.window.renderShop = jest.fn();
+
+        const updateMock = jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({ error: null }) });
+        const insertMock = jest.fn().mockResolvedValue({ error: null });
+
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user1' } } })
+            },
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'profiles') {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                single: jest.fn().mockResolvedValue({ data: { balance: 200 } })
+                            })
+                        }),
+                        update: updateMock
+                    };
+                }
+                if (table === 'orders') {
+                    return { insert: insertMock };
+                }
+            })
+        };
+
+        await window.executeSecurePurchase('prod_1', 'Test Item', 100, 5, 'digital');
+
+        expect(updateMock).toHaveBeenCalledWith({ balance: 100 });
+        expect(insertMock).toHaveBeenCalledWith({
+            user_id: 'user1',
+            product_id: 'prod_1',
+            amount: 100,
+            amount_usd: 0,
+            category: 'digital',
+            status: 'pending'
+        });
+        expect(global.window.refreshBalanceUI).toHaveBeenCalled();
+    });
+
+    test('should insert order with correct physical category and USD amount', async () => {
+        global.window.showNotification = jest.fn();
+        global.window.closeProductModal = jest.fn();
+        global.window.refreshBalanceUI = jest.fn();
+        global.window.renderShop = jest.fn();
+
+        const insertMock = jest.fn().mockResolvedValue({ error: null });
+
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user1' } } })
+            },
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'profiles') {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                single: jest.fn().mockResolvedValue({ data: { balance: 200 } })
+                            })
+                        }),
+                        update: () => ({ eq: jest.fn().mockResolvedValue({ error: null }) })
+                    };
+                }
+                if (table === 'orders') {
+                    return { insert: insertMock };
+                }
+            })
+        };
+
+        await window.executeSecurePurchase('prod_2', 'Physical Item', 100, 5, 'physical');
+
+        expect(insertMock).toHaveBeenCalledWith({
+            user_id: 'user1',
+            product_id: 'prod_2',
+            amount: 100,
+            amount_usd: 5,
+            category: 'physical',
+            status: 'pending'
+        });
+    });
+
+    test('should alert on database error', async () => {
+        global.window.supabaseClient = {
+            auth: {
+                getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user1' } } })
+            },
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'profiles') {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                single: jest.fn().mockRejectedValue(new Error("DB Error"))
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.executeSecurePurchase('prod_1', 'Test Item', 100, 5, 'digital');
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('交易異常'));
+    });
+});

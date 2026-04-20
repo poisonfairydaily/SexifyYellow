@@ -55,6 +55,7 @@ describe('window.handleShare', () => {
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
+        delete global.navigator.share;
         global.navigator.clipboard = {
             writeText: jest.fn().mockResolvedValue()
         };
@@ -77,6 +78,7 @@ describe('window.handleShare', () => {
     });
 
     test('should log error if clipboard fallback fails', async () => {
+        delete global.navigator.share;
         const error = new Error('Clipboard failed');
         global.navigator.clipboard = {
             writeText: jest.fn().mockRejectedValue(error)
