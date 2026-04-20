@@ -107,3 +107,107 @@ describe('getSafeImageUrl', () => {
         expect(global.window.supabaseClient.storage.from).toHaveBeenCalledWith('previews');
     });
 });
+
+describe('refreshBalanceUI', () => {
+    let originalConsoleError;
+    let mockSupabaseClient;
+
+    beforeEach(() => {
+        originalConsoleError = console.error;
+        console.error = jest.fn();
+
+        // Clear DOM
+        document.body.innerHTML = '';
+
+        // Add required DOM elements
+        const balanceDisplay = document.createElement('div');
+        balanceDisplay.id = 'user-balance';
+        document.body.appendChild(balanceDisplay);
+
+        const shopBalance = document.createElement('div');
+        shopBalance.id = 'shop-balance-display';
+        document.body.appendChild(shopBalance);
+
+        const pcBalance = document.createElement('div');
+        pcBalance.id = 'pc-balance';
+        document.body.appendChild(pcBalance);
+
+        // Mock Supabase Client setup
+        mockSupabaseClient = {
+            auth: {
+                getUser: jest.fn()
+            },
+            from: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn()
+        };
+
+        global.window.supabaseClient = mockSupabaseClient;
+        global.document = document;
+    });
+
+    afterEach(() => {
+        console.error = originalConsoleError;
+        delete global.window.supabaseClient;
+    });
+
+    test('should return early if no user is authenticated', async () => {
+        mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: null } });
+
+        await global.window.refreshBalanceUI();
+
+        expect(mockSupabaseClient.auth.getUser).toHaveBeenCalled();
+        expect(mockSupabaseClient.from).not.toHaveBeenCalled();
+
+        expect(String(document.getElementById('user-balance').innerText || '')).toBe('');
+        expect(String(document.getElementById('shop-balance-display').innerText || '')).toBe('');
+        expect(String(document.getElementById('pc-balance').innerText || '')).toBe('');
+    });
+
+    test('should update DOM elements with balance if user is authenticated', async () => {
+        const mockUser = { id: '123' };
+        const mockBalanceData = { balance: 500 };
+
+        mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: mockUser } });
+        mockSupabaseClient.single.mockResolvedValue({ data: mockBalanceData });
+
+        await global.window.refreshBalanceUI();
+
+        expect(mockSupabaseClient.auth.getUser).toHaveBeenCalled();
+        expect(mockSupabaseClient.from).toHaveBeenCalledWith('profiles');
+        expect(mockSupabaseClient.select).toHaveBeenCalledWith('balance');
+        expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', mockUser.id);
+        expect(mockSupabaseClient.single).toHaveBeenCalled();
+
+        expect(String(document.getElementById('user-balance').innerText)).toBe('500');
+        expect(String(document.getElementById('shop-balance-display').innerText)).toBe('500');
+        expect(String(document.getElementById('pc-balance').innerText)).toBe('500');
+    });
+
+    test('should handle missing elements gracefully', async () => {
+        document.body.innerHTML = ''; // Remove DOM elements
+
+        const mockUser = { id: '123' };
+        const mockBalanceData = { balance: 500 };
+
+        mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user: mockUser } });
+        mockSupabaseClient.single.mockResolvedValue({ data: mockBalanceData });
+
+        await global.window.refreshBalanceUI();
+
+        expect(mockSupabaseClient.single).toHaveBeenCalled();
+        // Just verify it doesn't throw
+        expect(console.error).not.toHaveBeenCalled();
+    });
+
+    test('should log error if API call fails', async () => {
+        const mockError = new Error('API Error');
+        mockSupabaseClient.auth.getUser.mockRejectedValue(mockError);
+
+        await global.window.refreshBalanceUI();
+
+        expect(mockSupabaseClient.auth.getUser).toHaveBeenCalled();
+        expect(console.error).toHaveBeenCalledWith(mockError);
+    });
+});

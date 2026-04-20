@@ -2,10 +2,9 @@ const fs = require('fs');
 const path = require('path');
 
 describe('window.handleShare', () => {
-    let originalWindow;
-    let originalNavigator;
-    let originalConsoleLog;
     let originalAlert;
+    let originalShare;
+    let originalClipboard;
 
     beforeAll(() => {
         // Set up globals
@@ -24,67 +23,80 @@ describe('window.handleShare', () => {
 
         // Load app.js
         const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf-8');
-        eval(appCode);
+        // Let's create a script element and append it to JSDOM's document body
+        const scriptEl = document.createElement('script');
+        scriptEl.textContent = appCode;
+        document.head.appendChild(scriptEl);
+
+        originalAlert = window.alert;
+        originalShare = navigator.share;
+        originalClipboard = navigator.clipboard;
     });
 
     afterAll(() => {
-        global.window = originalWindow;
-        global.navigator = originalNavigator;
-        console.log = originalConsoleLog;
-        global.alert = originalAlert;
-        delete global.document;
+        window.alert = originalAlert;
+        Object.defineProperty(navigator, 'share', { value: originalShare, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', { value: originalClipboard, configurable: true });
     });
 
     beforeEach(() => {
         console.log = jest.fn();
-        global.alert = jest.fn();
-        global.navigator = {}; // Reset navigator mocks
+        window.alert = jest.fn();
+        // clear navigator overrides
+        Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
     });
 
     test('should use navigator.share if available', async () => {
-        global.navigator.share = jest.fn().mockResolvedValue();
+        const mockShare = jest.fn().mockResolvedValue();
+        Object.defineProperty(navigator, 'share', { value: mockShare, configurable: true });
 
         await window.handleShare('123', 'Test Title');
 
-        expect(global.navigator.share).toHaveBeenCalledWith({
+        expect(mockShare).toHaveBeenCalledWith({
             title: 'SFY 推薦',
             text: 'Test Title',
-            url: 'http://localhost?post=123'
+            url: window.location.origin + '?post=123'
         });
         expect(console.log).not.toHaveBeenCalled();
     });
 
     test('should use clipboard fallback if navigator.share is not available', async () => {
-        global.navigator.clipboard = {
-            writeText: jest.fn().mockResolvedValue()
-        };
+        const mockWriteText = jest.fn().mockResolvedValue();
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: mockWriteText },
+            configurable: true
+        });
 
         await window.handleShare('123', 'Test Title');
 
-        expect(global.navigator.clipboard.writeText).toHaveBeenCalledWith('http://localhost?post=123');
-        expect(global.alert).toHaveBeenCalledWith('連結已複製到剪貼簿！');
+        expect(mockWriteText).toHaveBeenCalledWith(window.location.origin + '?post=123');
+        expect(window.alert).toHaveBeenCalledWith('連結已複製到剪貼簿！');
         expect(console.log).not.toHaveBeenCalled();
     });
 
     test('should log error if navigator.share fails', async () => {
         const error = new Error('Share failed');
-        global.navigator.share = jest.fn().mockRejectedValue(error);
+        const mockShare = jest.fn().mockRejectedValue(error);
+        Object.defineProperty(navigator, 'share', { value: mockShare, configurable: true });
 
         await window.handleShare('123', 'Test Title');
 
-        expect(global.navigator.share).toHaveBeenCalled();
+        expect(mockShare).toHaveBeenCalled();
         expect(console.log).toHaveBeenCalledWith('分享取消或發生錯誤', error);
     });
 
     test('should log error if clipboard fallback fails', async () => {
         const error = new Error('Clipboard failed');
-        global.navigator.clipboard = {
-            writeText: jest.fn().mockRejectedValue(error)
-        };
+        const mockWriteText = jest.fn().mockRejectedValue(error);
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: mockWriteText },
+            configurable: true
+        });
 
         await window.handleShare('123', 'Test Title');
 
-        expect(global.navigator.clipboard.writeText).toHaveBeenCalled();
+        expect(mockWriteText).toHaveBeenCalled();
         expect(console.log).toHaveBeenCalledWith('分享取消或發生錯誤', error);
     });
 });
