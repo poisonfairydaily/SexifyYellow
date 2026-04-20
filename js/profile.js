@@ -207,103 +207,6 @@ window.previewBannerImage = function(input) {
 window.openPersonalCenter = async function() { /* 原版邏輯 */ }
 window.closePersonalCenter = function() { /* 原版邏輯 */ }
 window.savePersonalCenter = async function() { /* 原版邏輯 */ }
-window.renderProfile = async function() { /* 原版邏輯 */ }
-
-window.openEditProfile = async function() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (!modal) return;
-    try {
-        const myId = await getAuthenticatedUserId();
-        if (!myId) return alert('請先登入');
-        const { data: profile } = await window.supabaseClient.from('profiles').select('*').eq('id', myId).single();
-
-        document.getElementById('edit-display-name').value = profile.display_name || '';
-        document.getElementById('edit-bio').value = profile.bio || '';
-        
-        isAvatarChanged = false;
-        if (profile.avatar_url && profile.avatar_url.startsWith('http')) {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                currentAvatarImage = img;
-                window.resetAvatarTransform();
-                isAvatarChanged = false;
-            };
-            img.src = profile.avatar_url;
-        } else {
-            currentAvatarImage = null;
-            const canvas = document.getElementById('avatar-canvas');
-            if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        const bannerPreview = document.getElementById('edit-banner-preview');
-        const placeholder = document.getElementById('banner-placeholder');
-        if (profile.banner_url && profile.banner_url.startsWith('http')) {
-            if(bannerPreview) { bannerPreview.src = profile.banner_url; bannerPreview.classList.remove('hidden'); }
-            if(placeholder) placeholder.classList.add('hidden');
-        } else {
-            if(bannerPreview) { bannerPreview.src = ''; bannerPreview.classList.add('hidden'); }
-            if(placeholder) placeholder.classList.remove('hidden');
-        }
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    } catch (err) { alert("無法讀取個人資料"); }
-};
-
-window.closeEditProfile = function() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-};
-
-window.saveProfileData = async function() {
-    const btn = document.getElementById('save-profile-btn');
-    const myId = await getAuthenticatedUserId();
-    if (!myId) return alert('請登入');
-
-    btn.innerText = "轉檔上傳中..."; btn.disabled = true;
-    
-    try {
-        const updateData = {
-            display_name: document.getElementById('edit-display-name').value.trim(),
-            bio: document.getElementById('edit-bio').value.trim(),
-        };
-
-        if (isAvatarChanged && currentAvatarImage) {
-            const canvas = document.getElementById('avatar-canvas');
-            const base64 = canvas.toDataURL('image/webp', 0.8);
-            updateData.avatar_url = await window.uploadToR2(base64, 'avatar');
-        }
-
-        let bannerSrc = document.getElementById('edit-banner-preview').src;
-        if (bannerSrc.startsWith('data:image')) {
-            updateData.banner_url = await window.uploadToR2(bannerSrc, 'banner');
-        } else if (bannerSrc && bannerSrc.startsWith('http')) {
-            updateData.banner_url = bannerSrc;
-        } else {
-            updateData.banner_url = null;
-        }
-
-        const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
-        if (error) throw error;
-
-        // We no longer store myChatName in localStorage
-        window.closeEditProfile();
-        // 嘗試更新首頁的頭像圖示
-        const sidebarAvatar = document.getElementById('sidebar-avatar');
-        if(sidebarAvatar && updateData.avatar_url) sidebarAvatar.src = updateData.avatar_url;
-        
-        if (typeof window.renderProfile === 'function') window.renderProfile();
-    } catch (err) { alert("更新失敗：" + err.message); } 
-    finally { btn.innerText = "儲存修改"; btn.disabled = false; }
-}
-
-// 其餘粉絲清單等功能保留你的原版...
-
-// ------------------------------------------
-// 2. 個人專頁與編輯資料模組
-// ------------------------------------------
-
 window.renderProfile = async function() {
     const container = document.getElementById('my-profile-container');
     if (!container) return;
@@ -314,16 +217,29 @@ window.renderProfile = async function() {
         return; 
     }
 
-    container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl text-sexify"></i></div>`;
+    // Initialize global tab state if not set
+    if (!window.currentProfileTab) window.currentProfileTab = 'posts';
+    window.profileSearchKeyword = window.profileSearchKeyword || '';
+
+    // Only show spinner on first full load
+    if(!document.getElementById('profile-stats-following')) {
+        container.innerHTML = `<div class="p-10 text-center mt-20"><i class="fa-solid fa-spinner fa-spin text-2xl text-sexify"></i></div>`;
+    }
 
     try {
-        const [profileRes, postsRes] = await Promise.all([
+        const [profileRes, postsRes, followingRes, followersRes, likesRes] = await Promise.all([
             window.supabaseClient.from('profiles').select('*').eq('id', myId).single(),
-            window.supabaseClient.from('posts').select('*').eq('user_id', myId).order('created_at', { ascending: false })
+            // posts fetching will be handled dynamically based on tab later in this function
+            window.supabaseClient.from('posts').select('likes_count').eq('user_id', myId),
+            window.supabaseClient.from('subscriptions').select('id', { count: 'exact' }).eq('subscriber_id', myId),
+            window.supabaseClient.from('subscriptions').select('id', { count: 'exact' }).eq('creator_id', myId)
         ]);
 
         const profile = profileRes.data;
-        const myPosts = postsRes.data || [];
+        const totalLikes = (postsRes.data || []).reduce((acc, p) => acc + (p.likes_count || 0), 0);
+        const followingCount = followingRes.count || 0;
+        const followersCount = followersRes.count || 0;
+
         const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}&background=random`;
         
         const bannerUrl = (profile.banner_url && profile.banner_url.startsWith('http')) ? profile.banner_url : null;
@@ -344,25 +260,95 @@ window.renderProfile = async function() {
                         <p class="text-xs text-sexify font-bold mt-0.5 mb-2">@${window.escapeHTML(profile.username || 'unknown')}</p>
                         <p class="text-sm text-gray-600 whitespace-pre-line">${window.escapeHTML(profile.bio || '尚未填寫簡介')}</p>
                     </div>
+
+                    <!-- 📊 統計數字區 -->
+                    <div class="flex items-center gap-6 mt-4 pt-4 border-t border-gray-50">
+                        <div class="text-center">
+                            <div class="text-sm font-black text-gray-900" id="profile-stats-following">${followingCount}</div>
+                            <div class="text-[10px] font-bold text-gray-400">追蹤</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm font-black text-gray-900" id="profile-stats-followers">${followersCount}</div>
+                            <div class="text-[10px] font-bold text-gray-400">粉絲</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm font-black text-gray-900">${totalLikes}</div>
+                            <div class="text-[10px] font-bold text-gray-400">獲讚</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="bg-gray-50 pt-3 pb-32 min-h-[300px]"><div class="masonry-grid px-2">`;
-        
-        if (myPosts.length > 0) {
-            html += myPosts.map(p => `
-                <div class="masonry-item relative shadow-sm border border-gray-100 bg-white p-2 rounded-xl mb-3 break-inside-avoid" onclick="viewPost('${p.id}')">
-                    ${p.media_url ? `<img src="${p.media_url}" class="w-full rounded-lg mb-2 object-cover">` : `<div class="p-4 text-center text-gray-400 bg-gray-50 rounded-lg mb-2 text-xs italic">純文字內容</div>`}
-                    <p class="text-xs text-gray-800 line-clamp-2 leading-relaxed mt-1">${window.escapeHTML(p.caption || '')}</p>
+
+            <!-- 📑 分頁列 & 搜尋框 -->
+            <div class="bg-white sticky top-0 z-30 shadow-sm">
+                <div class="flex justify-around items-center px-2 py-2 border-b border-gray-100">
+                    <button onclick="window.switchProfileTab('posts')" class="profile-tab-btn flex-1 py-2 text-sm font-bold ${window.currentProfileTab === 'posts' ? 'text-gray-900 border-b-2 border-sexify' : 'text-gray-400'}">貼文</button>
+                    <button onclick="window.switchProfileTab('likes')" class="profile-tab-btn flex-1 py-2 text-sm font-bold ${window.currentProfileTab === 'likes' ? 'text-gray-900 border-b-2 border-sexify' : 'text-gray-400'}">喜歡</button>
+                    <button onclick="window.switchProfileTab('saves')" class="profile-tab-btn flex-1 py-2 text-sm font-bold ${window.currentProfileTab === 'saves' ? 'text-gray-900 border-b-2 border-sexify' : 'text-gray-400'}">收藏</button>
+                    <button onclick="window.switchProfileTab('history')" class="profile-tab-btn flex-1 py-2 text-sm font-bold ${window.currentProfileTab === 'history' ? 'text-gray-900 border-b-2 border-sexify' : 'text-gray-400'}">歷史</button>
                 </div>
-            `).join('');
-        } else {
-            html += `<div class="col-span-2 text-center py-20 text-gray-400 w-full">尚無發佈貼文</div>`;
-        }
-        container.innerHTML = html + `</div></div>`;
+                <div class="px-4 py-2 bg-gray-50/50">
+                    <div class="relative">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                        <input type="text" id="profile-search" placeholder="搜尋貼文..." value="${window.profileSearchKeyword}" oninput="window.handleProfileSearch(this.value)" class="w-full bg-white border border-gray-200 rounded-full py-1.5 pl-8 pr-4 text-xs focus:outline-none focus:border-sexify transition">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gray-50 pt-3 pb-32 min-h-[300px]"><div class="masonry-grid px-2" id="profile-masonry-grid">
+            </div></div>`;
+            container.innerHTML = html;
+            window.renderProfileGrid();
+
 
     } catch (err) { container.innerHTML = `<div class="p-10 text-center text-red-500 mt-20">讀取失敗。</div>`; }
 }
 
+window.openEditProfile = async function() {
+    const modal = document.getElementById('edit-profile-modal');
+    if (!modal) return;
+
+    try {
+        const myId = await getAuthenticatedUserId();
+        if (!myId) return alert('請先登入');
+
+        const { data: profile } = await window.supabaseClient.from('profiles').select('*').eq('id', myId).single();
+
+        document.getElementById('edit-display-name').value = profile.display_name || '';
+        document.getElementById('edit-bio').value = profile.bio || '';
+        
+        // ✨ 頭像防破圖：加入 crossOrigin="anonymous" 允許跨域讀取，才能在 Canvas 上調整並轉存
+        isAvatarChanged = false;
+        if (profile.avatar_url && profile.avatar_url.startsWith('http')) {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                currentAvatarImage = img;
+                window.resetAvatarTransform();
+                isAvatarChanged = false; // 載入時不視為更動
+            };
+            img.src = profile.avatar_url;
+        } else {
+            currentAvatarImage = null;
+            const canvas = document.getElementById('avatar-canvas');
+            if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // 處理背景預覽
+        const bannerPreview = document.getElementById('edit-banner-preview');
+        const placeholder = document.getElementById('banner-placeholder');
+        if (profile.banner_url && profile.banner_url.startsWith('http')) {
+            if(bannerPreview) { bannerPreview.src = profile.banner_url; bannerPreview.classList.remove('hidden'); }
+            if(placeholder) placeholder.classList.add('hidden');
+        } else {
+            if(bannerPreview) { bannerPreview.src = ''; bannerPreview.classList.add('hidden'); }
+            if(placeholder) placeholder.classList.remove('hidden');
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    } catch (err) { alert("無法讀取個人資料"); }
+};
 
 window.closeEditProfile = function() {
     const modal = document.getElementById('edit-profile-modal');
@@ -405,7 +391,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        // We no longer store myChatName in localStorage
+        localStorage.setItem('myChatName', updateData.display_name);
         closeEditProfile();
         renderProfile();
     } catch (err) { alert("更新失敗：" + err.message); } 
@@ -610,3 +596,135 @@ document.addEventListener('DOMContentLoaded', () => {
         window.renderProfile();
     }
 });
+
+window.switchProfileTab = function(tabName) {
+    if (window.currentProfileTab === tabName) return;
+    window.currentProfileTab = tabName;
+    window.renderProfile();
+};
+
+window.handleProfileSearch = function(val) {
+    window.profileSearchKeyword = val;
+    window.renderProfileGrid();
+};
+
+window.renderProfileGrid = async function() {
+    const grid = document.getElementById('profile-masonry-grid');
+    if(!grid) return;
+    
+    grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10"><i class="fa-solid fa-spinner fa-spin text-gray-300 text-3xl"></i></div>`;
+    
+    try {
+        const myId = await getAuthenticatedUserId();
+        if(!myId) return;
+
+        let query;
+        let isJoinQuery = false;
+
+        switch(window.currentProfileTab) {
+            case 'posts':
+                query = window.supabaseClient.from('posts').select('*, profiles(display_name, avatar_url, username)').eq('user_id', myId).order('created_at', { ascending: false });
+                break;
+            case 'likes':
+                query = window.supabaseClient.from('likes').select('posts(*, profiles(display_name, avatar_url, username))').eq('user_id', myId).order('created_at', { ascending: false });
+                isJoinQuery = true;
+                break;
+            case 'saves':
+                query = window.supabaseClient.from('bookmarks').select('posts(*, profiles(display_name, avatar_url, username))').eq('user_id', myId).order('created_at', { ascending: false });
+                isJoinQuery = true;
+                break;
+            case 'history':
+                query = window.supabaseClient.from('history').select('posts(*, profiles(display_name, avatar_url, username))').eq('user_id', myId).order('viewed_at', { ascending: false });
+                isJoinQuery = true;
+                break;
+        }
+
+        const { data, error } = await query;
+        if(error) throw error;
+
+        let posts = data || [];
+        if (isJoinQuery) {
+            posts = posts.map(item => item.posts).filter(p => p !== null);
+        }
+
+        // Apply Search Filter
+        if (window.profileSearchKeyword && window.profileSearchKeyword.trim() !== '') {
+            const kw = window.profileSearchKeyword.trim().toLowerCase();
+            posts = posts.filter(p => p.caption && p.caption.toLowerCase().includes(kw));
+        }
+
+        if (posts.length === 0) {
+            grid.innerHTML = `<div class="col-span-2 text-center py-20 mt-10 text-gray-400 flex flex-col items-center">
+                <i class="fa-solid fa-ghost text-4xl mb-4 opacity-30"></i>
+                <p class="font-bold">空空如也</p>
+            </div>`;
+            return;
+        }
+
+        // Get my likes for UI
+        let myLikes = new Set();
+        const { data: likeData } = await window.supabaseClient.from('likes').select('post_id').eq('user_id', myId);
+        if (likeData) likeData.forEach(l => myLikes.add(l.post_id));
+
+        // Get my bookmarks for UI
+        let myBookmarksSet = new Set();
+        const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+        if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+
+        grid.innerHTML = posts.map(post => {
+            const safeName = window.escapeHTML(post.profiles?.display_name || '使用者');
+            const safeCaption = window.escapeHTML(post.caption || '');
+            const safeAvatar = window.escapeHTML(post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}`);
+            const safeMedia = window.escapeHTML(post.media_url || '');
+
+            const isLocked = post.is_paid;
+            const blurClass = isLocked ? 'blur-md pointer-events-none' : '';
+            const isLiked = myLikes.has(post.id);
+            const heartClass = isLiked ? 'fa-solid fa-heart text-sexify' : 'fa-regular fa-heart text-gray-500';
+            const currentLikes = post.likes_count || post.likes || 0;
+            const isBookmarked = myBookmarksSet.has(post.id);
+            const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
+            const postObjStr = encodeURIComponent(JSON.stringify({ id: post.id, caption: post.caption, media_url: post.media_url, authorName: safeName, authorAvatar: safeAvatar }));
+
+            return `
+            <div class="masonry-item break-inside-avoid relative shadow-sm border border-gray-100 bg-white rounded-xl mb-3 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200"
+                 style="touch-action: pan-y;"
+                 oncontextmenu="event.preventDefault();"
+                 onclick="window.handleCardClick(event, '${post.id}')">
+
+                <div class="relative bg-gray-50 min-h-[120px]"
+                     onpointerdown="window.startLongPress(event, '${post.id}', ${safeMedia ? `'${safeMedia}'` : 'null'})"
+                     onpointerup="window.cancelLongPress()"
+                     onpointerleave="window.cancelLongPress()"
+                     onpointercancel="window.cancelLongPress()">
+                     
+                    ${safeMedia ? `<img src="${safeMedia}" class="w-full h-auto block object-cover ${blurClass} pointer-events-none" loading="lazy">` : `<div class="p-8 text-center text-gray-400 italic ${blurClass} pointer-events-none">純文字</div>`}
+                    ${isLocked ? `<div class="absolute inset-0 bg-black/20 z-10 flex items-center justify-center flex-col backdrop-blur-[2px] pointer-events-none"><i class="fa-solid fa-lock text-white text-2xl mb-2 drop-shadow-md"></i><span class="bg-sexify text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">解鎖內容</span></div>` : ''}
+                </div>
+
+                <div class="p-3 bg-white">
+                    <p class="text-[13px] text-gray-900 line-clamp-2 leading-snug font-medium mb-2.5">${safeCaption}</p>
+                    
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5 min-w-0" onclick="event.stopPropagation(); window.viewCreatorProfile('${post.user_id}')">
+                            <img src="${safeAvatar}" class="w-4 h-4 rounded-full object-cover shrink-0" loading="lazy">
+                            <span class="text-[10px] text-gray-500 font-medium truncate w-16">${safeName}</span>
+                        </div>
+                        <div class="flex items-center gap-3 shrink-0">
+                            <button class="flex items-center gap-1 text-gray-500 hover:text-sexify transition active:scale-90" onclick="event.stopPropagation(); toggleLike(this, '${post.id}', '${post.user_id}')">
+                                <i class="${heartClass} text-sm transition-transform"></i>
+                                <span class="text-[11px] font-bold">${currentLikes > 0 ? currentLikes : '讚'}</span>
+                            </button>
+                            <button class="text-sm text-gray-400 hover:text-gray-600 transition" onclick="event.stopPropagation(); if(typeof toggleBookmark==='function') toggleBookmark(this, '${post.id}', '${postObjStr}')">
+                                <i class="${bmIcon} fa-bookmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(err) {
+        console.error(err);
+        grid.innerHTML = `<div class="col-span-2 text-center py-20 text-red-500 mt-20">載入失敗</div>`;
+    }
+};
