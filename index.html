@@ -171,6 +171,37 @@
         </div>
     </div>
 
+    <div id="other-profile-modal" class="fixed inset-0 bg-white z-[850] hidden flex-col transform translate-x-full transition-transform duration-300">
+        <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 justify-between">
+            <div class="flex items-center gap-2">
+                <button onclick="closeOtherProfile()" class="text-gray-700 w-8 h-8 flex items-center justify-center active:scale-90 transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
+                <h2 id="other-header-name" class="font-black text-lg">載入中...</h2>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto bg-gray-100">
+            <div class="bg-white pb-4 shadow-sm relative">
+                <img id="other-banner" src="" class="w-full h-40 object-cover hidden">
+                <div class="px-5 relative -mt-12">
+                    <div class="flex justify-between items-end mb-3">
+                        <img id="other-avatar" src="" class="w-24 h-24 rounded-full border-4 border-white object-cover bg-white shadow-sm">
+                        <div class="flex gap-2 mb-2">
+                            <button id="other-msg-btn" class="bg-gray-100 text-gray-700 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold active:scale-95 transition shadow-sm"><i class="fa-solid fa-comment-dots"></i></button>
+                            <button id="other-follow-btn" class="bg-sexify text-white px-6 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm">追蹤</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 id="other-display-name" class="text-xl font-black text-gray-900">載入中...</h2>
+                        <p id="other-username" class="text-xs text-sexify font-bold mt-0.5 mb-2">@...</p>
+                        <p id="other-bio" class="text-sm text-gray-600 whitespace-pre-line">...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 pt-3 pb-32 min-h-[300px]">
+                <div id="other-posts-grid" class="masonry-grid px-2"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="post-detail-modal" class="fixed inset-0 bg-white z-[850] hidden flex-col transform translate-x-full transition-transform duration-300">
         <header class="bg-white/90 backdrop-blur-md border-b flex items-center p-4 sticky top-0 z-10 justify-between">
             <div class="flex items-center gap-2">
