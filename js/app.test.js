@@ -76,7 +76,7 @@ describe('window.handleShare', () => {
 
         await window.handleShare('123', 'Test Title');
 
-        expect(mockWriteText).toHaveBeenCalledWith(window.location.origin + '?post=123');
+        expect(global.navigator.clipboard.writeText).toHaveBeenCalledWith(window.location.origin + '?post=123');
         expect(window.alert).toHaveBeenCalledWith('連結已複製到剪貼簿！');
         expect(console.log).not.toHaveBeenCalled();
     });
@@ -101,7 +101,7 @@ describe('window.handleShare', () => {
 
         await window.handleShare('123', 'Test Title');
 
-        expect(mockWriteText).toHaveBeenCalled();
+        expect(global.navigator.clipboard.writeText).toHaveBeenCalled();
         expect(console.log).toHaveBeenCalledWith('分享取消或發生錯誤', error);
     });
 });
@@ -130,6 +130,7 @@ describe('window.saveUserProfile', () => {
         global.window.renderProfile = jest.fn();
 
         originalSupabaseClient = global.window.supabaseClient;
+        global.window.supabaseClient = { auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: "user123" } } }, error: null }) } };
     });
 
     afterEach(() => {
@@ -154,6 +155,7 @@ describe('window.saveUserProfile', () => {
 
         const mockError = new Error('Public update failed');
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: "user123" } } }, error: null }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
@@ -179,6 +181,7 @@ describe('window.saveUserProfile', () => {
 
         const mockError = new Error('Private update failed');
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: "user123" } } }, error: null }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
@@ -203,6 +206,7 @@ describe('window.saveUserProfile', () => {
         const formData = { display_name: 'Test' };
 
         global.window.supabaseClient = {
+            auth: { getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: "user123" } } }, error: null }) },
             from: jest.fn((table) => {
                 if (table === 'profiles') {
                     return {
