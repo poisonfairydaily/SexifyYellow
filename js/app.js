@@ -76,7 +76,8 @@ window.toggleNotifications = async function() {
         setTimeout(() => panel.classList.remove('translate-x-full'), 10);
         if (badge) badge.classList.add('hidden');
 
-        const userId = localStorage.getItem('userId');
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const userId = session?.user?.id;
         if(!userId) return;
 
         list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
@@ -163,7 +164,8 @@ window.toggleSearch = function(show) {
 };
 
 window.saveUserProfile = async function(formData) {
-    const userId = localStorage.getItem('userId');
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const userId = session?.user?.id;
     if (!userId) return;
 
     try {
@@ -291,7 +293,8 @@ window.logoutUser = async function() {
 // 全域狀態：動態更新下方導覽列紅點
 // ==========================================
 window.updateGlobalMessageBadge = async function() {
-    const userId = localStorage.getItem('userId');
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const userId = session?.user?.id;
     if (!userId || !window.supabaseClient) return;
     
     const msgBadge = document.getElementById('nav-msg-badge');
@@ -345,7 +348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) {
         const userId = session.user.id;
-        localStorage.setItem('userId', userId);
+        // We no longer store userId in localStorage to avoid data exposure
         
         // 啟動首頁內容
         if (typeof window.renderDiscovery === 'function') {

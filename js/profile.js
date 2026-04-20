@@ -287,7 +287,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        localStorage.setItem('myChatName', updateData.display_name);
+        // We no longer store myChatName in localStorage
         window.closeEditProfile();
         // 嘗試更新首頁的頭像圖示
         const sidebarAvatar = document.getElementById('sidebar-avatar');
@@ -405,7 +405,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        localStorage.setItem('myChatName', updateData.display_name);
+        // We no longer store myChatName in localStorage
         closeEditProfile();
         renderProfile();
     } catch (err) { alert("更新失敗：" + err.message); } 

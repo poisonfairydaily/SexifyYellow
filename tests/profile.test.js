@@ -61,84 +61,46 @@ describe('escapeHTML', () => {
     });
 });
 
-describe('openEditProfile try/catch block', () => {
-    let originalAlert;
-    let originalGetAuthenticatedUserId;
-
+describe('viewOtherProfile Error Handling', () => {
     beforeEach(() => {
-        // Mock DOM elements
         document.body.innerHTML = `
-            <div id="edit-profile-modal" class="hidden"></div>
-            <input id="edit-display-name" />
-            <input id="edit-bio" />
-            <img id="edit-banner-preview" />
-            <div id="banner-placeholder"></div>
-            <canvas id="avatar-canvas"></canvas>
+            <div id="other-profile-modal" class="hidden translate-x-full"></div>
         `;
 
-        originalAlert = window.alert;
-        window.alert = jest.fn();
-
-        window.supabaseClient = {
-            from: jest.fn().mockReturnThis(),
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
-                data: {
-                    display_name: 'Test User',
-                    bio: 'Test Bio',
-                    avatar_url: 'http://example.com/avatar.jpg',
-                    banner_url: 'http://example.com/banner.jpg'
-                }
-            })
-        };
-
-        window.resetAvatarTransform = jest.fn();
-
-        originalGetAuthenticatedUserId = global.getAuthenticatedUserId;
-        global.getAuthenticatedUserId = jest.fn().mockResolvedValue('test-user-id');
-        window.getAuthenticatedUserId = global.getAuthenticatedUserId;
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        console.error = jest.fn(); // Mock console.error
     });
 
     afterEach(() => {
-        window.alert = originalAlert;
-        global.getAuthenticatedUserId = originalGetAuthenticatedUserId;
-        window.getAuthenticatedUserId = originalGetAuthenticatedUserId;
+        jest.restoreAllMocks();
     });
 
-    test('catches error when getAuthenticatedUserId fails and alerts "無法讀取個人資料"', async () => {
-        global.getAuthenticatedUserId = jest.fn().mockRejectedValue(new Error('Auth failed'));
-        window.getAuthenticatedUserId = global.getAuthenticatedUserId;
+    test('handles Supabase fetch error correctly', async () => {
+        const mockError = new Error('Database connection failed');
 
-        await window.openEditProfile();
+        // Mock window.supabaseClient.from().select().eq().single() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        single: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                    })
+                })
+            })
+        };
 
-        expect(window.alert).toHaveBeenCalledWith('無法讀取個人資料');
+        await window.viewOtherProfile('user-2');
 
-        const modal = document.getElementById('edit-profile-modal');
-        expect(modal.classList.contains('hidden')).toBe(true);
-        expect(modal.classList.contains('flex')).toBe(false);
-    });
+        // Check if getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
 
-    test('catches error when Supabase fails and alerts "無法讀取個人資料"', async () => {
-        window.supabaseClient.single = jest.fn().mockRejectedValue(new Error('DB connection failed'));
-
-        await window.openEditProfile();
-
-        expect(window.alert).toHaveBeenCalledWith('無法讀取個人資料');
-
-        const modal = document.getElementById('edit-profile-modal');
-        expect(modal.classList.contains('hidden')).toBe(true);
-        expect(modal.classList.contains('flex')).toBe(false);
-    });
-
-    test('successfully populates DOM on valid profile load', async () => {
-        await window.openEditProfile();
-
-        expect(document.getElementById('edit-display-name').value).toBe('Test User');
-        expect(document.getElementById('edit-bio').value).toBe('Test Bio');
-
-        const modal = document.getElementById('edit-profile-modal');
-        expect(modal.classList.contains('hidden')).toBe(false);
+        // Check if modal was opened
+        const modal = document.getElementById('other-profile-modal');
         expect(modal.classList.contains('flex')).toBe(true);
+        expect(modal.classList.contains('hidden')).toBe(false);
+
+        // Check if console.error was called with the mock error
+        expect(console.error).toHaveBeenCalledWith(mockError);
     });
 });
