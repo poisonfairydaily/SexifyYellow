@@ -215,33 +215,9 @@ window.handleProductFiles = function(input) {
 };
 
 
-async function generateWebPBlob(file) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const max_size = 1200; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
-            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
-            canvas.width = width; canvas.height = height;
-            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
-        };
-    });
-}
 
-async function uploadToR2(blob, fileName) {
-    const formData = new FormData();
-    formData.append('file', blob, fileName);
-    const response = await fetch(WORKER_URL, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('伺服器上傳失敗');
-    const resData = await response.json();
-    return resData.url;
-}
+
+
 
 // ✨ 修改版：AI 只負責記錄，上傳時觸發分流進入 MY_BUCKET
 window.publishProduct = async function() {
@@ -279,11 +255,11 @@ window.publishProduct = async function() {
             }
 
             // 2. 轉換與上傳
-            const webpBlob = await generateWebPBlob(file);
+            const webpBlob = await window.generateWebPBlob(file);
             
             // ✨【核心修復】檔名必須包含 "product"，觸發 Worker 存入 MY_BUCKET (products/)
             const fileName = `product_${Date.now()}_${i}.webp`; 
-            const uploadedUrl = await uploadToR2(webpBlob, fileName);
+            const uploadedUrl = await window.uploadToR2File(webpBlob, fileName);
 
             processedCount++;
             btn.innerText = `🔍 影像分析與優化中 (${processedCount}/${selectedFiles.length})...`;
