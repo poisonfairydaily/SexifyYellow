@@ -198,7 +198,7 @@ window.publishPost = async function() {
             const randomID = Math.random().toString(36).substring(7);
             const isVideo = selectedFile.type.startsWith('video/');
             const extension = isVideo ? 'mp4' : 'webp';
-            const cleanFileName = `post_${Date.now()}_${randomID}.${extension}`;
+            const cleanFileName = `${Date.now()}_${randomID}.${extension}`;
 
             // 3. 執行 R2 代理上傳 (已更新為新的專屬函數名稱)
             mediaUrl = await uploadPostMediaToR2(blob, cleanFileName);
