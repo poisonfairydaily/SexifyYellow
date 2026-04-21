@@ -316,23 +316,22 @@ window.logoutUser = async function() {
 // 全域狀態：動態更新下方導覽列紅點 (已加入 Cache 優化)
 // ==========================================
 window.updateGlobalMessageBadge = async function() {
-    let userId = window.cachedMyUserId;
-    if (!userId && window.supabaseClient) {
-        const { data: { session } } = await window.supabaseClient.auth.getSession();
-        userId = session?.user?.id;
-        window.cachedMyUserId = userId;
-    }
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const userId = session?.user?.id;
     if (!userId || !window.supabaseClient) return;
-    
+
     const msgBadge = document.getElementById('nav-msg-badge');
     if (!msgBadge) return;
 
     try {
-        const { count } = await window.supabaseClient.from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('receiver', userId).eq('is_read', false);
+        const { data: totalUnreadCount, error } = await window.supabaseClient.rpc('get_unread_message_count');
 
-        if (count > 0) {
+        if (error) {
+            console.warn("無法取得未讀訊息數量", error);
+            return;
+        }
+
+        if (totalUnreadCount > 0) {
             msgBadge.classList.remove('hidden');
         } else {
             msgBadge.classList.add('hidden');
@@ -355,7 +354,10 @@ function setupGlobalRealtime(userId) {
     }).subscribe();
 
     window.supabaseClient.channel('global-messages')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver=eq.${userId}` }, payload => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        // Filter out own messages
+        if (payload.new.sender_name === userId) return;
+
         const msgBadge = document.getElementById('nav-msg-badge');
         if (msgBadge && window.activeRoomId !== payload.new.room_id) {
             msgBadge.classList.remove('hidden');
