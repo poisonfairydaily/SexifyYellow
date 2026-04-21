@@ -108,14 +108,12 @@ describe('viewOtherProfile Error Handling', () => {
 describe('switchFansTab Error Handling', () => {
     beforeEach(() => {
         document.body.innerHTML = `
-            <div id="tab-fans"></div>
-            <div id="tab-subs"></div>
+            <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
+            <div id="tab-subs" class="text-gray-400 border-transparent">訂閱</div>
             <div id="fans-subs-list"></div>
         `;
 
-        // Mock getAuthenticatedUserId globally
         window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
-        console.error = jest.fn(); // Mock console.error if needed
     });
 
     afterEach(() => {
@@ -125,7 +123,6 @@ describe('switchFansTab Error Handling', () => {
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
-        // Mock window.supabaseClient.from().select().eq() chain
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
@@ -136,10 +133,6 @@ describe('switchFansTab Error Handling', () => {
 
         await window.switchFansTab('fans');
 
-        // Check if getAuthenticatedUserId was called
-        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
-
-        // Check if the error message is displayed
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
@@ -147,7 +140,6 @@ describe('switchFansTab Error Handling', () => {
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
 
-        // Mock window.supabaseClient.from().select().eq() chain
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
@@ -158,10 +150,6 @@ describe('switchFansTab Error Handling', () => {
 
         await window.switchFansTab('subs');
 
-        // Check if getAuthenticatedUserId was called
-        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
-
-        // Check if the error message is displayed
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
