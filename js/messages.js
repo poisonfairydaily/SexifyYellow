@@ -114,7 +114,7 @@ window.handleSendAction = async function() {
         window.selectedMediaUrl = null; 
         window.selectedMediaIsNsfw = false; // 重置
         
-        await loadMessages();
+        await window.loadMessages();
         
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
@@ -384,11 +384,11 @@ window.openChat = async function(targetId, displayName, avatarUrl, isGroup = fal
     if(typeof window.renderMessages === 'function') window.renderMessages();
     if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
     
-    await loadMessages();
+    await window.loadMessages();
     setupChatRealtime();
 };
 
-async function loadMessages() {
+window.loadMessages = async function() {
     if (!window.activeRoomId) return;
     const { data, error } = await window.supabaseClient.from('messages')
         .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
@@ -428,7 +428,7 @@ function setupChatRealtime() {
                 await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
             }
             
-            await loadMessages();
+            await window.loadMessages();
             
             if(typeof window.renderMessages === 'function') window.renderMessages();
             if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
@@ -464,7 +464,7 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
         }
 
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
-        loadMessages();
+        window.loadMessages();
         if(typeof window.renderMessages === 'function') window.renderMessages(); 
     } catch (e) { 
         console.error(e);
@@ -858,7 +858,7 @@ window.toggleNsfwBlurPreference = function() {
     const current = localStorage.getItem('nsfw_unblur_default') === 'true';
     localStorage.setItem('nsfw_unblur_default', !current);
     alert(!current ? '已設定：成人內容將不再模糊顯示' : '已設定：成人內容將預設模糊保護');
-    loadMessages();
+    window.loadMessages();
 };
 
 // ==========================================
