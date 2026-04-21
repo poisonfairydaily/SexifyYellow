@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 終極安全與體驗完整版 (無省略)
-// 功能：自動捲動 + 點擊大圖 + R2私密上傳 + JWT防護 + 詐騙過濾
+// 功能：自動捲動 + 點擊大圖 + R2私密上傳 + JWT防護 + 詐騙過濾 + 快取優化
 // ==========================================
 
 window.activeRoomId = null;
@@ -14,11 +14,23 @@ window.isRecording = false;
 window.selectedMediaUrl = null;
 window.selectedMediaIsNsfw = false; 
 
-// ✨ 核心升級：將檔案上傳至 Cloudflare R2 (私密 chat 資料夾)
+// ✨ 快取機制：獲取 User ID，避免 Lock Stolen 報錯
+async function getValidUserId() {
+    if (window.cachedMyUserId) return window.cachedMyUserId;
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (session && session.user) {
+        window.cachedMyUserId = session.user.id;
+        return window.cachedMyUserId;
+    }
+    return null;
+}
+
+// ✨ 核心升級：將檔案上傳至 Cloudflare R2
+// 註：如果 fileName 包含 "chat"，Worker 會將其放入私密目錄
 async function uploadChatMediaToR2(blob, fileName) {
     const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
     const formData = new FormData();
-    formData.append('file', blob, fileName); // 檔名包含 chat_ 會觸發 Worker 的私密防護
+    formData.append('file', blob, fileName); 
 
     const response = await fetch(WORKER_URL + 'upload', {
         method: 'POST',
@@ -62,11 +74,6 @@ function getFallbackAvatar(name) {
 function safeText(str) {
     if (!str) return '';
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-
-async function getValidUserId() {
-    const { data: { user } } = await window.supabaseClient.auth.getUser();
-    return user ? user.id : null;
 }
 
 function generateRoomId(id1, id2) {
@@ -769,7 +776,7 @@ window.toggleNsfwBlurPreference = function() {
 };
 
 // ==========================================
-// 🚨 用戶檢舉系統
+// 🚨 用戶檢舉系統 (已修復截圖上傳)
 // ==========================================
 window.openReportModal = function(reportedUserId, msgContent, msgImageUrl) {
     const reason = prompt("請輸入檢舉原因 (例如：發送非法內容、詐騙、騷擾)：\n\n系統將自動附上該則訊息作為證據。");
@@ -783,8 +790,9 @@ window.openReportModal = function(reportedUserId, msgContent, msgImageUrl) {
             const file = e.target.files[0];
             if (!file) return;
             try {
-                // 檢舉證據可存於 Supabase，因為需要後台審核
-                const screenshotUrl = await uploadMediaToSupabase(file, `reports/${Date.now()}_${file.name}`);
+                // ✨ 截圖使用 "report_" 開頭，會被 Worker 分配到公開的 media/ 資料夾，方便後台管理員直接查看
+                const fileName = `report_${Date.now()}_${file.name}`;
+                const screenshotUrl = await uploadChatMediaToR2(file, fileName);
                 await submitReport(reportedUserId, reason, screenshotUrl, msgContent, msgImageUrl);
             } catch (err) { alert('截圖上傳失敗'); }
         };
