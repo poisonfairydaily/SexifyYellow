@@ -1,6 +1,7 @@
 // ==========================================
 // js/app.js - 全域邏輯、導航、長按手勢與分享核心
 // ==========================================
+
 // 防 XSS 攻擊的核心過濾器
 window.escapeHTML = function(str) {
     if (typeof str !== 'string') return '';
@@ -11,6 +12,20 @@ window.escapeHTML = function(str) {
         return charsToReplace[tag] || tag;
     });
 };
+
+// ✨ 新增：文字安全過濾器 (Anti-Spam & Phishing)
+window.containsToxicContent = function(text) {
+    if (!text) return false;
+    
+    // 1. 攔截常見短網址 (常被用作隱藏惡意連結)
+    const shortLinkRegex = /(bit\.ly|t\.co|tinyurl|reurl\.cc|pse\.is)/i;
+    
+    // 2. 攔截要求私下聯絡的詐騙特徵
+    const scamRegex = /(加賴|加line|加微信|t\.me\/|line\.me\/|投資群|免費領)/i;
+    
+    return shortLinkRegex.test(text) || scamRegex.test(text);
+};
+
 // 1. 底部導航欄分頁切換
 window.switchTab = function(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(t => {
@@ -77,7 +92,7 @@ window.toggleNotifications = async function() {
         if (badge) badge.classList.add('hidden');
 
         const { data: { session } } = await window.supabaseClient.auth.getSession();
-    const userId = session?.user?.id;
+        const userId = session?.user?.id;
         if(!userId) return;
 
         list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
@@ -279,13 +294,12 @@ window.closeContactModal = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 };
 
-// ✨ 登出邏輯 (從 auth.js 移駕至此)
 window.logoutUser = async function() {
     if (confirm("確定要登出帳號嗎？")) {
         await window.supabaseClient.auth.signOut();
         localStorage.clear();
         sessionStorage.clear();
-        window.location.href = 'login.html'; // 直接導向登入頁
+        window.location.href = 'login.html'; 
     }
 };
 
@@ -341,32 +355,25 @@ function setupGlobalRealtime(userId) {
 
 // 應用程式初始化
 document.addEventListener('DOMContentLoaded', async () => {
-    // 確保 Supabase 載入
     if (!window.supabaseClient) return;
 
-    // 檢查登入狀態並啟動功能
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) {
         const userId = session.user.id;
-        // We no longer store userId in localStorage to avoid data exposure
         
-        // 啟動首頁內容
         if (typeof window.renderDiscovery === 'function') {
             window.renderDiscovery();
         }
 
-        // 檢查未讀通知與訊息
         try {
             const { count } = await window.supabaseClient.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
             if (count > 0) document.getElementById('notification-badge').classList.remove('hidden');
             
-            // ✨ 透過新增的全域函數計算紅點
             await window.updateGlobalMessageBadge();
         } catch(e) {
             console.warn("載入未讀標記失敗", e);
         }
         
-        // 綁定 WebSocket 監聽
         setupGlobalRealtime(userId);
     }
 });
@@ -393,35 +400,33 @@ window.handleShare = async function(postId, titleText) {
 };
 
 // ==========================================
-// ✨ 觸覺反饋與長按全螢幕預覽 (Haptic Touch - 離手即關閉)
+// ✨ 觸覺反饋與長按全螢幕預覽 (Haptic Touch)
 // ==========================================
 window.longPressTimer = null;
 window.isLongPressActive = false;
 
 window.startLongPress = function(e, postId, mediaUrl) {
-    if (!mediaUrl) return; // 純文字不觸發預覽
+    if (!mediaUrl) return; 
     window.isLongPressActive = false;
     const card = e.currentTarget;
-    card.style.transform = 'scale(0.96)'; // 點擊時微縮小
+    card.style.transform = 'scale(0.96)'; 
 
     window.longPressTimer = setTimeout(() => {
         window.isLongPressActive = true;
-        if (navigator.vibrate) navigator.vibrate(50); // Haptic Touch 輕微震動
+        if (navigator.vibrate) navigator.vibrate(50); 
         window.showImagePreview(postId, mediaUrl);
-    }, 400); // 按住 0.4 秒觸發大圖
+    }, 400); 
 };
 
 window.cancelLongPress = function(e, postId) {
-    clearTimeout(window.longPressTimer); // 取消計時
+    clearTimeout(window.longPressTimer); 
     const card = e.currentTarget;
-    if (card) card.style.transform = 'scale(1)'; // 恢復卡片大小
+    if (card) card.style.transform = 'scale(1)'; 
 };
 
-// 動態注入全螢幕大圖 Modal (綁定手指放開事件)
 window.showImagePreview = function(postId, mediaUrl) {
     let previewModal = document.getElementById('haptic-preview-modal');
     
-    // 第一次觸發時動態建立 Modal
     if (!previewModal) {
         previewModal = document.createElement('div');
         previewModal.id = 'haptic-preview-modal';
@@ -432,7 +437,6 @@ window.showImagePreview = function(postId, mediaUrl) {
         `;
         document.body.appendChild(previewModal);
 
-        // 綁定離手關閉事件
         const closeHandler = (e) => {
             e.preventDefault();
             window.closeImagePreview();
@@ -447,7 +451,7 @@ window.showImagePreview = function(postId, mediaUrl) {
     img.src = mediaUrl;
 
     previewModal.classList.remove('hidden');
-    void previewModal.offsetWidth; // 強制重繪
+    void previewModal.offsetWidth; 
     
     previewModal.classList.remove('opacity-0');
     img.classList.remove('scale-95');
@@ -465,6 +469,6 @@ window.closeImagePreview = function() {
         setTimeout(() => {
             previewModal.classList.add('hidden');
             img.src = '';
-        }, 300); // 等待淡出動畫結束
+        }, 300); 
     }
 };
