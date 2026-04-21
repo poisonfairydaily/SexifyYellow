@@ -297,32 +297,47 @@ window.loadRecentPosts = async function() {
 
 
 // --- 🚨 8. 用戶檢舉管理中心 (User Reports) ---
+// --- 🚨 8. 用戶檢舉管理中心 (User Reports) - 防彈查詢版 ---
 window.loadUserReports = async function() {
     const list = document.getElementById('user-reports-list');
     if(!list) return;
 
     try {
-        const { data, error } = await supabaseClient
+        // 第一步：先單純拉取檢舉紀錄 (不使用容易報錯的 Join)
+        const { data: reports, error } = await supabaseClient
             .from('user_reports')
-            .select(`
-                *,
-                reporter:reporter_id (display_name, username),
-                reported:reported_user_id (display_name, username)
-            `)
+            .select('*')
             .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        if (data.length === 0) {
+        if (!reports || reports.length === 0) {
             list.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400 font-bold">🎉 目前沒有待處理的檢舉</td></tr>`;
             return;
         }
 
-        list.innerHTML = data.map(r => {
+        // 第二步：收集所有牽涉到的 User IDs (檢舉人 + 被檢舉人)
+        const userIds = [...new Set(reports.flatMap(r => [r.reporter_id, r.reported_user_id]))];
+
+        // 第三步：一次過抓取這些使用者的 Profiles
+        const { data: profiles } = await supabaseClient
+            .from('profiles')
+            .select('id, display_name, username')
+            .in('id', userIds);
+
+        // 建立字典方便對應 (ID -> Profile)
+        const profMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+
+        // 渲染畫面
+        list.innerHTML = reports.map(r => {
             const statusColor = r.status === 'resolved' ? 'text-green-600 bg-green-50' : (r.status === 'dismissed' ? 'text-gray-500 bg-gray-100' : 'text-red-600 bg-red-50');
             const statusText = r.status === 'resolved' ? '已處分' : (r.status === 'dismissed' ? '已駁回' : '待處理');
             
-            // 處理證據圖片 (訊息截圖或原圖)
+            // 抓出名字，找不到就顯示未知
+            const reporter = profMap[r.reporter_id] || { display_name: '未知用戶', username: 'unknown' };
+            const reported = profMap[r.reported_user_id] || { display_name: '未知用戶', username: 'unknown' };
+            
+            // 處理證據圖片
             let imgHtml = '';
             if (r.screenshot_url) imgHtml += `<img src="${r.screenshot_url}" onclick="openLightbox('${r.screenshot_url}')" class="w-10 h-10 rounded object-cover cursor-zoom-in border border-red-200" title="用戶上傳的截圖">`;
             if (r.evidence_image) imgHtml += `<img src="${r.evidence_image}" onclick="openLightbox('${r.evidence_image}')" class="w-10 h-10 rounded object-cover cursor-zoom-in border border-gray-200 ml-1" title="原訊息夾帶的媒體">`;
@@ -333,9 +348,9 @@ window.loadUserReports = async function() {
                     <span class="px-2 py-1 rounded text-[10px] font-bold ${statusColor}">${statusText}</span>
                 </td>
                 <td class="p-3">
-                    <div class="font-bold text-gray-900">${escapeHTML(r.reported?.display_name || '未知用戶')}</div>
-                    <div class="text-[10px] text-gray-400">@${escapeHTML(r.reported?.username)}</div>
-                    <div class="text-[9px] text-gray-300 mt-1">檢舉人: ${escapeHTML(r.reporter?.display_name)}</div>
+                    <div class="font-bold text-gray-900">${escapeHTML(reported.display_name)}</div>
+                    <div class="text-[10px] text-gray-400">@${escapeHTML(reported.username)}</div>
+                    <div class="text-[9px] text-gray-300 mt-1">檢舉人: ${escapeHTML(reporter.display_name)}</div>
                 </td>
                 <td class="p-3 max-w-xs">
                     <div class="text-xs font-bold text-red-500 mb-1">事由: ${escapeHTML(r.reason)}</div>
@@ -347,26 +362,17 @@ window.loadUserReports = async function() {
                         <button onclick="updateReportStatus('${r.id}', 'resolved')" class="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded mr-1">處分/警告</button>
                         <button onclick="updateReportStatus('${r.id}', 'dismissed')" class="bg-gray-200 text-gray-700 text-[10px] font-bold px-3 py-1.5 rounded mt-1">無違規駁回</button>
                     ` : `
-                        <button onclick="deleteRecord('user_reports', '${r.id}')" class="text-gray-300 hover:text-red-500 text-[10px] underline">刪除紀錄</button>
+                        <button onclick="deleteRecord('user_reports', '${r.id}')" class="text-gray-300 hover:text-red-500 text-[10px] underline mt-1">刪除紀錄</button>
                     `}
                 </td>
             </tr>`;
         }).join('');
 
     } catch (e) {
-        console.error(e);
-        list.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-red-500">載入失敗</td></tr>`;
+        console.error("載入檢舉清單失敗:", e);
+        list.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-red-500">載入失敗: ${escapeHTML(e.message)}</td></tr>`;
     }
 };
-
-window.updateReportStatus = async function(reportId, newStatus) {
-    if (!confirm(newStatus === 'resolved' ? '確定標記為「已處分」？（此動作僅更新狀態，若需封鎖用戶請至 Supabase Auth 操作）' : '確定駁回此檢舉？')) return;
-    
-    const { error } = await supabaseClient.from('user_reports').update({ status: newStatus }).eq('id', reportId);
-    if (error) alert('更新失敗');
-    else loadUserReports();
-};
-
 
 // --- 🛠️ 9. 全域管理功能 (刪除/下架/燈箱) ---
 window.approveProduct = async (id) => {
