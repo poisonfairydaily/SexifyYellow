@@ -391,7 +391,7 @@ window.saveProfileData = async function() {
         const { error } = await window.supabaseClient.from('profiles').update(updateData).eq('id', myId);
         if (error) throw error;
 
-        localStorage.setItem('myChatName', updateData.display_name);
+
         closeEditProfile();
         renderProfile();
     } catch (err) { alert("更新失敗：" + err.message); } 
