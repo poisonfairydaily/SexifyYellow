@@ -263,11 +263,11 @@ window.renderProfile = async function() {
 
                     <!-- 📊 統計數字區 -->
                     <div class="flex items-center gap-6 mt-4 pt-4 border-t border-gray-50">
-                        <div class="text-center">
+                        <div class="text-center cursor-pointer" onclick="openFansSubsModal('subs')">
                             <div class="text-sm font-black text-gray-900" id="profile-stats-following">${followingCount}</div>
                             <div class="text-[10px] font-bold text-gray-400">追蹤</div>
                         </div>
-                        <div class="text-center">
+                        <div class="text-center cursor-pointer" onclick="openFansSubsModal('fans')">
                             <div class="text-sm font-black text-gray-900" id="profile-stats-followers">${followersCount}</div>
                             <div class="text-[10px] font-bold text-gray-400">粉絲</div>
                         </div>
@@ -441,8 +441,21 @@ window.viewOtherProfile = async function(userId) {
 
         if (isSubbed) {
             followBtn.innerText = "已追蹤";
-            followBtn.className = "bg-gray-200 text-gray-700 px-6 py-2 rounded-full text-xs font-bold";
-            followBtn.onclick = null;
+            followBtn.className = "bg-gray-200 text-gray-700 px-6 py-2 rounded-full text-xs font-bold cursor-pointer hover:bg-red-100 hover:text-red-600 transition";
+            followBtn.onclick = async () => {
+                if (!confirm("確定要取消追蹤嗎？")) return;
+                followBtn.innerText = "處理中...";
+                try {
+                    await window.supabaseClient.from('subscriptions').delete().eq('subscriber_id', myId).eq('creator_id', userId);
+                    followBtn.innerText = "追蹤";
+                    followBtn.className = "bg-sexify text-white px-6 py-2 rounded-full text-xs font-bold cursor-pointer";
+                    // 重新載入他人主頁以更新狀態與顯示
+                    viewOtherProfile(userId);
+                } catch(e) {
+                    followBtn.innerText = "取消失敗";
+                    setTimeout(() => viewOtherProfile(userId), 1000);
+                }
+            };
         } else {
             followBtn.innerText = "追蹤";
             followBtn.className = "bg-sexify text-white px-6 py-2 rounded-full text-xs font-bold";
