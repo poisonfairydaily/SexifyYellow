@@ -105,7 +105,7 @@ describe('viewOtherProfile Error Handling', () => {
     });
 });
 
-describe('switchFansTab Error Handling', () => {
+describe('switchFansTab', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -118,6 +118,59 @@ describe('switchFansTab Error Handling', () => {
 
     afterEach(() => {
         jest.restoreAllMocks();
+    });
+
+    test('handles successful fetch for fans tab', async () => {
+        const mockSubs = [
+            { id: 'sub-1', subscriber_id: 'user-2' },
+            { id: 'sub-2', subscriber_id: 'user-3' }
+        ];
+        const mockProfs = [
+            { id: 'user-2', display_name: 'Alice', avatar_url: 'alice.jpg' },
+            { id: 'user-3', display_name: 'Bob', avatar_url: null }
+        ];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfs, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Alice');
+        expect(list.innerHTML).toContain('alice.jpg');
+        expect(list.innerHTML).toContain('Bob');
+        expect(list.innerHTML).toContain('ui-avatars.com/api/?name=Bob');
+    });
+
+    test('handles empty followers list correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
     });
 
     test('handles Supabase fetch error correctly for fans tab', async () => {
@@ -135,6 +188,56 @@ describe('switchFansTab Error Handling', () => {
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles successful fetch for subs tab', async () => {
+        const mockSubs = [
+            { id: 'sub-1', creator_id: 'user-2' }
+        ];
+        const mockProfs = [
+            { id: 'user-2', display_name: 'Alice', avatar_url: 'alice.jpg' }
+        ];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfs, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Alice');
+        expect(list.innerHTML).toContain('alice.jpg');
+        expect(list.innerHTML).toContain('取消追蹤');
+    });
+
+    test('handles empty list correctly for subs tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
     });
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
