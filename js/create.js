@@ -5,6 +5,7 @@
  * 2. 雙桶分流對接：確保貼文檔案進入 POST_BUCKET (media/ 目錄)
  * 3. 欄位精準對齊：Supabase posts 表使用 media_url
  * 4. 完整的 UI 預覽與觸控滑動關閉邏輯
+ * 5. ✨ 加入文字內容安全檢測
  */
 
 // --- 🛡️ 0. 全域工具函數 ---
@@ -185,6 +186,11 @@ window.publishPost = async function() {
         const isPaid = document.getElementById('view-paid').checked;
 
         if (!selectedFile && !caption) throw new Error('請輸入內容或選擇檔案');
+
+        // ✨ 呼叫 app.js 中的全域函數：檢查毒連結與敏感詞
+        if (window.containsToxicContent && window.containsToxicContent(caption)) {
+            throw new Error("⚠️ 系統偵測到您的內容包含不安全的連結或違規詞彙，請修改後再發佈。");
+        }
 
         let mediaUrl = '';
 
