@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 終極安全與體驗完整版 (無省略)
-// 功能：修復 Bug + 自動捲動 + 點擊大圖 + AI 檢測 + NSFW 模糊 + 檢舉系統 + 群組邏輯
+// 功能：修復 Bug + 自動捲動 + 點擊大圖 + AI 檢測 + NSFW 模糊 + 檢舉系統 + 詐騙過濾
 // ==========================================
 
 window.activeRoomId = null;
@@ -12,7 +12,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
-window.selectedMediaIsNsfw = false; // ✨ 新增：紀錄準備上傳的媒體是否為成人內容
+window.selectedMediaIsNsfw = false; 
 
 // 內部工具：將檔案上傳至 Supabase Storage (media 桶)
 async function uploadMediaToSupabase(fileBlob, filePath) {
@@ -97,6 +97,11 @@ window.handleSendAction = async function() {
         const myId = await getValidUserId();
         if (!myId || !window.activeRoomId) return alert('請先登入');
 
+        // ✨ 新增：呼叫 app.js 的全域函數檢查毒連結與敏感詞
+        if (window.containsToxicContent && window.containsToxicContent(content)) {
+            throw new Error("⚠️ 系統偵測到您的內容包含不安全的連結或違規詞彙，請修改後再發送。");
+        }
+
         const targetReceiver = window.activeIsGroup ? myId : window.activeChatTarget;
 
         const { error } = await window.supabaseClient.from('messages').insert([{
@@ -106,25 +111,25 @@ window.handleSendAction = async function() {
             content: content,
             image_url: window.selectedMediaUrl,
             is_read: window.activeIsGroup ? true : false,
-            is_nsfw: window.selectedMediaIsNsfw || false // ✨ 寫入成人標籤
+            is_nsfw: window.selectedMediaIsNsfw || false 
         }]);
 
         if (error) throw error;
         input.value = '';
         window.selectedMediaUrl = null; 
-        window.selectedMediaIsNsfw = false; // 重置
+        window.selectedMediaIsNsfw = false; 
         
         await loadMessages();
         
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
-        alert('傳送失敗');
+        alert(e.message || '傳送失敗');
     } finally {
         btn.disabled = false;
     }
 };
 
-// ✨ 修復的渲染對話內容函數 (包含 NSFW Blur 與 檢舉按鈕)
+// ✨ 渲染對話內容函數 (包含 NSFW Blur 與 檢舉按鈕)
 async function drawMessages(messages, profileMap = null) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
@@ -752,12 +757,11 @@ window.toggleVoiceRecord = async function() {
 // ==========================================
 async function scanMediaWithAI(file) {
     // 未來請在此處接駁真實 API (如 Sightengine 或 Google Vision)
-    // 這裡我們暫時回傳測試結果：不阻擋上傳，但標記為 NSFW 測試 Blur 功能
     return new Promise(resolve => {
         setTimeout(() => {
             resolve({
-                isIllegal: false, // 設為 true 則阻擋上傳
-                isNsfw: true      // 設為 true 則寫入 is_nsfw 觸發 Blur
+                isIllegal: false, 
+                isNsfw: true      
             });
         }, 500); 
     });
@@ -776,12 +780,10 @@ window.handleImageSelection = async function(input) {
     chatInput.disabled = true;
 
     try {
-        // ✨ AI 檢測攔截
         const aiResult = await scanMediaWithAI(file);
         if (aiResult.isIllegal) {
             throw new Error("系統檢測到包含嚴重違規內容，上傳已被拒絕。");
         }
-        // 紀錄 NSFW 標籤，稍後隨訊息寫入 DB
         window.selectedMediaIsNsfw = aiResult.isNsfw;
 
         chatInput.placeholder = "媒體檔案上傳中...";
@@ -812,14 +814,13 @@ window.handleImageSelection = async function(input) {
 // 🔍 模組 3：媒體大圖查看與 NSFW 解鎖燈箱
 // ==========================================
 window.handleMediaClick = function(url, isVideo, element, isInitiallyBlurred) {
-    // 解鎖 Blur
     if (isInitiallyBlurred && element.classList.contains('blur-2xl')) {
         if (confirm('⚠️ 此內容可能含有成人或敏感內容，確定要觀看嗎？\n\n(您可以在設定中關閉此預設警告)')) {
             element.classList.remove('blur-2xl');
             const icon = element.nextElementSibling;
-            if (icon) icon.remove(); // 移除遮罩圖示
+            if (icon) icon.remove();
         }
-        return; // 解鎖後先不放大，等用戶再點一次才放大
+        return; 
     }
     window.openMediaViewer(url, isVideo);
 };
