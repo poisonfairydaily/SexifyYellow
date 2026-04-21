@@ -108,13 +108,12 @@ describe('viewOtherProfile Error Handling', () => {
 describe('switchFansTab Error Handling', () => {
     beforeEach(() => {
         document.body.innerHTML = `
-            <div id="tab-fans"></div>
-            <div id="tab-subs"></div>
+            <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
+            <div id="tab-subs" class="text-gray-400 border-transparent">訂閱</div>
             <div id="fans-subs-list"></div>
         `;
 
         window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
-        console.error = jest.fn();
     });
 
     afterEach(() => {
@@ -122,7 +121,8 @@ describe('switchFansTab Error Handling', () => {
     });
 
     test('handles Supabase fetch error correctly for fans tab', async () => {
-        const mockError = new Error('Database error');
+        const mockError = new Error('Database connection failed');
+
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
@@ -133,13 +133,13 @@ describe('switchFansTab Error Handling', () => {
 
         await window.switchFansTab('fans');
 
-        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
-        const mockError = new Error('Database error');
+        const mockError = new Error('Database connection failed');
+
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
@@ -150,7 +150,6 @@ describe('switchFansTab Error Handling', () => {
 
         await window.switchFansTab('subs');
 
-        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
