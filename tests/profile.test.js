@@ -120,6 +120,60 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
+    test('handles empty fans list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles valid fans list correctly', async () => {
+        const mockSubs = [
+            { subscriber_id: 'user-2' },
+            { subscriber_id: 'user-3' }
+        ];
+
+        const mockProfs = [
+            { id: 'user-2', display_name: 'User Two', avatar_url: 'http://example.com/avatar2.jpg' },
+            { id: 'user-3', display_name: 'User Three', avatar_url: 'http://example.com/avatar3.jpg' }
+        ];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfs, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('User Two');
+        expect(list.innerHTML).toContain('User Three');
+        expect(list.innerHTML).not.toContain('目前還沒有粉絲');
+        expect(list.innerHTML).not.toContain('讀取失敗');
+    });
+
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
