@@ -1,7 +1,6 @@
 /**
- * admin.js - 究極管理員核心版 (2026 雙桶分流穩定版)
- * 功能：雙桶 R2 對接、WebP 壓縮、AI 報告解析、全域內容控制
- * 修正：官方商品上傳自動進入 MY_BUCKET，用戶貼文讀取自動定向至 POST_BUCKET
+ * admin.js - 究極管理員核心版 (2026 雙桶分流穩定版 + 用戶檢舉審查系統)
+ * 功能：雙桶 R2 對接、WebP 壓縮、AI 報告解析、全域內容控制、用戶行為檢舉審查
  */
 
 const SUPABASE_URL = 'https://shsmvbeebuxscnvnmlzf.supabase.co';
@@ -58,30 +57,77 @@ window.onload = async () => {
         
         if(adminDash) {
             adminDash.style.display = 'flex';
+            
+            // ✨ 動態注入檢舉選單與容器 (如果 HTML 還沒寫，自動補上)
+            injectReportTabUI();
+            
             loadPendingProducts();
             loadRecentPosts();
             loadAuditList(); 
+            loadUserReports(); // ✨ 載入檢舉清單
         } else if (adminSec) {
             adminSec.style.display = 'block';
         }
         
-
     } catch (err) {
         console.error("初始化失敗:", err);
         if(loginSec) loginSec.style.display = 'block';
     }
 };
 
+// ✨ 動態注入檢舉 UI (避免修改 HTML)
+function injectReportTabUI() {
+    const tabNav = document.querySelector('.flex.space-x-2.mb-6');
+    if (tabNav && !document.getElementById('tab-reports')) {
+        tabNav.innerHTML += `<button class="tab-btn px-4 py-2 rounded-lg font-bold text-gray-500 hover:bg-gray-100" onclick="window.switchTab('reports')">🚨 檢舉審查</button>`;
+    }
+
+    const tabContainer = document.querySelector('.bg-white.rounded-2xl.shadow-sm.p-6.border');
+    if (tabContainer && !document.getElementById('reports')) {
+        tabContainer.innerHTML += `
+            <div id="reports" class="tab-content hidden">
+                <h2 class="text-xl font-bold mb-4">🚨 用戶檢舉處理中心</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <th class="p-3">狀態</th>
+                                <th class="p-3">被檢舉人</th>
+                                <th class="p-3">檢舉原因 & 證據內容</th>
+                                <th class="p-3">截圖/圖片</th>
+                                <th class="p-3">處理動作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-reports-list" class="text-sm">
+                            <tr><td colspan="5" class="text-center py-10">載入中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+    }
+}
+
+
 // --- 🔄 2. 頁籤切換邏輯 ---
 window.switchTab = function(tabId) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.add('hidden'); // 改用 Tailwind hidden
+        el.style.display = 'none'; // 雙重保險
+    });
+    document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('bg-gray-800', 'text-white');
+        el.classList.add('text-gray-500');
+    });
     
     const targetTab = document.getElementById(tabId);
-    if(targetTab) targetTab.classList.add('active');
+    if(targetTab) {
+        targetTab.classList.remove('hidden');
+        targetTab.style.display = 'block';
+    }
     
     if(event && event.currentTarget) {
-        event.currentTarget.classList.add('active');
+        event.currentTarget.classList.remove('text-gray-500');
+        event.currentTarget.classList.add('bg-gray-800', 'text-white');
     }
 };
 
@@ -104,14 +150,6 @@ if (pImageInput) {
         });
     });
 }
-
-
-
-
-/**
- * ✨ R2 代理上傳 (分流對接版)
- */
-
 
 // --- 🚀 4. 官方商品上架 (自動進入 MY_BUCKET) ---
 const uploadBtn = document.getElementById('upload-btn');
@@ -140,7 +178,6 @@ if (uploadBtn) {
                 const aiReport = audit?.safeSearchAnnotation || audit;
 
                 const webpBlob = await window.generateWebPBlob(file);
-                // ✨【分流關鍵】檔名帶入 product_ 以觸發 Worker 存入 MY_BUCKET 的 products/
                 const fileName = `product_official_${Date.now()}_${i}.webp`;
 
                 const publicUrl = await uploadToR2(webpBlob, fileName);
@@ -196,7 +233,6 @@ window.loadPendingProducts = async function() {
         
         grid.innerHTML = (data || []).map(item => {
             let firstImg = item.image_url.split(',')[0];
-            // ✨ 分流讀取邏輯
             let imgPath = firstImg;
             if (firstImg.includes('r2.dev') || firstImg.includes('workers.dev')) {
                 imgPath = `${WORKER_URL}/products/${firstImg.split('/').pop()}`;
@@ -285,7 +321,6 @@ window.loadRecentPosts = async function() {
 
         grid.innerHTML = (data || []).map(post => {
             let imgPath = post.media_url;
-            // ✨ 貼文分流讀取邏輯：從 media/ 目錄讀取
             if (imgPath && (imgPath.includes('r2.dev') || imgPath.includes('workers.dev'))) {
                 imgPath = `${WORKER_URL}/media/${imgPath.split('/').pop()}`;
             }
@@ -301,8 +336,80 @@ window.loadRecentPosts = async function() {
     } catch(e) { console.error(e); }
 };
 
-// --- 🛠️ 8. 全域管理功能 (刪除/下架/燈箱) ---
 
+// --- 🚨 8. 用戶檢舉管理中心 (User Reports) ---
+window.loadUserReports = async function() {
+    const list = document.getElementById('user-reports-list');
+    if(!list) return;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('user_reports')
+            .select(`
+                *,
+                reporter:reporter_id (display_name, username),
+                reported:reported_user_id (display_name, username)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data.length === 0) {
+            list.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400 font-bold">🎉 目前沒有待處理的檢舉</td></tr>`;
+            return;
+        }
+
+        list.innerHTML = data.map(r => {
+            const statusColor = r.status === 'resolved' ? 'text-green-600 bg-green-50' : (r.status === 'dismissed' ? 'text-gray-500 bg-gray-100' : 'text-red-600 bg-red-50');
+            const statusText = r.status === 'resolved' ? '已處分' : (r.status === 'dismissed' ? '已駁回' : '待處理');
+            
+            // 處理證據圖片 (訊息截圖或原圖)
+            let imgHtml = '';
+            if (r.screenshot_url) imgHtml += `<img src="${r.screenshot_url}" onclick="openLightbox('${r.screenshot_url}')" class="w-10 h-10 rounded object-cover cursor-zoom-in border border-red-200" title="用戶上傳的截圖">`;
+            if (r.evidence_image) imgHtml += `<img src="${r.evidence_image}" onclick="openLightbox('${r.evidence_image}')" class="w-10 h-10 rounded object-cover cursor-zoom-in border border-gray-200 ml-1" title="原訊息夾帶的媒體">`;
+
+            return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="p-3">
+                    <span class="px-2 py-1 rounded text-[10px] font-bold ${statusColor}">${statusText}</span>
+                </td>
+                <td class="p-3">
+                    <div class="font-bold text-gray-900">${escapeHTML(r.reported?.display_name || '未知用戶')}</div>
+                    <div class="text-[10px] text-gray-400">@${escapeHTML(r.reported?.username)}</div>
+                    <div class="text-[9px] text-gray-300 mt-1">檢舉人: ${escapeHTML(r.reporter?.display_name)}</div>
+                </td>
+                <td class="p-3 max-w-xs">
+                    <div class="text-xs font-bold text-red-500 mb-1">事由: ${escapeHTML(r.reason)}</div>
+                    ${r.evidence_text ? `<div class="text-[11px] text-gray-600 bg-gray-100 p-2 rounded line-clamp-2">" ${escapeHTML(r.evidence_text)} "</div>` : ''}
+                </td>
+                <td class="p-3 flex items-center">${imgHtml || '<span class="text-xs text-gray-300">無圖片</span>'}</td>
+                <td class="p-3">
+                    ${r.status === 'pending' ? `
+                        <button onclick="updateReportStatus('${r.id}', 'resolved')" class="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded mr-1">處分/警告</button>
+                        <button onclick="updateReportStatus('${r.id}', 'dismissed')" class="bg-gray-200 text-gray-700 text-[10px] font-bold px-3 py-1.5 rounded">無違規駁回</button>
+                    ` : `
+                        <button onclick="deleteRecord('user_reports', '${r.id}')" class="text-gray-300 hover:text-red-500 text-[10px] underline">刪除紀錄</button>
+                    `}
+                </td>
+            </tr>`;
+        }).join('');
+
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-red-500">載入失敗</td></tr>`;
+    }
+};
+
+window.updateReportStatus = async function(reportId, newStatus) {
+    if (!confirm(newStatus === 'resolved' ? '確定標記為「已處分」？（此動作僅更新狀態，若需封鎖用戶請至 Supabase Auth 操作）' : '確定駁回此檢舉？')) return;
+    
+    const { error } = await supabaseClient.from('user_reports').update({ status: newStatus }).eq('id', reportId);
+    if (error) alert('更新失敗');
+    else loadUserReports();
+};
+
+
+// --- 🛠️ 9. 全域管理功能 (刪除/下架/燈箱) ---
 window.approveProduct = async (id) => {
     if(!confirm("核准上架？")) return;
     const { error } = await supabaseClient.from('products').update({ status: 'approved' }).eq('id', id);
@@ -327,9 +434,13 @@ window.hardDeleteProduct = async (id, imageUrls) => {
 };
 
 window.deleteRecord = async (table, id) => {
-    if(!confirm(`確定要刪除這筆 ${table} 紀錄嗎？`)) return;
+    if(!confirm(`確定要刪除這筆紀錄嗎？`)) return;
     const { error } = await supabaseClient.from(table).delete().eq('id', id);
-    if (!error) { alert("已刪除"); if(table === 'posts') loadRecentPosts(); }
+    if (!error) { 
+        alert("已刪除"); 
+        if (table === 'posts') loadRecentPosts(); 
+        if (table === 'user_reports') loadUserReports();
+    }
 };
 
 window.openLightbox = function(url) {
@@ -341,6 +452,11 @@ window.openLightbox = function(url) {
         overlay.onclick = () => { overlay.style.display = 'none'; };
         document.body.appendChild(overlay);
     }
-    overlay.innerHTML = `<img src="${url}" style="max-width:90%; max-height:90%; border-radius:10px; border:2px solid white;">`;
+    // 判斷是否為影片
+    if(url.match(/\.(mp4|webm|mov|ogg)$/i)) {
+        overlay.innerHTML = `<video src="${url}" controls autoplay class="max-w-[90%] max-h-[90%] rounded-lg border-2 border-white"></video>`;
+    } else {
+        overlay.innerHTML = `<img src="${url}" style="max-width:90%; max-height:90%; border-radius:10px; border:2px solid white;">`;
+    }
     overlay.style.display = 'flex';
 };

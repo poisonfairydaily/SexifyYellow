@@ -108,24 +108,21 @@ describe('viewOtherProfile Error Handling', () => {
 describe('switchFansTab Error Handling', () => {
     beforeEach(() => {
         document.body.innerHTML = `
-            <button id="tab-fans"></button>
-            <button id="tab-subs"></button>
+            <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
+            <div id="tab-subs" class="text-gray-400 border-transparent">訂閱</div>
             <div id="fans-subs-list"></div>
         `;
 
-        // Mock getAuthenticatedUserId globally
         window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
-        jest.spyOn(console, 'error').mockImplementation(() => {});
     });
 
     afterEach(() => {
         jest.restoreAllMocks();
     });
 
-    test('handles Supabase fetch error correctly when loading fans', async () => {
+    test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
-        // Mock window.supabaseClient.from('subscriptions').select('*').eq('creator_id', myId)
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
@@ -140,10 +137,9 @@ describe('switchFansTab Error Handling', () => {
         expect(list.innerHTML).toContain('讀取失敗');
     });
 
-    test('handles Supabase fetch error correctly when loading subs', async () => {
+    test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
 
-        // Mock window.supabaseClient.from('subscriptions').select('*').eq('subscriber_id', myId)
         window.supabaseClient = {
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
