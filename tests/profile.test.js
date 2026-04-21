@@ -105,7 +105,7 @@ describe('viewOtherProfile Error Handling', () => {
     });
 });
 
-describe('switchFansTab Error Handling', () => {
+describe('switchFansTab', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -118,6 +118,66 @@ describe('switchFansTab Error Handling', () => {
 
     afterEach(() => {
         jest.restoreAllMocks();
+    });
+
+test('handles empty data correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles empty data correctly for subs tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+    });
+
+    test('handles successful data load correctly for fans tab', async () => {
+        const mockSubscriptions = { data: [{ subscriber_id: 'user-2' }], error: null };
+        const mockProfiles = { data: [{ id: 'user-2', display_name: 'Test Fan', avatar_url: 'avatar.jpg' }], error: null };
+
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue(mockSubscriptions)
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue(mockProfiles)
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Test Fan');
+        expect(list.innerHTML).toContain('avatar.jpg');
     });
 
     test('handles Supabase fetch error correctly for fans tab', async () => {
