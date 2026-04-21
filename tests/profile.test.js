@@ -120,6 +120,21 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
+    test('handles empty fans list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
@@ -135,6 +150,21 @@ describe('switchFansTab Error Handling', () => {
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles empty subs list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
     });
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
