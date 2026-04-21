@@ -1,6 +1,6 @@
 // ==========================================
 // js/messages.js - 終極安全與體驗完整版 (無省略)
-// 功能：修復 Bug + 自動捲動 + 點擊大圖 + AI 檢測 + NSFW 模糊 + 檢舉系統 + 詐騙過濾
+// 功能：自動捲動 + 點擊大圖 + R2私密上傳 + JWT防護 + 詐騙過濾
 // ==========================================
 
 window.activeRoomId = null;
@@ -14,27 +14,44 @@ window.isRecording = false;
 window.selectedMediaUrl = null;
 window.selectedMediaIsNsfw = false; 
 
-// 內部工具：將檔案上傳至 Supabase Storage (media 桶)
-async function uploadMediaToSupabase(fileBlob, filePath) {
-    try {
-        const { data, error } = await window.supabaseClient.storage
-            .from('media')
-            .upload(filePath, fileBlob, {
-                cacheControl: '3600',
-                upsert: false
-            });
+// ✨ 核心升級：將檔案上傳至 Cloudflare R2 (私密 chat 資料夾)
+async function uploadChatMediaToR2(blob, fileName) {
+    const WORKER_URL = 'https://sexify-uploader.poisonfairydaily.workers.dev/'; 
+    const formData = new FormData();
+    formData.append('file', blob, fileName); // 檔名包含 chat_ 會觸發 Worker 的私密防護
 
-        if (error) throw error;
+    const response = await fetch(WORKER_URL + 'upload', {
+        method: 'POST',
+        body: formData
+    });
 
-        const { data: publicData } = window.supabaseClient.storage
-            .from('media')
-            .getPublicUrl(filePath);
+    if (!response.ok) throw new Error(`上傳連線失敗`);
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error);
+    
+    return result.url;
+}
 
-        return publicData.publicUrl;
-    } catch (err) {
-        console.error("Supabase 上傳失敗:", err);
-        throw err;
-    }
+// ✨ WebP 自動壓縮引擎
+async function generateWebPBlob(file) {
+    if (!file.type.startsWith('image/')) return file; 
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const max_size = 1200; 
+            let width = img.width, height = img.height;
+            if (width > height) { if (width > max_size) { height *= max_size / width; width = max_size; } }
+            else { if (height > max_size) { width *= max_size / height; height = max_size; } }
+            canvas.width = width; canvas.height = height;
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.85); 
+        };
+        img.onerror = () => { resolve(file); };
+    });
 }
 
 function getFallbackAvatar(name) {
@@ -44,12 +61,7 @@ function getFallbackAvatar(name) {
 
 function safeText(str) {
     if (!str) return '';
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
 async function getValidUserId() {
@@ -62,7 +74,6 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_');
 }
 
-// ✨ 強化的捲動到底部函數 (保證準確)
 window.scrollToBottom = function() {
     const container = document.getElementById('chat-messages');
     if (container) {
@@ -75,7 +86,6 @@ window.scrollToBottom = function() {
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
-    
     if (window.activeIsGroup) {
         statusText.innerHTML = '● 群組聊天';
         statusText.className = 'text-[10px] font-bold mt-1 uppercase tracking-tighter text-gray-400';
@@ -97,7 +107,6 @@ window.handleSendAction = async function() {
         const myId = await getValidUserId();
         if (!myId || !window.activeRoomId) return alert('請先登入');
 
-        // ✨ 新增：呼叫 app.js 的全域函數檢查毒連結與敏感詞
         if (window.containsToxicContent && window.containsToxicContent(content)) {
             throw new Error("⚠️ 系統偵測到您的內容包含不安全的連結或違規詞彙，請修改後再發送。");
         }
@@ -120,7 +129,6 @@ window.handleSendAction = async function() {
         window.selectedMediaIsNsfw = false; 
         
         await loadMessages();
-        
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
         alert(e.message || '傳送失敗');
@@ -129,13 +137,16 @@ window.handleSendAction = async function() {
     }
 };
 
-// ✨ 渲染對話內容函數 (包含 NSFW Blur 與 檢舉按鈕)
 async function drawMessages(messages, profileMap = null) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
     
     const myId = await getValidUserId();
     let lastDate = null;
+    
+    // ✨ 取得當前用戶的 JWT Token (用來解鎖私密圖片)
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const jwtToken = session?.access_token || '';
 
     container.innerHTML = messages.map(m => {
         const isMine = m.sender_name === myId;
@@ -151,18 +162,21 @@ async function drawMessages(messages, profileMap = null) {
         }
 
         const cleanContent = safeText(m.content);
-        const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
+        let safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
         
-        const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
-        const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
+        // ✨ JWT 鑰匙注入：如果網址屬於聊天室私密目錄，自動在網址尾巴掛上 Token
+        if (safeImgUrl && safeImgUrl.includes('/chat/')) {
+            safeImgUrl = `${safeImgUrl}?token=${jwtToken}`;
+        }
         
-        // ✨ NSFW Blur 與燈箱顯示邏輯
+        const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)/i) || safeImgUrl.includes('voice_'));
+        const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)/i) && !isAudio;
+        
         let mediaHtml = '';
         if (safeImgUrl) {
             const disableBlur = localStorage.getItem('nsfw_unblur_default') === 'true';
             const isNsfw = m.is_nsfw === true; 
             const needsBlur = isNsfw && !disableBlur;
-            
             const blurClass = needsBlur ? 'blur-2xl cursor-pointer select-none' : 'cursor-pointer';
 
             if (isAudio) {
@@ -206,11 +220,8 @@ async function drawMessages(messages, profileMap = null) {
     }).join('');
 
     window.scrollToBottom();
-
     const images = container.querySelectorAll('img');
-    images.forEach(img => {
-        img.onload = () => window.scrollToBottom();
-    });
+    images.forEach(img => { img.onload = () => window.scrollToBottom(); });
 }
 
 window.renderMessages = async function() {
@@ -458,16 +469,9 @@ function setupChatRealtime() {
 window.deleteMessage = async function(msgId, senderId, mediaUrl) {
     const myId = await getValidUserId();
     if (myId !== senderId) return; 
-    if (!confirm('確定回收這條訊息？(相關媒體檔案也將從伺服器永久刪除)')) return;
+    if (!confirm('確定回收這條訊息？')) return;
     
     try {
-        if (mediaUrl && mediaUrl.includes('/storage/v1/object/public/media/')) {
-            const filePath = mediaUrl.split('/storage/v1/object/public/media/')[1];
-            if (filePath) {
-                await window.supabaseClient.storage.from('media').remove([filePath]);
-            }
-        }
-
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
         loadMessages();
         if(typeof window.renderMessages === 'function') window.renderMessages(); 
@@ -478,9 +482,8 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
 };
 
 // ==========================================
-// 🌟 建立群組與成員管理功能
+// 🌟 群組與成員管理功能
 // ==========================================
-
 window.openCreateGroupModal = function() {
     const modal = document.getElementById('create-group-modal');
     modal.classList.remove('hidden');
@@ -500,54 +503,32 @@ window.handleCreateGroup = async function() {
     const membersStr = membersInput ? membersInput.value.trim() : '';
 
     if (!name) return alert('請輸入群組名稱');
-    
     const myId = await getValidUserId();
     if (!myId) return;
 
     try {
-        const { data: groupData, error: groupErr } = await window.supabaseClient.from('chat_groups').insert([{
-            name: name,
-            owner_id: myId
-        }]).select().single();
-
+        const { data: groupData, error: groupErr } = await window.supabaseClient.from('chat_groups').insert([{ name: name, owner_id: myId }]).select().single();
         if (groupErr) throw groupErr;
 
-        const membersToInsert = [{
-            group_id: groupData.id,
-            user_id: myId
-        }];
+        const membersToInsert = [{ group_id: groupData.id, user_id: myId }];
 
         if (membersStr) {
             const terms = membersStr.split(',').map(s => s.trim()).filter(s => s);
             if (terms.length > 0) {
                 let orConditions = terms.map(t => `username.ilike.%${t}%,display_name.ilike.%${t}%`).join(',');
-                
-                const { data: foundUsers } = await window.supabaseClient.from('profiles')
-                    .select('id')
-                    .or(orConditions);
-
+                const { data: foundUsers } = await window.supabaseClient.from('profiles').select('id').or(orConditions);
                 if (foundUsers && foundUsers.length > 0) {
-                    foundUsers.forEach(u => {
-                        if (u.id !== myId) {
-                            membersToInsert.push({
-                                group_id: groupData.id,
-                                user_id: u.id
-                            });
-                        }
-                    });
+                    foundUsers.forEach(u => { if (u.id !== myId) membersToInsert.push({ group_id: groupData.id, user_id: u.id }); });
                 }
             }
         }
-
         await window.supabaseClient.from('chat_group_members').insert(membersToInsert);
-
         window.closeCreateGroupModal();
         nameInput.value = '';
         if (membersInput) membersInput.value = '';
         alert('群組建立成功！');
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (err) {
-        console.error("群組建立失敗", err);
         alert("建立失敗，請稍後再試。");
     }
 };
@@ -569,21 +550,14 @@ window.closeGroupSettings = function() {
 window.loadGroupMembers = async function() {
     const list = document.getElementById('group-members-list');
     list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
-
     const myId = await getValidUserId();
-
     const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
     const isOwner = groupData && groupData.owner_id === myId;
-
     const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
-    if (!members) {
-        list.innerHTML = `<div class="text-center py-10 text-gray-400">載入失敗</div>`;
-        return;
-    }
-
+    
+    if (!members) return;
     const userIds = members.map(m => m.user_id);
     const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, username, avatar_url').in('id', userIds);
-
     if (!profiles) return;
 
     list.innerHTML = profiles.map(p => `
@@ -602,82 +576,43 @@ window.addGroupMember = async function() {
     const input = document.getElementById('group-add-user-input');
     const term = input.value.trim();
     if (!term) return;
-
-    const { data: users } = await window.supabaseClient.from('profiles')
-        .select('id')
-        .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
-        .limit(1);
-
-    if (!users || users.length === 0) {
-        return alert('找不到該用戶，請確認名稱是否正確');
-    }
-
-    const targetUserId = users[0].id;
-
-    const { error } = await window.supabaseClient.from('chat_group_members').insert([{
-        group_id: window.activeRoomId,
-        user_id: targetUserId
-    }]);
-
-    if (error) {
-        if (error.code === '23505') alert('該用戶已經在群組中了');
-        else alert('新增失敗，可能資料庫權限 (RLS) 不足');
-    } else {
-        input.value = '';
-        alert('加入成功！');
-        await window.loadGroupMembers();
-    }
+    const { data: users } = await window.supabaseClient.from('profiles').select('id').or(`username.ilike.%${term}%,display_name.ilike.%${term}%`).limit(1);
+    if (!users || users.length === 0) return alert('找不到該用戶');
+    
+    const { error } = await window.supabaseClient.from('chat_group_members').insert([{ group_id: window.activeRoomId, user_id: users[0].id }]);
+    if (error) alert('新增失敗');
+    else { input.value = ''; alert('加入成功！'); await window.loadGroupMembers(); }
 };
 
 window.kickGroupMember = async function(userId) {
-    if (!confirm('確定要將該成員踢出群組？')) return;
-    await window.supabaseClient.from('chat_group_members')
-        .delete()
-        .eq('group_id', window.activeRoomId).eq('user_id', userId);
+    if (!confirm('確定要踢出？')) return;
+    await window.supabaseClient.from('chat_group_members').delete().eq('group_id', window.activeRoomId).eq('user_id', userId);
     await window.loadGroupMembers();
 };
 
 window.leaveGroup = async function() {
     if (!confirm('確定要退出這個群組嗎？')) return;
-    
     const myId = await getValidUserId();
     if (!myId || !window.activeRoomId) return;
 
     try {
         const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
-        
         if (groupData && groupData.owner_id === myId) {
             const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
             const otherMembers = members.filter(m => m.user_id !== myId);
-            
             if (otherMembers.length > 0) {
-                const newOwnerId = otherMembers[0].user_id;
-                await window.supabaseClient.from('chat_groups').update({ owner_id: newOwnerId }).eq('id', window.activeRoomId);
+                await window.supabaseClient.from('chat_groups').update({ owner_id: otherMembers[0].user_id }).eq('id', window.activeRoomId);
             } else {
                 await window.supabaseClient.from('chat_groups').delete().eq('id', window.activeRoomId);
-                window.closeGroupSettings();
-                window.closeChat();
+                window.closeGroupSettings(); window.closeChat();
                 if(typeof window.renderMessages === 'function') window.renderMessages();
                 return;
             }
         }
-
-        const { error } = await window.supabaseClient.from('chat_group_members')
-            .delete()
-            .eq('group_id', window.activeRoomId)
-            .eq('user_id', myId);
-
-        if (error) throw error;
-
-        alert('已成功退出群組');
-        window.closeGroupSettings();
-        window.closeChat();
+        await window.supabaseClient.from('chat_group_members').delete().eq('group_id', window.activeRoomId).eq('user_id', myId);
+        window.closeGroupSettings(); window.closeChat();
         if(typeof window.renderMessages === 'function') window.renderMessages();
-        
-    } catch (err) {
-        console.error("退出群組失敗:", err);
-        alert('退出群組失敗，請確認 Supabase RLS 設定是否允許刪除自己的群組成員紀錄。');
-    }
+    } catch (err) { alert('退出群組失敗'); }
 };
 
 // ==========================================
@@ -690,85 +625,55 @@ window.toggleVoiceRecord = async function() {
     if (!window.isRecording) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
             
             mediaRecorder.onstop = async () => {
                 const myId = await getValidUserId();
-                
                 const mimeType = mediaRecorder.mimeType || 'audio/webm';
                 const audioBlob = new Blob(audioChunks, { type: mimeType });
                 const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 
-                const filePath = `chat_media/voice_${myId}_${Date.now()}.${ext}`;
+                const randomID = Math.random().toString(36).substring(7);
+                const fileName = `chat_voice_${myId}_${Date.now()}_${randomID}.${ext}`;
 
                 const originalPlaceholder = input.placeholder;
                 input.placeholder = "語音上傳中，請稍候...";
                 input.disabled = true;
 
                 try {
-                    const publicUrl = await uploadMediaToSupabase(audioBlob, filePath);
+                    // ✨ 錄音同樣透過 R2 私密渠道上傳
+                    const publicUrl = await uploadChatMediaToR2(audioBlob, fileName);
                     if (publicUrl) {
                         window.selectedMediaUrl = publicUrl;
                         await window.handleSendAction();
                     }
                 } catch (e) { 
-                    console.error("語音上傳錯誤:", e);
-                    alert('語音上傳失敗，請確認網路連線與資料庫權限。'); 
+                    alert('語音上傳失敗'); 
                 } finally {
                     input.placeholder = originalPlaceholder;
                     input.disabled = false;
                 }
-                
                 stream.getTracks().forEach(track => track.stop());
             };
             
             mediaRecorder.start();
             window.isRecording = true;
-            
-            if(btnIcon) {
-                btnIcon.classList.remove('fa-microphone');
-                btnIcon.classList.add('fa-stop', 'text-red-500', 'animate-pulse');
-            }
+            if(btnIcon) { btnIcon.classList.remove('fa-microphone'); btnIcon.classList.add('fa-stop', 'text-red-500', 'animate-pulse'); }
         } catch (e) { 
-            console.error("麥克風錯誤:", e);
             alert('無法開啟麥克風。請確認：\n1. 您的網站使用 HTTPS 連線\n2. 已同意瀏覽器存取麥克風權限。'); 
         }
     } else {
-        if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
+        if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
         window.isRecording = false;
-        
-        if(btnIcon) {
-            btnIcon.classList.add('fa-microphone');
-            btnIcon.classList.remove('fa-stop', 'text-red-500', 'animate-pulse');
-        }
+        if(btnIcon) { btnIcon.classList.add('fa-microphone'); btnIcon.classList.remove('fa-stop', 'text-red-500', 'animate-pulse'); }
     }
 };
 
 // ==========================================
-// 🛡️ 模組 1：模擬 AI 媒體安全檢測 (前端掛載點)
-// ==========================================
-async function scanMediaWithAI(file) {
-    // 未來請在此處接駁真實 API (如 Sightengine 或 Google Vision)
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve({
-                isIllegal: false, 
-                isNsfw: true      
-            });
-        }, 500); 
-    });
-}
-
-// ==========================================
-// 🖼️ 模組 2：圖片/影片上傳與 AI 整合邏輯
+// 🖼️ 圖片/影片自動壓縮上傳 (保護隱私版)
 // ==========================================
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
@@ -776,32 +681,33 @@ window.handleImageSelection = async function(input) {
     
     const chatInput = document.getElementById('chat-input');
     const originalPlaceholder = chatInput.placeholder;
-    chatInput.placeholder = "🛡️ 進行安全檢測中...";
+    chatInput.placeholder = "🚀 處理與上傳中...";
     chatInput.disabled = true;
 
     try {
-        const aiResult = await scanMediaWithAI(file);
-        if (aiResult.isIllegal) {
-            throw new Error("系統檢測到包含嚴重違規內容，上傳已被拒絕。");
-        }
-        window.selectedMediaIsNsfw = aiResult.isNsfw;
-
-        chatInput.placeholder = "媒體檔案上傳中...";
         const myId = await getValidUserId();
-        const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
-        const isVideoUpload = ['mp4', 'webm', 'mov', 'ogg'].includes(ext);
-        const prefix = isVideoUpload ? 'vid_' : 'img_';
+        const isVideoUpload = file.type.startsWith('video/');
+        let finalFile = file;
+        let ext = file.name.split('.').pop().toLowerCase() || 'jpg';
         
-        const filePath = `chat_media/${prefix}${myId}_${Date.now()}.${ext}`;
+        // 圖片自動壓縮為 WebP
+        if (!isVideoUpload) {
+            finalFile = await generateWebPBlob(file);
+            ext = 'webp';
+        }
+        
+        const prefix = isVideoUpload ? 'chat_vid_' : 'chat_img_';
+        const randomID = Math.random().toString(36).substring(7);
+        const fileName = `${prefix}${myId}_${Date.now()}_${randomID}.${ext}`;
 
-        const publicUrl = await uploadMediaToSupabase(file, filePath);
+        // ✨ 透過 R2 私密渠道上傳
+        const publicUrl = await uploadChatMediaToR2(finalFile, fileName);
         
         if (publicUrl) {
             window.selectedMediaUrl = publicUrl;
             await window.handleSendAction();
         }
     } catch (e) { 
-        console.error("上傳錯誤:", e);
         alert(e.message || '媒體上傳失敗'); 
     } finally {
         chatInput.placeholder = originalPlaceholder;
@@ -811,7 +717,7 @@ window.handleImageSelection = async function(input) {
 };
 
 // ==========================================
-// 🔍 模組 3：媒體大圖查看與 NSFW 解鎖燈箱
+// 🔍 媒體大圖查看與 NSFW 解鎖燈箱
 // ==========================================
 window.handleMediaClick = function(url, isVideo, element, isInitiallyBlurred) {
     if (isInitiallyBlurred && element.classList.contains('blur-2xl')) {
@@ -863,7 +769,7 @@ window.toggleNsfwBlurPreference = function() {
 };
 
 // ==========================================
-// 🚨 模組 4：用戶檢舉系統
+// 🚨 用戶檢舉系統
 // ==========================================
 window.openReportModal = function(reportedUserId, msgContent, msgImageUrl) {
     const reason = prompt("請輸入檢舉原因 (例如：發送非法內容、詐騙、騷擾)：\n\n系統將自動附上該則訊息作為證據。");
@@ -877,6 +783,7 @@ window.openReportModal = function(reportedUserId, msgContent, msgImageUrl) {
             const file = e.target.files[0];
             if (!file) return;
             try {
+                // 檢舉證據可存於 Supabase，因為需要後台審核
                 const screenshotUrl = await uploadMediaToSupabase(file, `reports/${Date.now()}_${file.name}`);
                 await submitReport(reportedUserId, reason, screenshotUrl, msgContent, msgImageUrl);
             } catch (err) { alert('截圖上傳失敗'); }
@@ -899,7 +806,6 @@ async function submitReport(targetId, reason, screenshotUrl, content, imageUrl) 
     }]);
 
     if (error) {
-        console.error(error);
         alert('檢舉提交失敗，請稍後再試。');
     } else {
         alert('✅ 檢舉已成功提交！管理員會盡快審核。');
