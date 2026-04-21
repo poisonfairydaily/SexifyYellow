@@ -25,15 +25,58 @@ async function getAuthenticatedUserId() {
 // --- 🖱️ 2. 互動與長按事件控制 ---
 window.startLongPress = function(e, postId, mediaUrl) {
     window.isLongPressActive = false;
+
+    // Add simple haptic feedback if supported
+    if (navigator.vibrate) {
+        navigator.vibrate(50); // slight tap
+    }
+
     longPressTimer = setTimeout(() => {
         window.isLongPressActive = true;
-        if (mediaUrl && mediaUrl !== 'null' && confirm("是否下載此圖片/影片？")) {
-            const link = document.createElement('a');
-            link.href = mediaUrl;
-            link.download = `sexify_media_${postId}.jpg`;
-            link.click();
+
+        // Stronger haptic feedback for trigger
+        if (navigator.vibrate) {
+            navigator.vibrate([100]);
         }
-    }, 800);
+
+        // Show 3D touch style preview modal
+        if (mediaUrl && mediaUrl !== 'null') {
+            const previewModal = document.getElementById('haptic-preview-modal');
+            const previewImg = document.getElementById('haptic-preview-img');
+            const previewContainer = document.getElementById('haptic-preview-container');
+
+            if (previewModal && previewImg) {
+                previewImg.src = mediaUrl;
+                previewModal.classList.remove('hidden');
+
+                // Animate in
+                requestAnimationFrame(() => {
+                    previewModal.classList.remove('opacity-0');
+                    previewModal.classList.add('opacity-100');
+                    previewContainer.classList.remove('scale-95');
+                    previewContainer.classList.add('scale-100');
+                });
+
+                // Hide on touch end/cancel
+                const hidePreview = () => {
+                    previewModal.classList.remove('opacity-100');
+                    previewModal.classList.add('opacity-0');
+                    previewContainer.classList.remove('scale-100');
+                    previewContainer.classList.add('scale-95');
+                    setTimeout(() => {
+                        previewModal.classList.add('hidden');
+                        previewImg.src = '';
+                    }, 200);
+
+                    document.removeEventListener('touchend', hidePreview);
+                    document.removeEventListener('mouseup', hidePreview);
+                };
+
+                document.addEventListener('touchend', hidePreview);
+                document.addEventListener('mouseup', hidePreview);
+            }
+        }
+    }, 500); // reduced from 800 for better "3D touch" feel
 };
 
 window.cancelLongPress = function() {
@@ -395,13 +438,45 @@ window.editPostContent = async function(postId) {
     const menu = document.getElementById('post-options-menu');
     if(menu) menu.classList.add('hidden');
     
-    const newText = prompt("請輸入新的貼文內容：");
-    if (newText === null) return;
+    const captionElem = document.getElementById('detail-caption');
+    if(!captionElem) return;
+
+    // Switch to edit mode
+    const currentText = captionElem.innerText;
+    // Store original text in a data attribute to avoid inline string escaping issues
+    captionElem.dataset.originalText = currentText;
+
+    captionElem.innerHTML = `
+        <textarea id="edit-caption-textarea" class="w-full bg-gray-50 border rounded p-2 text-sm focus:outline-none" rows="3">${window.escapeHTML(currentText)}</textarea>
+        <div class="flex justify-end gap-2 mt-2">
+            <button onclick="window.cancelEditPost('${postId}')" class="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs font-bold active:scale-95 transition">取消</button>
+            <button onclick="window.saveEditPost('${postId}')" class="px-3 py-1 bg-sexify text-white rounded text-xs font-bold active:scale-95 transition">儲存</button>
+        </div>
+    `;
+};
+
+window.cancelEditPost = function(postId) {
+    const captionElem = document.getElementById('detail-caption');
+    if(captionElem) {
+        captionElem.innerText = captionElem.dataset.originalText || '';
+    }
+};
+
+window.saveEditPost = async function(postId) {
+    const textarea = document.getElementById('edit-caption-textarea');
+    if(!textarea) return;
+    const newText = textarea.value.trim();
+    if(!newText) {
+        alert("內容不能為空");
+        return;
+    }
+
     try {
         const { error } = await window.supabaseClient.from('posts').update({ caption: newText }).eq('id', postId);
         if(error) throw error;
+
         const captionElem = document.getElementById('detail-caption');
-        if(captionElem) captionElem.innerText = window.escapeHTML(newText);
+        if(captionElem) captionElem.innerText = newText;
         window.renderDiscovery();
     } catch (err) { alert("編輯失敗"); }
 };
