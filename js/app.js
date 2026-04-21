@@ -2,6 +2,9 @@
 // js/app.js - 全域邏輯、導航、長按手勢與分享核心
 // ==========================================
 
+// ✨ 新增：全域快取 User ID，防止 Supabase Lock Stolen 報錯
+window.cachedMyUserId = null;
+
 // 防 XSS 攻擊的核心過濾器
 window.escapeHTML = function(str) {
     if (typeof str !== 'string') return '';
@@ -13,16 +16,13 @@ window.escapeHTML = function(str) {
     });
 };
 
-// ✨ 新增：文字安全過濾器 (Anti-Spam & Phishing)
+// ✨ 文字安全過濾器 (Anti-Spam & Phishing)
 window.containsToxicContent = function(text) {
     if (!text) return false;
-    
-    // 1. 攔截常見短網址 (常被用作隱藏惡意連結)
+    // 1. 攔截常見短網址
     const shortLinkRegex = /(bit\.ly|t\.co|tinyurl|reurl\.cc|pse\.is)/i;
-    
-    // 2. 攔截要求私下聯絡的詐騙特徵
+    // 2. 攔截詐騙特徵
     const scamRegex = /(加賴|加line|加微信|t\.me\/|line\.me\/|投資群|免費領)/i;
-    
     return shortLinkRegex.test(text) || scamRegex.test(text);
 };
 
@@ -78,7 +78,7 @@ window.toggleSettings = function() {
     }
 };
 
-// 3. 右側：通知抽屜
+// 3. 右側：通知抽屜 (已加入 Cache 優化)
 window.toggleNotifications = async function() {
     const drawer = document.getElementById('notification-drawer');
     const panel = document.getElementById('notification-panel');
@@ -91,8 +91,12 @@ window.toggleNotifications = async function() {
         setTimeout(() => panel.classList.remove('translate-x-full'), 10);
         if (badge) badge.classList.add('hidden');
 
-        const { data: { session } } = await window.supabaseClient.auth.getSession();
-        const userId = session?.user?.id;
+        let userId = window.cachedMyUserId;
+        if (!userId && window.supabaseClient) {
+            const { data: { session } } = await window.supabaseClient.auth.getSession();
+            userId = session?.user?.id;
+            window.cachedMyUserId = userId;
+        }
         if(!userId) return;
 
         list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
@@ -179,8 +183,11 @@ window.toggleSearch = function(show) {
 };
 
 window.saveUserProfile = async function(formData) {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    const userId = session?.user?.id;
+    let userId = window.cachedMyUserId;
+    if (!userId && window.supabaseClient) {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        userId = session?.user?.id;
+    }
     if (!userId) return;
 
     try {
@@ -294,21 +301,27 @@ window.closeContactModal = function() {
     setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
 };
 
+// ✨ 登出 (清除快取)
 window.logoutUser = async function() {
     if (confirm("確定要登出帳號嗎？")) {
         await window.supabaseClient.auth.signOut();
         localStorage.clear();
         sessionStorage.clear();
+        window.cachedMyUserId = null;
         window.location.href = 'login.html'; 
     }
 };
 
 // ==========================================
-// 全域狀態：動態更新下方導覽列紅點
+// 全域狀態：動態更新下方導覽列紅點 (已加入 Cache 優化)
 // ==========================================
 window.updateGlobalMessageBadge = async function() {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    const userId = session?.user?.id;
+    let userId = window.cachedMyUserId;
+    if (!userId && window.supabaseClient) {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        userId = session?.user?.id;
+        window.cachedMyUserId = userId;
+    }
     if (!userId || !window.supabaseClient) return;
     
     const msgBadge = document.getElementById('nav-msg-badge');
@@ -359,6 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (session) {
+        window.cachedMyUserId = session.user.id; // ✨ 初始化時寫入快取
         const userId = session.user.id;
         
         if (typeof window.renderDiscovery === 'function') {
