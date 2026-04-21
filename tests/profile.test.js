@@ -153,4 +153,46 @@ describe('switchFansTab Error Handling', () => {
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
+
+    test('handles empty followers list correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles successful followers list correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: [{ subscriber_id: 'sub-1' }], error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: [{ id: 'sub-1', display_name: 'Test Fan', avatar_url: '' }], error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Test Fan');
+        expect(list.innerHTML).toContain("viewOtherProfile('sub-1')");
+    });
 });
