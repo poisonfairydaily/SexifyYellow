@@ -153,4 +153,67 @@ describe('switchFansTab Error Handling', () => {
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
+
+    test('handles rejected Promise correctly for fans tab', async () => {
+        const mockError = new Error('Network failure');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockRejectedValue(mockError)
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles empty fans list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles profile fetch error correctly for fans tab', async () => {
+        const mockError = new Error('Profiles fetch failed');
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ subscriber_id: 'user-2' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockRejectedValue(mockError)
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
 });
