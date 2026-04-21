@@ -105,7 +105,7 @@ describe('viewOtherProfile Error Handling', () => {
     });
 });
 
-describe('switchFansTab Error Handling', () => {
+describe('switchFansTab Tests', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -120,37 +120,212 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
-    test('handles Supabase fetch error correctly for fans tab', async () => {
-        const mockError = new Error('Database connection failed');
+    describe('Error Handling', () => {
+        test('handles Supabase fetch error correctly for fans tab', async () => {
+            const mockError = new Error('Database connection failed');
+            const mockEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
+            const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+            const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
 
-        window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
-        };
+            window.supabaseClient = {
+                from: mockFrom
+            };
 
-        await window.switchFansTab('fans');
+            await window.switchFansTab('fans');
 
-        const list = document.getElementById('fans-subs-list');
-        expect(list.innerHTML).toContain('讀取失敗');
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockSelect).toHaveBeenCalledWith('*');
+            expect(mockEq).toHaveBeenCalledWith('creator_id', 'user-1');
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('讀取失敗');
+        });
+
+        test('handles Supabase fetch error correctly for subs tab', async () => {
+            const mockError = new Error('Database connection failed');
+            const mockEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
+            const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+            const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
+
+            window.supabaseClient = {
+                from: mockFrom
+            };
+
+            await window.switchFansTab('subs');
+
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockSelect).toHaveBeenCalledWith('*');
+            expect(mockEq).toHaveBeenCalledWith('subscriber_id', 'user-1');
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('讀取失敗');
+        });
     });
 
-    test('handles Supabase fetch error correctly for subs tab', async () => {
-        const mockError = new Error('Database connection failed');
+    describe('Empty State Handling', () => {
+        test('displays empty state for fans tab when no data is returned', async () => {
+            const mockEq = jest.fn().mockResolvedValue({ data: [], error: null });
+            const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+            const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
 
-        window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
-        };
+            window.supabaseClient = {
+                from: mockFrom
+            };
 
-        await window.switchFansTab('subs');
+            await window.switchFansTab('fans');
 
-        const list = document.getElementById('fans-subs-list');
-        expect(list.innerHTML).toContain('讀取失敗');
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockSelect).toHaveBeenCalledWith('*');
+            expect(mockEq).toHaveBeenCalledWith('creator_id', 'user-1');
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('目前還沒有粉絲');
+        });
+
+        test('displays empty state for subs tab when no data is returned', async () => {
+            const mockEq = jest.fn().mockResolvedValue({ data: null, error: null });
+            const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+            const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
+
+            window.supabaseClient = {
+                from: mockFrom
+            };
+
+            await window.switchFansTab('subs');
+
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockSelect).toHaveBeenCalledWith('*');
+            expect(mockEq).toHaveBeenCalledWith('subscriber_id', 'user-1');
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+        });
+    });
+
+    describe('Successful Rendering', () => {
+        test('renders list for fans tab correctly', async () => {
+            // Mock subscriptions table
+            const mockSubsEq = jest.fn().mockResolvedValue({
+                data: [{ subscriber_id: 'user-2' }, { subscriber_id: 'user-3' }],
+                error: null
+            });
+            const mockSubsSelect = jest.fn().mockReturnValue({ eq: mockSubsEq });
+
+            // Mock profiles table
+            const mockProfsIn = jest.fn().mockResolvedValue({
+                data: [
+                    { id: 'user-2', display_name: 'Alice', avatar_url: 'alice.jpg' },
+                    { id: 'user-3', display_name: 'Bob', avatar_url: 'bob.jpg' }
+                ],
+                error: null
+            });
+            const mockProfsSelect = jest.fn().mockReturnValue({ in: mockProfsIn });
+
+            // Combine mocks into the supabaseClient
+            const mockFrom = jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: mockSubsSelect };
+                } else if (table === 'profiles') {
+                    return { select: mockProfsSelect };
+                }
+            });
+
+            window.supabaseClient = {
+                from: mockFrom
+            };
+
+            await window.switchFansTab('fans');
+
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockFrom).toHaveBeenCalledWith('profiles');
+            expect(mockProfsIn).toHaveBeenCalledWith('id', ['user-2', 'user-3']);
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('Alice');
+            expect(list.innerHTML).toContain('Bob');
+            expect(list.innerHTML).toContain('alice.jpg');
+            expect(list.innerHTML).toContain('bob.jpg');
+        });
+
+        test('renders list for subs tab correctly', async () => {
+            // Mock subscriptions table
+            const mockSubsEq = jest.fn().mockResolvedValue({
+                data: [{ id: 'sub-1', creator_id: 'user-4' }],
+                error: null
+            });
+            const mockSubsSelect = jest.fn().mockReturnValue({ eq: mockSubsEq });
+
+            // Mock profiles table
+            const mockProfsIn = jest.fn().mockResolvedValue({
+                data: [
+                    { id: 'user-4', display_name: 'Charlie', avatar_url: 'charlie.jpg' }
+                ],
+                error: null
+            });
+            const mockProfsSelect = jest.fn().mockReturnValue({ in: mockProfsIn });
+
+            // Combine mocks into the supabaseClient
+            const mockFrom = jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: mockSubsSelect };
+                } else if (table === 'profiles') {
+                    return { select: mockProfsSelect };
+                }
+            });
+
+            window.supabaseClient = {
+                from: mockFrom
+            };
+
+            await window.switchFansTab('subs');
+
+            expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+            expect(mockFrom).toHaveBeenCalledWith('profiles');
+            expect(mockProfsIn).toHaveBeenCalledWith('id', ['user-4']);
+
+            const list = document.getElementById('fans-subs-list');
+            expect(list.innerHTML).toContain('Charlie');
+            expect(list.innerHTML).toContain('charlie.jpg');
+            // Subs tab should include unfollow button
+            expect(list.innerHTML).toContain('取消追蹤');
+            expect(list.innerHTML).toContain("unfollowUserFromList('sub-1', this)");
+        });
+    });
+
+    describe('Missing Profile Handling', () => {
+        test('handles missing user profile gracefully', async () => {
+            // Mock subscriptions table with a user that will not be found in profiles
+            const mockSubsEq = jest.fn().mockResolvedValue({
+                data: [{ subscriber_id: 'user-missing' }],
+                error: null
+            });
+            const mockSubsSelect = jest.fn().mockReturnValue({ eq: mockSubsEq });
+
+            // Mock profiles table to return empty (simulating missing user)
+            const mockProfsIn = jest.fn().mockResolvedValue({
+                data: [],
+                error: null
+            });
+            const mockProfsSelect = jest.fn().mockReturnValue({ in: mockProfsIn });
+
+            // Combine mocks into the supabaseClient
+            const mockFrom = jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: mockSubsSelect };
+                } else if (table === 'profiles') {
+                    return { select: mockProfsSelect };
+                }
+            });
+
+            window.supabaseClient = {
+                from: mockFrom
+            };
+
+            await window.switchFansTab('fans');
+
+            const list = document.getElementById('fans-subs-list');
+            // Should be empty string from `if(!user) return '';` resulting in empty list.innerHTML
+            expect(list.innerHTML).toBe('');
+        });
     });
 });
