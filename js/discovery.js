@@ -236,6 +236,7 @@ window.viewPost = async function(postId) {
         if (error) throw error;
         
         window.currentViewedPostOwnerId = post.user_id;
+        window.recordHistory(postId);
         const authorName = window.escapeHTML(post.profiles?.display_name || '未知創作者');
         const authorAvatar = post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}`;
         const blurClass = post.is_paid ? 'blur-md pointer-events-none' : '';
@@ -262,8 +263,12 @@ window.viewPost = async function(postId) {
         const likeIcon = isLiked ? 'fa-solid text-sexify' : 'fa-regular text-gray-400';
 
         // 判斷收藏狀態
-        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [];
-        const isBookmarked = bookmarks.some(b => b.id === post.id);
+        let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+        const isBookmarked = myBookmarksSet.has(post.id);
         const bmIcon = isBookmarked ? 'fa-solid text-yellow-500' : 'fa-regular text-gray-300';
         
         const currentLikes = post.likes_count || post.likes || 0;
@@ -450,3 +455,73 @@ document.addEventListener('DOMContentLoaded', () => {
         window.renderDiscovery();
     }
 });
+
+window.toggleBookmark = async function(btn, postId, postObjStr) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    const icon = btn.querySelector('i');
+    const isBookmarked = icon.classList.contains('fa-solid');
+
+    try {
+        const myId = await getAuthenticatedUserId();
+        if(!myId) {
+            btn.disabled = false;
+            return alert("請先登入");
+        }
+
+        if (isBookmarked) {
+            icon.classList.replace('fa-solid', 'fa-regular');
+            icon.classList.remove('text-yellow-500');
+            icon.classList.add('text-gray-300');
+            await window.supabaseClient.from('bookmarks').delete().match({ post_id: postId, user_id: myId });
+
+            // Sync with localStorage for backward compatibility with old views
+            let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+            bookmarks = bookmarks.filter(b => b.id !== postId);
+            localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+        } else {
+            icon.classList.replace('fa-regular', 'fa-solid');
+            icon.classList.remove('text-gray-300');
+            icon.classList.add('text-yellow-500');
+            await window.supabaseClient.from('bookmarks').insert({ post_id: postId, user_id: myId });
+
+            // Sync with localStorage
+            let myBookmarksSet = new Set();
+        if (myId) {
+            const { data: bData } = await window.supabaseClient.from('bookmarks').select('post_id').eq('user_id', myId);
+            if (bData) bData.forEach(b => myBookmarksSet.add(b.post_id));
+        }
+            const postObj = JSON.parse(decodeURIComponent(postObjStr));
+            if (!bookmarks.some(b => b.id === postId)) {
+                bookmarks.push(postObj);
+                localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+            }
+        }
+    } catch(e) {
+        console.error("收藏失敗", e);
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+window.recordHistory = async function(postId) {
+    try {
+        const myId = await getAuthenticatedUserId();
+        if(!myId) return;
+
+        // Check if exists
+        const { data } = await window.supabaseClient.from('history').select('id').match({ post_id: postId, user_id: myId }).single();
+        if (data) {
+            await window.supabaseClient.from('history').update({ viewed_at: new Date().toISOString() }).eq('id', data.id);
+        } else {
+            await window.supabaseClient.from('history').insert({ post_id: postId, user_id: myId });
+        }
+    } catch (e) {
+        // ignore errors
+    }
+};

@@ -1,15 +1,18 @@
 // ==========================================
-// js/messages.js - 完整升級版 (未讀數量 + 影片支援 + 在線狀態修復)
+// js/messages.js - 終極安全與體驗完整版 (無省略)
+// 功能：修復 Bug + 自動捲動 + 點擊大圖 + AI 檢測 + NSFW 模糊 + 檢舉系統 + 群組邏輯
 // ==========================================
 
 window.activeRoomId = null;
 window.activeChatTarget = null;
+window.activeIsGroup = false; 
 window.roomChannel = null;
 
 let mediaRecorder = null;
 let audioChunks = [];
 window.isRecording = false;
 window.selectedMediaUrl = null;
+window.selectedMediaIsNsfw = false; // ✨ 新增：紀錄準備上傳的媒體是否為成人內容
 
 // 內部工具：將檔案上傳至 Supabase Storage (media 桶)
 async function uploadMediaToSupabase(fileBlob, filePath) {
@@ -23,7 +26,6 @@ async function uploadMediaToSupabase(fileBlob, filePath) {
 
         if (error) throw error;
 
-        // 取得公開網址
         const { data: publicData } = window.supabaseClient.storage
             .from('media')
             .getPublicUrl(filePath);
@@ -35,7 +37,6 @@ async function uploadMediaToSupabase(fileBlob, filePath) {
     }
 }
 
-// 純 CSS 頭像產生器 (解決 UI-Avatars 的 CORS 報錯)
 function getFallbackAvatar(name) {
     const char = name ? name.charAt(0).toUpperCase() : 'U';
     return `<div class="w-full h-full rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53)">${char}</div>`;
@@ -61,21 +62,27 @@ function generateRoomId(id1, id2) {
     return [id1, id2].sort().join('_');
 }
 
-function scrollToBottom() {
+// ✨ 強化的捲動到底部函數 (保證準確)
+window.scrollToBottom = function() {
     const container = document.getElementById('chat-messages');
     if (container) {
-        setTimeout(() => {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }, 150);
+        container.scrollTop = container.scrollHeight;
+        setTimeout(() => { if (container) container.scrollTop = container.scrollHeight; }, 100);
+        setTimeout(() => { if (container) container.scrollTop = container.scrollHeight; }, 300);
     }
-}
+};
 
-// 更新 UI 在線狀態 (修復假在線問題)
 function updateOnlineStatusUI(isOnline) {
     const statusText = document.querySelector('#chat-modal span.uppercase');
     if (!statusText) return;
-    statusText.innerHTML = isOnline ? '● Online' : '● Offline';
-    statusText.className = `text-[10px] font-bold mt-1 uppercase tracking-tighter ${isOnline ? 'text-green-500' : 'text-gray-400'}`;
+    
+    if (window.activeIsGroup) {
+        statusText.innerHTML = '● 群組聊天';
+        statusText.className = 'text-[10px] font-bold mt-1 uppercase tracking-tighter text-gray-400';
+    } else {
+        statusText.innerHTML = isOnline ? '● Online' : '● Offline';
+        statusText.className = `text-[10px] font-bold mt-1 uppercase tracking-tighter ${isOnline ? 'text-green-500' : 'text-gray-400'}`;
+    }
 }
 
 window.handleSendAction = async function() {
@@ -90,22 +97,25 @@ window.handleSendAction = async function() {
         const myId = await getValidUserId();
         if (!myId || !window.activeRoomId) return alert('請先登入');
 
+        const targetReceiver = window.activeIsGroup ? myId : window.activeChatTarget;
+
         const { error } = await window.supabaseClient.from('messages').insert([{
             room_id: window.activeRoomId,
             sender_name: myId,
-            receiver: window.activeChatTarget,
+            receiver: targetReceiver,
             content: content,
             image_url: window.selectedMediaUrl,
-            is_read: false
+            is_read: window.activeIsGroup ? true : false,
+            is_nsfw: window.selectedMediaIsNsfw || false // ✨ 寫入成人標籤
         }]);
 
         if (error) throw error;
         input.value = '';
-        window.selectedMediaUrl = null; // 發送後清空
-        await loadMessages();
-        scrollToBottom();
+        window.selectedMediaUrl = null; 
+        window.selectedMediaIsNsfw = false; // 重置
         
-        // 發送訊息後更新外層列表，將最後一句話推到最上面
+        await loadMessages();
+        
         if(typeof window.renderMessages === 'function') window.renderMessages();
     } catch (e) {
         alert('傳送失敗');
@@ -114,86 +124,154 @@ window.handleSendAction = async function() {
     }
 };
 
-// 渲染對話內容 (✨新增影片判斷與渲染)
-function drawMessages(messages) {
+// ✨ 修復的渲染對話內容函數 (包含 NSFW Blur 與 檢舉按鈕)
+async function drawMessages(messages, profileMap = null) {
     const container = document.getElementById('chat-messages');
     if (!container) return;
     
-    window.supabaseClient.auth.getUser().then(({data: {user}}) => {
-        const myId = user?.id;
-        let lastDate = null;
+    const myId = await getValidUserId();
+    let lastDate = null;
 
-        container.innerHTML = messages.map(m => {
-            const isMine = m.sender_name === myId;
-            const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
-            const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+    container.innerHTML = messages.map(m => {
+        const isMine = m.sender_name === myId;
+        const msgClass = isMine ? 'bg-sexify text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none';
+        const wrapperClass = isMine ? 'justify-end' : 'justify-start';
+        
+        const messageDate = new Date(m.created_at).toLocaleDateString();
+        let dateSeparator = '';
+        if (messageDate !== lastDate) {
+            const displayDate = messageDate === new Date().toLocaleDateString() ? '今天' : messageDate;
+            dateSeparator = `<div class="flex justify-center my-6"><span class="bg-gray-200 text-gray-500 text-[10px] px-3 py-1 rounded-full font-bold">${displayDate}</span></div>`;
+            lastDate = messageDate;
+        }
+
+        const cleanContent = safeText(m.content);
+        const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
+        
+        const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
+        const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
+        
+        // ✨ NSFW Blur 與燈箱顯示邏輯
+        let mediaHtml = '';
+        if (safeImgUrl) {
+            const disableBlur = localStorage.getItem('nsfw_unblur_default') === 'true';
+            const isNsfw = m.is_nsfw === true; 
+            const needsBlur = isNsfw && !disableBlur;
             
-            const messageDate = new Date(m.created_at).toLocaleDateString();
-            let dateSeparator = '';
-            if (messageDate !== lastDate) {
-                const displayDate = messageDate === new Date().toLocaleDateString() ? '今天' : messageDate;
-                dateSeparator = `<div class="flex justify-center my-6"><span class="bg-gray-200 text-gray-500 text-[10px] px-3 py-1 rounded-full font-bold">${displayDate}</span></div>`;
-                lastDate = messageDate;
+            const blurClass = needsBlur ? 'blur-2xl cursor-pointer select-none' : 'cursor-pointer';
+
+            if (isAudio) {
+                mediaHtml = `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>`;
+            } else if (isVideo) {
+                mediaHtml = `<div class="relative mt-1 max-w-full max-h-48 overflow-hidden rounded-lg">
+                                <video src="${safeImgUrl}" class="w-full h-full bg-black object-cover ${blurClass} transition-all duration-300" onclick="window.handleMediaClick('${safeImgUrl}', true, this, ${needsBlur})"></video>
+                                ${needsBlur ? '<div class="absolute inset-0 flex items-center justify-center pointer-events-none"><i class="fa-solid fa-eye-slash text-white text-3xl opacity-80"></i></div>' : ''}
+                             </div>`;
+            } else {
+                mediaHtml = `<div class="relative mt-1 max-w-full overflow-hidden rounded-lg">
+                                <img src="${safeImgUrl}" class="w-full shadow-sm object-cover ${blurClass} transition-all duration-300" onclick="window.handleMediaClick('${safeImgUrl}', false, this, ${needsBlur})">
+                                ${needsBlur ? '<div class="absolute inset-0 flex items-center justify-center pointer-events-none"><i class="fa-solid fa-eye-slash text-white text-3xl opacity-80"></i></div>' : ''}
+                             </div>`;
             }
+        }
 
-            const cleanContent = safeText(m.content);
-            const safeImgUrl = m.image_url ? encodeURI(m.image_url) : null;
-            
-            // 判斷媒體類型
-            const isAudio = safeImgUrl && (safeImgUrl.match(/\.(mp3|wav|m4a)$/i) || safeImgUrl.includes('voice_'));
-            const isVideo = safeImgUrl && safeImgUrl.match(/\.(mp4|webm|mov|ogg)$/i) && !isAudio;
-            
-            let mediaHtml = '';
-            if (safeImgUrl) {
-                if (isAudio) {
-                    mediaHtml = `<audio src="${safeImgUrl}" controls class="h-8 mt-1 max-w-[200px] sm:max-w-xs"></audio>`;
-                } else if (isVideo) {
-                    mediaHtml = `<video src="${safeImgUrl}" controls playsinline class="rounded-lg mt-1 max-w-full shadow-sm max-h-48 bg-black object-cover"></video>`;
-                } else {
-                    mediaHtml = `<img src="${safeImgUrl}" class="rounded-lg mt-1 max-w-full shadow-sm object-cover">`;
-                }
-            }
+        let avatarHtml = '';
+        let nameHtml = '';
+        if (!isMine && window.activeIsGroup && profileMap && profileMap[m.sender_name]) {
+            const p = profileMap[m.sender_name];
+            avatarHtml = `<img src="${p.avatar_url || 'https://ui-avatars.com/api/?name='+encodeURIComponent(p.display_name)}" class="w-8 h-8 rounded-full mr-2 self-end mb-1 object-cover flex-shrink-0">`;
+            nameHtml = `<div class="text-[10px] text-gray-500 mb-0.5 ml-1 font-bold">${safeText(p.display_name)}</div>`;
+        }
 
-            return `
-                ${dateSeparator}
-                <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
-                    <div class="max-w-[80%] ${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
+        return `
+            ${dateSeparator}
+            <div class="flex ${wrapperClass} mb-4 px-4 animate-fade-in">
+                ${avatarHtml}
+                <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[80%] relative group/msg">
+                    ${nameHtml}
+                    <div class="${msgClass} px-4 py-2 rounded-2xl shadow-sm relative group">
                         ${cleanContent ? `<div class="text-sm whitespace-pre-wrap">${cleanContent}</div>` : ''}
                         ${mediaHtml}
                         <div class="text-[9px] opacity-50 mt-1 text-right">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-                        ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute -left-8 top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
+                        ${isMine ? `<button onclick="window.deleteMessage('${m.id}', '${m.sender_name}', '${m.image_url || ''}')" class="absolute ${isMine ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition p-2"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
                     </div>
-                </div>`;
-        }).join('');
+                    ${!isMine ? `<button onclick="window.openReportModal('${m.sender_name}', '${safeText(m.content || '')}', '${safeImgUrl || ''}')" title="檢舉此訊息" class="absolute -right-6 top-1 text-gray-200 hover:text-red-400 opacity-0 group-hover/msg:opacity-100 transition p-1"><i class="fa-solid fa-triangle-exclamation text-xs"></i></button>` : ''}
+                </div>
+            </div>`;
+    }).join('');
+
+    window.scrollToBottom();
+
+    const images = container.querySelectorAll('img');
+    images.forEach(img => {
+        img.onload = () => window.scrollToBottom();
     });
 }
 
-// 渲染訊息列表 (✨新增未讀數量計算)
 window.renderMessages = async function() {
     const container = document.getElementById('chat-list');
     const myId = await getValidUserId();
     if (!container || !myId) return;
 
+    const { data: myGroups } = await window.supabaseClient.from('chat_group_members')
+        .select('group_id, last_read_time, chat_groups(name, avatar_url, created_at)').eq('user_id', myId);
+    
+    const groupMap = {};
+    const groupIds = [];
+    if (myGroups) {
+        myGroups.forEach(g => {
+            groupIds.push(g.group_id);
+            groupMap[g.group_id] = { ...g.chat_groups, last_read_time: g.last_read_time };
+        });
+    }
+
+    let orQuery = `sender_name.eq.${myId},receiver.eq.${myId}`;
+    if (groupIds.length > 0) {
+        orQuery += `,room_id.in.(${groupIds.join(',')})`;
+    }
+
     const { data: msgData } = await window.supabaseClient.from('messages')
-        .select('*').or(`sender_name.eq.${myId},receiver.eq.${myId}`)
+        .select('*').or(orQuery)
         .order('created_at', { ascending: false });
 
-    if (!msgData) return;
-
+    const msgs = msgData || [];
     const rooms = {};
     const unreadCounts = {};
 
-    msgData.forEach(m => { 
-        if (!rooms[m.room_id]) rooms[m.room_id] = m; // 保留每個房間最新的一則訊息
+    msgs.forEach(m => { 
+        if (!rooms[m.room_id]) rooms[m.room_id] = m; 
         
-        // 如果我是接收者且這則訊息還沒讀過，數量+1
-        if (m.receiver === myId && m.is_read === false) {
-            unreadCounts[m.room_id] = (unreadCounts[m.room_id] || 0) + 1;
+        const isGroup = groupIds.includes(m.room_id);
+        
+        if (isGroup) {
+            const groupInfo = groupMap[m.room_id];
+            const msgTime = new Date(m.created_at).getTime();
+            const lastRead = new Date(groupInfo.last_read_time).getTime();
+            if (m.sender_name !== myId && msgTime > lastRead) {
+                unreadCounts[m.room_id] = (unreadCounts[m.room_id] || 0) + 1;
+            }
+        } else {
+            if (m.receiver === myId && m.is_read === false) {
+                unreadCounts[m.room_id] = (unreadCounts[m.room_id] || 0) + 1;
+            }
+        }
+    });
+
+    groupIds.forEach(gid => {
+        if (!rooms[gid]) {
+            rooms[gid] = {
+                room_id: gid,
+                content: '群組已建立，快來發送第一則訊息吧！',
+                created_at: groupMap[gid].created_at || new Date().toISOString(),
+                sender_name: myId,
+                receiver: myId
+            };
         }
     });
     
-    const sortedRooms = Object.values(rooms);
-    const targetIds = sortedRooms.map(m => m.sender_name === myId ? m.receiver : m.sender_name);
+    const sortedRooms = Object.values(rooms).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const targetIds = sortedRooms.filter(m => !groupIds.includes(m.room_id)).map(m => m.sender_name === myId ? m.receiver : m.sender_name);
     const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', targetIds);
     const profMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
 
@@ -203,11 +281,26 @@ window.renderMessages = async function() {
     }
 
     container.innerHTML = sortedRooms.map(m => {
-        const tid = m.sender_name === myId ? m.receiver : m.sender_name;
-        const p = profMap[tid];
-        const name = p?.display_name || '用戶';
+        const isGroup = groupIds.includes(m.room_id);
+        let name, avatarPart, onClickStr;
+
+        if (isGroup) {
+            const g = groupMap[m.room_id];
+            name = g.name || '群組聊天';
+            avatarPart = g.avatar_url 
+                ? `<img src="${g.avatar_url}" class="w-full h-full rounded-full object-cover border border-gray-100">`
+                : `<div class="w-full h-full rounded-full flex items-center justify-center bg-black text-white"><i class="fa-solid fa-users text-lg"></i></div>`;
+            onClickStr = `openChat('${m.room_id}', '${safeText(name)}', '${g.avatar_url || ''}', true)`;
+        } else {
+            const tid = m.sender_name === myId ? m.receiver : m.sender_name;
+            const p = profMap[tid];
+            name = p?.display_name || '用戶';
+            avatarPart = p?.avatar_url 
+                ? `<img src="${p.avatar_url}" class="w-full h-full rounded-full object-cover border border-gray-100">`
+                : getFallbackAvatar(name);
+            onClickStr = `openChat('${tid}', '${safeText(name)}', '${p?.avatar_url || ''}', false)`;
+        }
         
-        // 判斷最後一句話是不是媒體
         let lastMsg = '';
         if (m.content) {
             lastMsg = safeText(m.content);
@@ -217,21 +310,15 @@ window.renderMessages = async function() {
             else lastMsg = '[圖片]';
         }
         
-        const avatarPart = p?.avatar_url 
-            ? `<img src="${p.avatar_url}" class="w-full h-full rounded-full object-cover border border-gray-100">`
-            : getFallbackAvatar(name);
-            
-        // 未讀紅點 HTML
         const unreads = unreadCounts[m.room_id] || 0;
         const unreadBadge = unreads > 0 
             ? `<div class="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">${unreads > 99 ? '99+' : unreads}</div>` 
             : '';
         
-        // 如果有未讀，讓預覽文字變黑變粗體
         const textStyle = unreads > 0 ? "text-gray-900 font-bold" : "text-gray-400";
         
         return `
-            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="openChat('${tid}', '${safeText(name)}', '${p?.avatar_url || ''}')">
+            <div class="flex items-center gap-3 p-4 border-b border-gray-50 active:bg-gray-50 transition cursor-pointer" onclick="${onClickStr}">
                 <div class="w-14 h-14 bg-gray-100 rounded-full relative flex-shrink-0">${avatarPart}</div>
                 <div class="flex-1 overflow-hidden flex flex-col justify-center">
                     <div class="flex justify-between items-center font-bold text-sm text-gray-900 mb-1">
@@ -243,40 +330,61 @@ window.renderMessages = async function() {
             </div>`;
     }).join('');
 
-    // ✨ 確保外層列表更新時，底部的全域紅點也同步狀態
     if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
 };
 
-window.openChat = async function(targetUid, displayName, avatarUrl) {
+window.openChat = async function(targetId, displayName, avatarUrl, isGroup = false) {
     const myId = await getValidUserId(); 
     if (!myId) return;
     
-    window.activeChatTarget = targetUid;
-    window.activeRoomId = generateRoomId(myId, targetUid);
+    window.activeIsGroup = isGroup;
+    window.activeChatTarget = targetId;
+    
+    const groupOptBtn = document.getElementById('group-options-btn');
+
+    if (isGroup) {
+        window.activeRoomId = targetId;
+        if(groupOptBtn) {
+            groupOptBtn.classList.remove('hidden');
+            groupOptBtn.style.display = 'flex'; 
+        }
+    } else {
+        window.activeRoomId = generateRoomId(myId, targetId);
+        if(groupOptBtn) {
+            groupOptBtn.classList.add('hidden');
+            groupOptBtn.style.display = 'none'; 
+        }
+    }
     
     if(document.getElementById('chat-name')) document.getElementById('chat-name').innerText = safeText(displayName);
     
     const avatarImg = document.getElementById('chat-target-avatar');
     if (avatarImg) {
-        avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
+        if (isGroup && !avatarUrl) {
+            avatarImg.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+        } else {
+            avatarImg.src = avatarUrl || `https://ui-avatars.com/api/?name=${safeText(displayName)}&background=random`;
+        }
     }
     
-    // ✨ 修復: 打開聊天室時先預設為 Offline，避免被硬生生寫死的 Online 騙了
     updateOnlineStatusUI(false);
     
     const modal = document.getElementById('chat-modal');
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('translate-x-full'), 10);
     
-    // 一打開就把該房間、對方傳給我的訊息標記為已讀
-    await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+    if (isGroup) {
+        await window.supabaseClient.from('chat_group_members')
+            .update({ last_read_time: new Date().toISOString() })
+            .eq('group_id', window.activeRoomId).eq('user_id', myId);
+    } else {
+        await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+    }
     
-    // ✨ 更新外層列表以消除紅點，同時同步全域底部紅點
     if(typeof window.renderMessages === 'function') window.renderMessages();
     if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
     
     await loadMessages();
-    scrollToBottom();
     setupChatRealtime();
 };
 
@@ -284,7 +392,17 @@ async function loadMessages() {
     if (!window.activeRoomId) return;
     const { data, error } = await window.supabaseClient.from('messages')
         .select('*').eq('room_id', window.activeRoomId).order('created_at', { ascending: true });
-    if (!error) drawMessages(data);
+    
+    if (error) return;
+
+    if (window.activeIsGroup) {
+        const senderIds = [...new Set(data.map(m => m.sender_name))];
+        const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, avatar_url').in('id', senderIds);
+        const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+        await drawMessages(data, profileMap);
+    } else {
+        await drawMessages(data, null);
+    }
 }
 
 function setupChatRealtime() {
@@ -300,24 +418,29 @@ function setupChatRealtime() {
             table: 'messages', 
             filter: `room_id=eq.${window.activeRoomId}` 
         }, async () => {
-            // 如果對方發新訊息，自動把狀態標成已讀
             const myId = await getValidUserId();
-            await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+            
+            if (window.activeIsGroup) {
+                await window.supabaseClient.from('chat_group_members')
+                    .update({ last_read_time: new Date().toISOString() })
+                    .eq('group_id', window.activeRoomId).eq('user_id', myId);
+            } else {
+                await window.supabaseClient.from('messages').update({ is_read: true }).eq('room_id', window.activeRoomId).eq('receiver', myId);
+            }
             
             await loadMessages();
-            scrollToBottom();
             
-            // ✨ 同步更新外層最新文字與全域紅點
             if(typeof window.renderMessages === 'function') window.renderMessages();
             if(typeof window.updateGlobalMessageBadge === 'function') window.updateGlobalMessageBadge();
         })
         .on('presence', { event: 'sync' }, () => {
+            if (window.activeIsGroup) return; 
             const state = window.roomChannel.presenceState();
             const isOnline = Object.values(state).flat().some(p => p.user_id === window.activeChatTarget);
             updateOnlineStatusUI(isOnline);
         })
         .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
+            if (status === 'SUBSCRIBED' && !window.activeIsGroup) {
                 const myId = await getValidUserId();
                 await window.roomChannel.track({
                     user_id: myId,
@@ -333,7 +456,6 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
     if (!confirm('確定回收這條訊息？(相關媒體檔案也將從伺服器永久刪除)')) return;
     
     try {
-        // 如果有 Supabase Storage 的網址，同步刪除實體檔案
         if (mediaUrl && mediaUrl.includes('/storage/v1/object/public/media/')) {
             const filePath = mediaUrl.split('/storage/v1/object/public/media/')[1];
             if (filePath) {
@@ -343,26 +465,218 @@ window.deleteMessage = async function(msgId, senderId, mediaUrl) {
 
         await window.supabaseClient.from('messages').delete().eq('id', msgId);
         loadMessages();
-        if(typeof window.renderMessages === 'function') window.renderMessages(); // 同步更新外層最新文字
+        if(typeof window.renderMessages === 'function') window.renderMessages(); 
     } catch (e) { 
         console.error(e);
         alert('回收失敗'); 
     }
 };
 
-window.closeChat = function() {
-    if (window.roomChannel) {
-        window.roomChannel.untrack(); // 離開時主動解除線上追蹤
-        window.roomChannel.unsubscribe();
+// ==========================================
+// 🌟 建立群組與成員管理功能
+// ==========================================
+
+window.openCreateGroupModal = function() {
+    const modal = document.getElementById('create-group-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+
+window.closeCreateGroupModal = function() {
+    const modal = document.getElementById('create-group-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+};
+
+window.handleCreateGroup = async function() {
+    const nameInput = document.getElementById('new-group-name');
+    const membersInput = document.getElementById('new-group-members-input');
+    const name = nameInput.value.trim();
+    const membersStr = membersInput ? membersInput.value.trim() : '';
+
+    if (!name) return alert('請輸入群組名稱');
+    
+    const myId = await getValidUserId();
+    if (!myId) return;
+
+    try {
+        const { data: groupData, error: groupErr } = await window.supabaseClient.from('chat_groups').insert([{
+            name: name,
+            owner_id: myId
+        }]).select().single();
+
+        if (groupErr) throw groupErr;
+
+        const membersToInsert = [{
+            group_id: groupData.id,
+            user_id: myId
+        }];
+
+        if (membersStr) {
+            const terms = membersStr.split(',').map(s => s.trim()).filter(s => s);
+            if (terms.length > 0) {
+                let orConditions = terms.map(t => `username.ilike.%${t}%,display_name.ilike.%${t}%`).join(',');
+                
+                const { data: foundUsers } = await window.supabaseClient.from('profiles')
+                    .select('id')
+                    .or(orConditions);
+
+                if (foundUsers && foundUsers.length > 0) {
+                    foundUsers.forEach(u => {
+                        if (u.id !== myId) {
+                            membersToInsert.push({
+                                group_id: groupData.id,
+                                user_id: u.id
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
+        await window.supabaseClient.from('chat_group_members').insert(membersToInsert);
+
+        window.closeCreateGroupModal();
+        nameInput.value = '';
+        if (membersInput) membersInput.value = '';
+        alert('群組建立成功！');
+        if(typeof window.renderMessages === 'function') window.renderMessages();
+    } catch (err) {
+        console.error("群組建立失敗", err);
+        alert("建立失敗，請稍後再試。");
     }
-    window.activeRoomId = null;
-    const modal = document.getElementById('chat-modal');
-    modal.classList.add('translate-x-full');
-    setTimeout(() => modal.classList.add('hidden'), 300);
+};
+
+window.openGroupSettings = async function() {
+    const modal = document.getElementById('group-settings-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('translate-y-full'), 10);
+    await window.loadGroupMembers();
+};
+
+window.closeGroupSettings = function() {
+    const modal = document.getElementById('group-settings-modal');
+    modal.classList.add('translate-y-full');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+};
+
+window.loadGroupMembers = async function() {
+    const list = document.getElementById('group-members-list');
+    list.innerHTML = `<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-gray-400"></i></div>`;
+
+    const myId = await getValidUserId();
+
+    const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
+    const isOwner = groupData && groupData.owner_id === myId;
+
+    const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
+    if (!members) {
+        list.innerHTML = `<div class="text-center py-10 text-gray-400">載入失敗</div>`;
+        return;
+    }
+
+    const userIds = members.map(m => m.user_id);
+    const { data: profiles } = await window.supabaseClient.from('profiles').select('id, display_name, username, avatar_url').in('id', userIds);
+
+    if (!profiles) return;
+
+    list.innerHTML = profiles.map(p => `
+        <div class="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100 mb-2">
+            <img src="${p.avatar_url || getFallbackAvatar(p.display_name)}" class="w-10 h-10 rounded-full object-cover">
+            <div class="flex-1">
+                <p class="text-sm font-bold text-gray-800">${safeText(p.display_name)} ${groupData.owner_id === p.id ? '<span class="text-[10px] bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded-full ml-1">群主</span>' : ''}</p>
+                <p class="text-[10px] text-gray-400">@${safeText(p.username)}</p>
+            </div>
+            ${(isOwner && p.id !== myId) ? `<button onclick="window.kickGroupMember('${p.id}')" class="text-red-500 text-xs font-bold px-3 py-1 bg-red-50 rounded-lg active:scale-90 transition">踢出</button>` : ''}
+        </div>
+    `).join('');
+};
+
+window.addGroupMember = async function() {
+    const input = document.getElementById('group-add-user-input');
+    const term = input.value.trim();
+    if (!term) return;
+
+    const { data: users } = await window.supabaseClient.from('profiles')
+        .select('id')
+        .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
+        .limit(1);
+
+    if (!users || users.length === 0) {
+        return alert('找不到該用戶，請確認名稱是否正確');
+    }
+
+    const targetUserId = users[0].id;
+
+    const { error } = await window.supabaseClient.from('chat_group_members').insert([{
+        group_id: window.activeRoomId,
+        user_id: targetUserId
+    }]);
+
+    if (error) {
+        if (error.code === '23505') alert('該用戶已經在群組中了');
+        else alert('新增失敗，可能資料庫權限 (RLS) 不足');
+    } else {
+        input.value = '';
+        alert('加入成功！');
+        await window.loadGroupMembers();
+    }
+};
+
+window.kickGroupMember = async function(userId) {
+    if (!confirm('確定要將該成員踢出群組？')) return;
+    await window.supabaseClient.from('chat_group_members')
+        .delete()
+        .eq('group_id', window.activeRoomId).eq('user_id', userId);
+    await window.loadGroupMembers();
+};
+
+window.leaveGroup = async function() {
+    if (!confirm('確定要退出這個群組嗎？')) return;
+    
+    const myId = await getValidUserId();
+    if (!myId || !window.activeRoomId) return;
+
+    try {
+        const { data: groupData } = await window.supabaseClient.from('chat_groups').select('owner_id').eq('id', window.activeRoomId).single();
+        
+        if (groupData && groupData.owner_id === myId) {
+            const { data: members } = await window.supabaseClient.from('chat_group_members').select('user_id').eq('group_id', window.activeRoomId);
+            const otherMembers = members.filter(m => m.user_id !== myId);
+            
+            if (otherMembers.length > 0) {
+                const newOwnerId = otherMembers[0].user_id;
+                await window.supabaseClient.from('chat_groups').update({ owner_id: newOwnerId }).eq('id', window.activeRoomId);
+            } else {
+                await window.supabaseClient.from('chat_groups').delete().eq('id', window.activeRoomId);
+                window.closeGroupSettings();
+                window.closeChat();
+                if(typeof window.renderMessages === 'function') window.renderMessages();
+                return;
+            }
+        }
+
+        const { error } = await window.supabaseClient.from('chat_group_members')
+            .delete()
+            .eq('group_id', window.activeRoomId)
+            .eq('user_id', myId);
+
+        if (error) throw error;
+
+        alert('已成功退出群組');
+        window.closeGroupSettings();
+        window.closeChat();
+        if(typeof window.renderMessages === 'function') window.renderMessages();
+        
+    } catch (err) {
+        console.error("退出群組失敗:", err);
+        alert('退出群組失敗，請確認 Supabase RLS 設定是否允許刪除自己的群組成員紀錄。');
+    }
 };
 
 // ==========================================
-// 🎙️ 語音錄製核心邏輯 (直接上傳 Supabase)
+// 🎙️ 語音錄製核心邏輯
 // ==========================================
 window.toggleVoiceRecord = async function() {
     const btnIcon = document.querySelector('[onclick*="toggleVoiceRecord"] i');
@@ -382,12 +696,10 @@ window.toggleVoiceRecord = async function() {
             mediaRecorder.onstop = async () => {
                 const myId = await getValidUserId();
                 
-                // 動態判斷附檔名 (iOS 通常為 mp4/aac，Android/PC 為 webm)
                 const mimeType = mediaRecorder.mimeType || 'audio/webm';
                 const audioBlob = new Blob(audioChunks, { type: mimeType });
                 const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 
-                // 設定在 Supabase Storage 中的路徑
                 const filePath = `chat_media/voice_${myId}_${Date.now()}.${ext}`;
 
                 const originalPlaceholder = input.placeholder;
@@ -395,7 +707,6 @@ window.toggleVoiceRecord = async function() {
                 input.disabled = true;
 
                 try {
-                    // 呼叫上方的 Supabase 上傳工具函數
                     const publicUrl = await uploadMediaToSupabase(audioBlob, filePath);
                     if (publicUrl) {
                         window.selectedMediaUrl = publicUrl;
@@ -437,7 +748,23 @@ window.toggleVoiceRecord = async function() {
 };
 
 // ==========================================
-// 🖼️ 圖片/影片上傳邏輯 (支援影片格式)
+// 🛡️ 模組 1：模擬 AI 媒體安全檢測 (前端掛載點)
+// ==========================================
+async function scanMediaWithAI(file) {
+    // 未來請在此處接駁真實 API (如 Sightengine 或 Google Vision)
+    // 這裡我們暫時回傳測試結果：不阻擋上傳，但標記為 NSFW 測試 Blur 功能
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve({
+                isIllegal: false, // 設為 true 則阻擋上傳
+                isNsfw: true      // 設為 true 則寫入 is_nsfw 觸發 Blur
+            });
+        }, 500); 
+    });
+}
+
+// ==========================================
+// 🖼️ 模組 2：圖片/影片上傳與 AI 整合邏輯
 // ==========================================
 window.handleImageSelection = async function(input) {
     const file = input.files[0];
@@ -445,12 +772,20 @@ window.handleImageSelection = async function(input) {
     
     const chatInput = document.getElementById('chat-input');
     const originalPlaceholder = chatInput.placeholder;
-    chatInput.placeholder = "媒體檔案上傳中...";
+    chatInput.placeholder = "🛡️ 進行安全檢測中...";
     chatInput.disabled = true;
 
     try {
+        // ✨ AI 檢測攔截
+        const aiResult = await scanMediaWithAI(file);
+        if (aiResult.isIllegal) {
+            throw new Error("系統檢測到包含嚴重違規內容，上傳已被拒絕。");
+        }
+        // 紀錄 NSFW 標籤，稍後隨訊息寫入 DB
+        window.selectedMediaIsNsfw = aiResult.isNsfw;
+
+        chatInput.placeholder = "媒體檔案上傳中...";
         const myId = await getValidUserId();
-        // 抓取副檔名 (例如 .jpg, .png, .mp4, .mov)
         const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
         const isVideoUpload = ['mp4', 'webm', 'mov', 'ogg'].includes(ext);
         const prefix = isVideoUpload ? 'vid_' : 'img_';
@@ -465,10 +800,107 @@ window.handleImageSelection = async function(input) {
         }
     } catch (e) { 
         console.error("上傳錯誤:", e);
-        alert('媒體上傳失敗'); 
+        alert(e.message || '媒體上傳失敗'); 
     } finally {
         chatInput.placeholder = originalPlaceholder;
         chatInput.disabled = false;
-        input.value = ''; // 清除 input 檔案，允許重複選擇同個檔案
+        input.value = ''; 
     }
 };
+
+// ==========================================
+// 🔍 模組 3：媒體大圖查看與 NSFW 解鎖燈箱
+// ==========================================
+window.handleMediaClick = function(url, isVideo, element, isInitiallyBlurred) {
+    // 解鎖 Blur
+    if (isInitiallyBlurred && element.classList.contains('blur-2xl')) {
+        if (confirm('⚠️ 此內容可能含有成人或敏感內容，確定要觀看嗎？\n\n(您可以在設定中關閉此預設警告)')) {
+            element.classList.remove('blur-2xl');
+            const icon = element.nextElementSibling;
+            if (icon) icon.remove(); // 移除遮罩圖示
+        }
+        return; // 解鎖後先不放大，等用戶再點一次才放大
+    }
+    window.openMediaViewer(url, isVideo);
+};
+
+window.openMediaViewer = function(url, isVideo) {
+    const existing = document.getElementById('media-lightbox');
+    if (existing) existing.remove();
+
+    const box = document.createElement('div');
+    box.id = 'media-lightbox';
+    box.className = 'fixed inset-0 bg-black bg-opacity-95 z-[9999] flex items-center justify-center p-4 opacity-0 transition-opacity duration-300';
+    box.onclick = function(e) { if(e.target === box) closeViewer(); };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'absolute top-4 right-4 text-white text-3xl font-bold bg-gray-800 bg-opacity-50 w-12 h-12 rounded-full flex items-center justify-center hover:bg-gray-700 transition z-50';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = closeViewer;
+
+    let content = isVideo 
+        ? `<video src="${url}" controls autoplay playsinline class="max-w-full max-h-[90vh] rounded-lg shadow-2xl"></video>`
+        : `<img src="${url}" class="max-w-full max-h-[90vh] rounded-lg shadow-2xl object-contain">`;
+
+    box.innerHTML = content;
+    box.appendChild(closeBtn);
+    document.body.appendChild(box);
+
+    requestAnimationFrame(() => { box.classList.remove('opacity-0'); });
+
+    function closeViewer() {
+        box.classList.add('opacity-0');
+        setTimeout(() => box.remove(), 300);
+    }
+};
+
+window.toggleNsfwBlurPreference = function() {
+    const current = localStorage.getItem('nsfw_unblur_default') === 'true';
+    localStorage.setItem('nsfw_unblur_default', !current);
+    alert(!current ? '已設定：成人內容將不再模糊顯示' : '已設定：成人內容將預設模糊保護');
+    loadMessages();
+};
+
+// ==========================================
+// 🚨 模組 4：用戶檢舉系統
+// ==========================================
+window.openReportModal = function(reportedUserId, msgContent, msgImageUrl) {
+    const reason = prompt("請輸入檢舉原因 (例如：發送非法內容、詐騙、騷擾)：\n\n系統將自動附上該則訊息作為證據。");
+    if (!reason) return;
+
+    if (confirm("是否要額外上傳一張螢幕截圖作為補充證據？")) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const screenshotUrl = await uploadMediaToSupabase(file, `reports/${Date.now()}_${file.name}`);
+                await submitReport(reportedUserId, reason, screenshotUrl, msgContent, msgImageUrl);
+            } catch (err) { alert('截圖上傳失敗'); }
+        };
+        input.click();
+    } else {
+        submitReport(reportedUserId, reason, null, msgContent, msgImageUrl);
+    }
+};
+
+async function submitReport(targetId, reason, screenshotUrl, content, imageUrl) {
+    const myId = await getValidUserId();
+    const { error } = await window.supabaseClient.from('user_reports').insert([{
+        reporter_id: myId,
+        reported_user_id: targetId,
+        reason: reason,
+        screenshot_url: screenshotUrl,
+        evidence_text: content,
+        evidence_image: imageUrl
+    }]);
+
+    if (error) {
+        console.error(error);
+        alert('檢舉提交失敗，請稍後再試。');
+    } else {
+        alert('✅ 檢舉已成功提交！管理員會盡快審核。');
+    }
+}

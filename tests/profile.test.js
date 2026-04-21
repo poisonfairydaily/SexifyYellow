@@ -60,3 +60,97 @@ describe('escapeHTML', () => {
         expect(window.escapeHTML({ toString: () => '<obj>' })).toBe('&lt;obj&gt;');
     });
 });
+
+describe('viewOtherProfile Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="other-profile-modal" class="hidden translate-x-full"></div>
+        `;
+
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        console.error = jest.fn(); // Mock console.error
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient.from().select().eq().single() chain
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        single: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                    })
+                })
+            })
+        };
+
+        await window.viewOtherProfile('user-2');
+
+        // Check if getAuthenticatedUserId was called
+        expect(window.getAuthenticatedUserId).toHaveBeenCalled();
+
+        // Check if modal was opened
+        const modal = document.getElementById('other-profile-modal');
+        expect(modal.classList.contains('flex')).toBe(true);
+        expect(modal.classList.contains('hidden')).toBe(false);
+
+        // Check if console.error was called with the mock error
+        expect(console.error).toHaveBeenCalledWith(mockError);
+    });
+});
+
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
+            <div id="tab-subs" class="text-gray-400 border-transparent">訂閱</div>
+            <div id="fans-subs-list"></div>
+        `;
+
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase fetch error correctly for fans tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles Supabase fetch error correctly for subs tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+});
