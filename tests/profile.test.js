@@ -120,6 +120,32 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
+    test('handles empty followers list correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles synchronous exception during fans tab fetch', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation(() => { throw new Error('Sync error'); })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
