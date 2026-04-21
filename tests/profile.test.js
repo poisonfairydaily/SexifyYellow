@@ -105,7 +105,7 @@ describe('viewOtherProfile Error Handling', () => {
     });
 });
 
-describe('switchFansTab Error Handling', () => {
+describe('switchFansTab Execution Paths', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -152,5 +152,154 @@ describe('switchFansTab Error Handling', () => {
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles empty subscriptions correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles empty subscriptions correctly for subs tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+    });
+
+    test('renders successfully for fans tab', async () => {
+        const mockSubs = [{ subscriber_id: 'sub-1' }];
+        const mockProfs = [{ id: 'sub-1', display_name: 'Safe Name Fan', avatar_url: 'https://example.com/avatar.png' }];
+
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                } else if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfs, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Safe Name Fan');
+        expect(list.innerHTML).toContain('truncate');
+        expect(list.innerHTML).toContain('https://example.com/avatar.png');
+    });
+
+    test('renders successfully for subs tab', async () => {
+        const mockSubs = [{ id: 'sub-record-1', creator_id: 'creator-1' }];
+        const mockProfs = [{ id: 'creator-1', display_name: 'Safe Name Sub', avatar_url: 'https://example.com/sub-avatar.png' }];
+
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                } else if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfs, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Safe Name Sub');
+        expect(list.innerHTML).toContain('truncate');
+        expect(list.innerHTML).toContain('https://example.com/sub-avatar.png');
+    });
+
+    test('handles profiles fetch error correctly for fans tab', async () => {
+        const mockSubs = [{ subscriber_id: 'sub-1' }];
+        const mockError = new Error('Database connection failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                } else if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: null, error: mockError }) // Simulation: profiles fetch fails, or returns null/error
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        // Because of the logic, if profiles fails, profMap is empty, sub is mapped to empty string, and it shouldn't crash.
+        // It doesn't throw, just returns empty.
+        expect(list.innerHTML).toBe('');
+    });
+
+    test('handles profiles fetch error correctly for subs tab', async () => {
+        const mockSubs = [{ id: 'sub-record-1', creator_id: 'creator-1' }];
+        const mockError = new Error('Database connection failed');
+
+        window.supabaseClient = {
+            from: jest.fn().mockImplementation((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                } else if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: null, error: mockError }) // Simulation: profiles fetch fails, or returns null/error
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        // Because of the logic, if profiles fails, profMap is empty, sub is mapped to empty string, and it shouldn't crash.
+        expect(list.innerHTML).toBe('');
     });
 });
