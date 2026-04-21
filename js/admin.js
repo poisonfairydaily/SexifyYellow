@@ -1,5 +1,5 @@
 /**
- * admin.js - 究極管理員核心版 (2026 雙桶分流穩定版 + 用戶檢舉審查系統)
+ * admin.js - 究極管理員核心版 (穩定原生 UI 版 + 檢舉系統)
  * 功能：雙桶 R2 對接、WebP 壓縮、AI 報告解析、全域內容控制、用戶行為檢舉審查
  */
 
@@ -58,9 +58,7 @@ window.onload = async () => {
         if(adminDash) {
             adminDash.style.display = 'flex';
             
-            // ✨ 動態注入檢舉選單與容器 (如果 HTML 還沒寫，自動補上)
-            injectReportTabUI();
-            
+            // 載入所有資料庫內容
             loadPendingProducts();
             loadRecentPosts();
             loadAuditList(); 
@@ -75,59 +73,20 @@ window.onload = async () => {
     }
 };
 
-// ✨ 動態注入檢舉 UI (避免修改 HTML)
-function injectReportTabUI() {
-    const tabNav = document.querySelector('.flex.space-x-2.mb-6');
-    if (tabNav && !document.getElementById('tab-reports')) {
-        tabNav.innerHTML += `<button class="tab-btn px-4 py-2 rounded-lg font-bold text-gray-500 hover:bg-gray-100" onclick="window.switchTab('reports')">🚨 檢舉審查</button>`;
-    }
-
-    const tabContainer = document.querySelector('.bg-white.rounded-2xl.shadow-sm.p-6.border');
-    if (tabContainer && !document.getElementById('reports')) {
-        tabContainer.innerHTML += `
-            <div id="reports" class="tab-content hidden">
-                <h2 class="text-xl font-bold mb-4">🚨 用戶檢舉處理中心</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
-                                <th class="p-3">狀態</th>
-                                <th class="p-3">被檢舉人</th>
-                                <th class="p-3">檢舉原因 & 證據內容</th>
-                                <th class="p-3">截圖/圖片</th>
-                                <th class="p-3">處理動作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="user-reports-list" class="text-sm">
-                            <tr><td colspan="5" class="text-center py-10">載入中...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>`;
-    }
-}
-
-
-// --- 🔄 2. 頁籤切換邏輯 ---
+// --- 🔄 2. 頁籤切換邏輯 (純 CSS 控制，永不黑屏) ---
 window.switchTab = function(tabId) {
-    document.querySelectorAll('.tab-content').forEach(el => {
-        el.classList.add('hidden'); // 改用 Tailwind hidden
-        el.style.display = 'none'; // 雙重保險
-    });
-    document.querySelectorAll('.tab-btn').forEach(el => {
-        el.classList.remove('bg-gray-800', 'text-white');
-        el.classList.add('text-gray-500');
-    });
+    // 隱藏所有內容區塊
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    // 取消所有按鈕的高亮狀態
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     
+    // 顯示目標區塊
     const targetTab = document.getElementById(tabId);
-    if(targetTab) {
-        targetTab.classList.remove('hidden');
-        targetTab.style.display = 'block';
-    }
+    if(targetTab) targetTab.classList.add('active');
     
+    // 高亮當前點擊的按鈕
     if(event && event.currentTarget) {
-        event.currentTarget.classList.remove('text-gray-500');
-        event.currentTarget.classList.add('bg-gray-800', 'text-white');
+        event.currentTarget.classList.add('active');
     }
 };
 
@@ -386,7 +345,7 @@ window.loadUserReports = async function() {
                 <td class="p-3">
                     ${r.status === 'pending' ? `
                         <button onclick="updateReportStatus('${r.id}', 'resolved')" class="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded mr-1">處分/警告</button>
-                        <button onclick="updateReportStatus('${r.id}', 'dismissed')" class="bg-gray-200 text-gray-700 text-[10px] font-bold px-3 py-1.5 rounded">無違規駁回</button>
+                        <button onclick="updateReportStatus('${r.id}', 'dismissed')" class="bg-gray-200 text-gray-700 text-[10px] font-bold px-3 py-1.5 rounded mt-1">無違規駁回</button>
                     ` : `
                         <button onclick="deleteRecord('user_reports', '${r.id}')" class="text-gray-300 hover:text-red-500 text-[10px] underline">刪除紀錄</button>
                     `}
