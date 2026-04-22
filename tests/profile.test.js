@@ -137,6 +137,49 @@ describe('switchFansTab Error Handling', () => {
         expect(list.innerHTML).toContain('讀取失敗');
     });
 
+    test('handles empty state correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles missing related profile gracefully in fans tab', async () => {
+        const mockSubs = [{ subscriber_id: 'sub-1' }];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubs, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: null, error: null }) // simulate missing profile
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe(''); // Should return empty string for that user
+    });
+
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
 
