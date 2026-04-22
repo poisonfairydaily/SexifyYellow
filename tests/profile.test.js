@@ -105,7 +105,7 @@ describe('viewOtherProfile Error Handling', () => {
     });
 });
 
-describe('switchFansTab Error Handling', () => {
+describe('switchFansTab functionality', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -120,14 +120,113 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
-    test('handles Supabase fetch error correctly for fans tab', async () => {
-        const mockError = new Error('Database connection failed');
+    test('displays empty state when user has no fans', async () => {
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({ data: [], error: null });
+        window.supabaseClient = {
+            from: jest.fn(() => ({
+                select: jest.fn(() => ({
+                    eq: mockSubscriptionsEq
+                }))
+            }))
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('subscriptions');
+        expect(mockSubscriptionsEq).toHaveBeenCalledWith('creator_id', 'user-1');
+    });
+
+    test('displays empty state when user has no subscriptions', async () => {
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({ data: [], error: null });
+        window.supabaseClient = {
+            from: jest.fn(() => ({
+                select: jest.fn(() => ({
+                    eq: mockSubscriptionsEq
+                }))
+            }))
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('subscriptions');
+        expect(mockSubscriptionsEq).toHaveBeenCalledWith('subscriber_id', 'user-1');
+    });
+
+    test('displays fans list successfully', async () => {
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({
+            data: [{ subscriber_id: 'sub-user' }],
+            error: null
+        });
+        const mockProfilesIn = jest.fn().mockResolvedValue({
+            data: [{ id: 'sub-user', display_name: 'Sub User', avatar_url: 'http://example.com/avatar.jpg' }],
+            error: null
+        });
 
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: jest.fn(() => ({ eq: mockSubscriptionsEq })) };
+                }
+                if (table === 'profiles') {
+                    return { select: jest.fn(() => ({ in: mockProfilesIn })) };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Sub User');
+        expect(list.innerHTML).toContain('http://example.com/avatar.jpg');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('subscriptions');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('profiles');
+        expect(mockProfilesIn).toHaveBeenCalledWith('id', ['sub-user']);
+    });
+
+    test('displays subscriptions list successfully', async () => {
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({
+            data: [{ creator_id: 'creator-user' }],
+            error: null
+        });
+        const mockProfilesIn = jest.fn().mockResolvedValue({
+            data: [{ id: 'creator-user', display_name: 'Creator User', avatar_url: 'http://example.com/creator.jpg' }],
+            error: null
+        });
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: jest.fn(() => ({ eq: mockSubscriptionsEq })) };
+                }
+                if (table === 'profiles') {
+                    return { select: jest.fn(() => ({ in: mockProfilesIn })) };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Creator User');
+        expect(list.innerHTML).toContain('http://example.com/creator.jpg');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('subscriptions');
+        expect(window.supabaseClient.from).toHaveBeenCalledWith('profiles');
+        expect(mockProfilesIn).toHaveBeenCalledWith('id', ['creator-user']);
+    });
+
+    test('handles Supabase fetch error correctly for fans tab', async () => {
+        const mockError = new Error('Database connection failed');
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: jest.fn(() => ({ eq: mockSubscriptionsEq })) };
+                }
             })
         };
 
@@ -139,12 +238,13 @@ describe('switchFansTab Error Handling', () => {
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
+        const mockSubscriptionsEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
 
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return { select: jest.fn(() => ({ eq: mockSubscriptionsEq })) };
+                }
             })
         };
 
