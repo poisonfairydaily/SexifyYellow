@@ -124,10 +124,15 @@ describe('switchFansTab Error Handling', () => {
         const mockError = new Error('Database connection failed');
 
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                        })
+                    };
+                }
+                return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockResolvedValue({ data: [], error: null }) };
             })
         };
 
@@ -141,14 +146,45 @@ describe('switchFansTab Error Handling', () => {
         const mockError = new Error('Database connection failed');
 
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                        })
+                    };
+                }
+                return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockResolvedValue({ data: [], error: null }) };
             })
         };
 
         await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('handles Supabase fetch error for subscriptions query correctly', async () => {
+        const mockError = new Error('Subscriptions query failed');
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                        })
+                    };
+                }
+                return {
+                    select: jest.fn().mockReturnValue({
+                        in: jest.fn().mockResolvedValue({ data: [], error: null })
+                    })
+                };
+            })
+        };
+
+        await window.switchFansTab('fans');
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
