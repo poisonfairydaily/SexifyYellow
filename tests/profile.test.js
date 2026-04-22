@@ -120,6 +120,21 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
+    test('displays empty state correctly for fans tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
@@ -137,6 +152,21 @@ describe('switchFansTab Error Handling', () => {
         expect(list.innerHTML).toContain('讀取失敗');
     });
 
+    test('displays empty state correctly for subs tab', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+    });
+
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
 
@@ -152,5 +182,111 @@ describe('switchFansTab Error Handling', () => {
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+    });
+
+    test('renders fans tab successfully with data', async () => {
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ subscriber_id: 'sub-1' }, { subscriber_id: 'sub-2' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({
+                                data: [
+                                    { id: 'sub-1', display_name: 'Alice', avatar_url: 'alice.jpg' },
+                                    { id: 'sub-2', display_name: 'Bob', avatar_url: 'bob.jpg' }
+                                ],
+                                error: null
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Alice');
+        expect(list.innerHTML).toContain('alice.jpg');
+        expect(list.innerHTML).toContain('Bob');
+        expect(list.innerHTML).toContain('bob.jpg');
+    });
+
+    test('renders subs tab successfully with data', async () => {
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ creator_id: 'creator-1' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({
+                                data: [
+                                    { id: 'creator-1', display_name: 'Charlie', avatar_url: 'charlie.jpg' }
+                                ],
+                                error: null
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('Charlie');
+        expect(list.innerHTML).toContain('charlie.jpg');
+        expect(list.innerHTML).toContain('取消追蹤');
+    });
+
+    test('renders correctly when profile data is missing in profMap', async () => {
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ subscriber_id: 'sub-with-no-profile' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({
+                                data: [], // No matching profiles found
+                                error: null
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe(''); // if(!user) return ''; results in empty string mapping
     });
 });
