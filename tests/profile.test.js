@@ -153,4 +153,76 @@ describe('switchFansTab Error Handling', () => {
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
     });
+
+    test('degrades gracefully when mapped profile is missing in fans tab', async () => {
+        // Mock subscriptions query to return a sub with a creator_id
+        // Mock profiles query to return empty data (simulating a missing profile)
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ id: 'sub-1', subscriber_id: 'sub-user-1', creator_id: 'user-1' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({
+                                data: [], // Missing profile
+                                error: null
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        // Because the profile is missing, the map logic `if(!user) return '';` is triggered
+        // resulting in an empty string being added to the list.
+        expect(list.innerHTML).toBe('');
+    });
+
+    test('degrades gracefully when mapped profile is missing in subs tab', async () => {
+        // Mock subscriptions query to return a sub with a subscriber_id
+        // Mock profiles query to return empty data (simulating a missing profile)
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({
+                                data: [{ id: 'sub-1', subscriber_id: 'user-1', creator_id: 'creator-user-1' }],
+                                error: null
+                            })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({
+                                data: [], // Missing profile
+                                error: null
+                            })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        // Because the profile is missing, the map logic `if(!user) return '';` is triggered
+        // resulting in an empty string being added to the list.
+        expect(list.innerHTML).toBe('');
+    });
 });
