@@ -107,6 +107,21 @@
                 </div>
             </div>
 
+            <div class="flex border-b bg-gray-50/50">
+                <div class="flex-1 p-3 text-center border-r border-gray-100">
+                    <p class="text-[10px] text-gray-500 font-bold">粉絲</p>
+                    <p id="sidebar-fans" class="text-sm font-black text-gray-900 mt-0.5">-</p>
+                </div>
+                <div class="flex-1 p-3 text-center border-r border-gray-100">
+                    <p class="text-[10px] text-gray-500 font-bold">追蹤</p>
+                    <p id="sidebar-subs" class="text-sm font-black text-gray-900 mt-0.5">-</p>
+                </div>
+                <div class="flex-1 p-3 text-center">
+                    <p class="text-[10px] text-gray-500 font-bold">餘額</p>
+                    <p class="text-sm font-black text-sexify mt-0.5">🪙 <span id="sidebar-balance">-</span></p>
+                </div>
+            </div>
+
             <div class="flex-1 overflow-y-auto py-4 space-y-2 px-4">
                 <button onclick="openPersonalCenter()" class="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition active:scale-95">
                     <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-id-card"></i></div>
@@ -532,17 +547,32 @@
                 const { data: { user } } = await window.supabaseClient.auth.getUser();
                 if (!user) return;
 
-                const { data: profile } = await window.supabaseClient.from('profiles').select('display_name, username, avatar_url').eq('id', user.id).single();
+                const [
+                    { data: profile },
+                    { count: fansCount },
+                    { count: subsCount }
+                ] = await Promise.all([
+                    window.supabaseClient.from('profiles').select('display_name, username, avatar_url, balance').eq('id', user.id).single(),
+                    window.supabaseClient.from('subscriptions').select('id', { count: 'exact', head: true }).eq('creator_id', user.id),
+                    window.supabaseClient.from('subscriptions').select('id', { count: 'exact', head: true }).eq('subscriber_id', user.id)
+                ]);
+
                 if (profile) {
                     const avatar = document.getElementById('sidebar-avatar');
                     const headerAvatar = document.getElementById('header-avatar');
                     const name = document.getElementById('sidebar-name');
                     const username = document.getElementById('sidebar-username');
+                    const fansEl = document.getElementById('sidebar-fans');
+                    const subsEl = document.getElementById('sidebar-subs');
+                    const balanceEl = document.getElementById('sidebar-balance');
 
                     if (avatar) avatar.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
                     if (headerAvatar) headerAvatar.src = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.display_name)}`;
                     if (name) name.innerText = profile.display_name || '未命名用戶';
                     if (username) username.innerText = profile.username || 'unknown';
+                    if (fansEl) fansEl.innerText = fansCount || 0;
+                    if (subsEl) subsEl.innerText = subsCount || 0;
+                    if (balanceEl) balanceEl.innerText = profile.balance || 0;
                 }
             } catch (e) {
                 console.error('Sidebar Profile Load Error:', e);
