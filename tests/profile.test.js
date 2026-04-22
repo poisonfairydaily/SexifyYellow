@@ -123,34 +123,40 @@ describe('switchFansTab Error Handling', () => {
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
+        const mockEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
+        const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+        const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
+
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
+            from: mockFrom
         };
 
         await window.switchFansTab('fans');
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+        expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+        expect(mockSelect).toHaveBeenCalledWith('*');
+        expect(mockEq).toHaveBeenCalledWith('creator_id', 'user-1');
     });
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
 
+        const mockEq = jest.fn().mockResolvedValue({ data: null, error: mockError });
+        const mockSelect = jest.fn().mockReturnValue({ eq: mockEq });
+        const mockFrom = jest.fn().mockReturnValue({ select: mockSelect });
+
         window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
+            from: mockFrom
         };
 
         await window.switchFansTab('subs');
 
         const list = document.getElementById('fans-subs-list');
         expect(list.innerHTML).toContain('讀取失敗');
+        expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+        expect(mockSelect).toHaveBeenCalledWith('*');
+        expect(mockEq).toHaveBeenCalledWith('subscriber_id', 'user-1');
     });
 });
