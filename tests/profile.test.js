@@ -106,6 +106,8 @@ describe('viewOtherProfile Error Handling', () => {
 });
 
 describe('switchFansTab Error Handling', () => {
+    let mockEq;
+
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="tab-fans" class="text-gray-400 border-transparent">粉絲</div>
@@ -114,22 +116,43 @@ describe('switchFansTab Error Handling', () => {
         `;
 
         window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+
+        mockEq = jest.fn();
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: mockEq
+                })
+            })
+        };
     });
 
     afterEach(() => {
         jest.restoreAllMocks();
+        window.supabaseClient = undefined;
+    });
+
+    test('handles empty fans list correctly', async () => {
+        mockEq.mockResolvedValue({ data: [], error: null });
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles empty subs list correctly', async () => {
+        mockEq.mockResolvedValue({ data: [], error: null });
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
     });
 
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
-
-        window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
-        };
+        mockEq.mockResolvedValue({ data: null, error: mockError });
 
         await window.switchFansTab('fans');
 
@@ -139,14 +162,7 @@ describe('switchFansTab Error Handling', () => {
 
     test('handles Supabase fetch error correctly for subs tab', async () => {
         const mockError = new Error('Database connection failed');
-
-        window.supabaseClient = {
-            from: jest.fn().mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
-                })
-            })
-        };
+        mockEq.mockResolvedValue({ data: null, error: mockError });
 
         await window.switchFansTab('subs');
 
