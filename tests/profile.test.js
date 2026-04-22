@@ -120,6 +120,115 @@ describe('switchFansTab Error Handling', () => {
         jest.restoreAllMocks();
     });
 
+    test('handles empty fans list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('目前還沒有粉絲');
+    });
+
+    test('handles empty subs list correctly', async () => {
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('尚未訂閱任何用戶');
+    });
+
+    test('handles successful fetch for fans list', async () => {
+        const mockSubscriptions = [
+            { subscriber_id: 'user-2' },
+            { subscriber_id: 'user-3' }
+        ];
+
+        const mockProfiles = [
+            { id: 'user-2', display_name: 'User Two', avatar_url: 'avatar2.jpg' },
+            { id: 'user-3', display_name: 'User Three', avatar_url: 'avatar3.jpg' }
+        ];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubscriptions, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfiles, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('User Two');
+        expect(list.innerHTML).toContain('avatar2.jpg');
+        expect(list.innerHTML).toContain('User Three');
+        expect(list.innerHTML).toContain('avatar3.jpg');
+    });
+
+    test('handles successful fetch for subs list', async () => {
+        const mockSubscriptions = [
+            { creator_id: 'user-4', id: 'sub-1' },
+            { creator_id: 'user-5', id: 'sub-2' }
+        ];
+
+        const mockProfiles = [
+            { id: 'user-4', display_name: 'User Four', avatar_url: 'avatar4.jpg' },
+            { id: 'user-5', display_name: 'User Five', avatar_url: 'avatar5.jpg' }
+        ];
+
+        window.supabaseClient = {
+            from: jest.fn((table) => {
+                if (table === 'subscriptions') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            eq: jest.fn().mockResolvedValue({ data: mockSubscriptions, error: null })
+                        })
+                    };
+                }
+                if (table === 'profiles') {
+                    return {
+                        select: jest.fn().mockReturnValue({
+                            in: jest.fn().mockResolvedValue({ data: mockProfiles, error: null })
+                        })
+                    };
+                }
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toContain('User Four');
+        expect(list.innerHTML).toContain('avatar4.jpg');
+        expect(list.innerHTML).toContain('User Five');
+        expect(list.innerHTML).toContain('avatar5.jpg');
+        expect(list.innerHTML).toContain('取消追蹤');
+    });
+
     test('handles Supabase fetch error correctly for fans tab', async () => {
         const mockError = new Error('Database connection failed');
 
