@@ -28,6 +28,7 @@ describe('window.toggleVoiceRecord', () => {
 
         global.window.supabaseClient = {
             auth: {
+                getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'test-user-id' } } }, error: null }),
                 getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null })
             },
             storage: {
@@ -91,6 +92,12 @@ describe('window.toggleVoiceRecord', () => {
             upload: jest.fn().mockResolvedValue({ data: {}, error: null }),
             getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'mock-url' } })
         });
+
+        // Mock global.fetch for uploadChatMediaToR2
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ success: true, url: 'mock-r2-url' })
+        });
     });
 
     test('should start and stop recording successfully (happy path)', async () => {
@@ -120,10 +127,8 @@ describe('window.toggleVoiceRecord', () => {
     });
 
     test('should handle upload error correctly', async () => {
-        const mockUpload = jest.fn().mockRejectedValue(new Error("Upload failed"));
-        global.window.supabaseClient.storage.from.mockReturnValue({
-            upload: mockUpload,
-            getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'mock-url' } })
+        global.fetch.mockResolvedValueOnce({
+            ok: false
         });
 
         await global.window.toggleVoiceRecord();
