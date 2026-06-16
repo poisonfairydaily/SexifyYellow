@@ -61,6 +61,60 @@ describe('escapeHTML', () => {
     });
 });
 
+describe('switchFansTab Error Handling', () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="tab-fans" class="text-gray-400 border-transparent"></div>
+            <div id="tab-subs" class="text-gray-400 border-transparent"></div>
+            <div id="fans-subs-list"></div>
+        `;
+
+        // Mock getAuthenticatedUserId globally
+        window.getAuthenticatedUserId = jest.fn().mockResolvedValue('user-1');
+        console.error = jest.fn(); // Mock console.error just in case
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test('handles Supabase error for fans tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient for fans tab (select from 'subscriptions' eq 'creator_id')
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('fans');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe('<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>');
+    });
+
+    test('handles Supabase error for subs tab', async () => {
+        const mockError = new Error('Database connection failed');
+
+        // Mock window.supabaseClient for subs tab (select from 'subscriptions' eq 'subscriber_id')
+        window.supabaseClient = {
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ data: null, error: mockError })
+                })
+            })
+        };
+
+        await window.switchFansTab('subs');
+
+        const list = document.getElementById('fans-subs-list');
+        expect(list.innerHTML).toBe('<div class="text-center py-10 text-red-400 text-sm">讀取失敗</div>');
+    });
+});
+
 describe('viewOtherProfile Error Handling', () => {
     beforeEach(() => {
         document.body.innerHTML = `
